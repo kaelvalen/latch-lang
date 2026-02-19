@@ -47,7 +47,30 @@ impl Interpreter {
             Stmt::IndexAssign { target, index, value } => {
                 let idx = self.eval_expr(index)?;
                 let val = self.eval_expr(value)?;
-                self.env.index_assign(&target, &idx, val)?;
+                // Simple case: target is Ident(name) → use env.index_assign
+                if let Expr::Ident(name) = &target {
+                    self.env.index_assign(name, &idx, val)?;
+                } else {
+                    // Nested case: evaluate target to get the container, then assign
+                    let container = self.eval_expr(target)?;
+                    match (&container, &idx) {
+                        (Value::List(list), Value::Int(i)) => {
+                            let i = *i as usize;
+                            let mut guard = list.lock().unwrap();
+                            if i >= guard.len() {
+                                return Err(LatchError::IndexOutOfBounds { index: i as i64, len: guard.len() });
+                            }
+                            guard[i] = val;
+                        }
+                        (Value::Map(map), Value::Str(key)) => {
+                            map.lock().unwrap().insert(key.clone(), val);
+                        }
+                        _ => return Err(LatchError::TypeMismatch {
+                            expected: "list[int] or dict[string]".into(),
+                            found: "incompatible types".into(),
+                        }),
+                    }
+                }
             }
 
             Stmt::CompoundAssign { name, op, value } => {
@@ -125,7 +148,7 @@ impl Interpreter {
             }
 
             Stmt::Fn { name, params, body, .. } => {
-                let val = Value::Fn { params, body };
+                let val = Value::Fn { params, body, captured_env: None };
                 self.env.set(&name, val);
             }
 
@@ -235,7 +258,7 @@ impl Interpreter {
                 let vals: Vec<Value> = items.into_iter()
                     .map(|e| self.eval_expr(e))
                     .collect::<Result<_>>()?;
-                Ok(Value::List(vals))
+                Ok(Value::new_list(vals))
             }
 
             Expr::Map(entries) => {
@@ -243,11 +266,13 @@ impl Interpreter {
                 for (key, val_expr) in entries {
                     map.insert(key, self.eval_expr(val_expr)?);
                 }
-                Ok(Value::Map(map))
+                Ok(Value::new_map(map))
             }
 
             Expr::Fn { params, body } => {
-                Ok(Value::Fn { params, body })
+                // Capture the current environment for closure semantics
+                let captured = self.env.clone();
+                Ok(Value::Fn { params, body, captured_env: Some(Box::new(captured)) })
             }
 
             Expr::Ident(name) => {
@@ -328,14 +353,16 @@ impl Interpreter {
                 match (&container, &idx) {
                     (Value::List(list), Value::Int(i)) => {
                         let i = *i;
-                        if i < 0 || i as usize >= list.len() {
-                            Err(LatchError::IndexOutOfBounds { index: i, len: list.len() })
+                        let guard = list.lock().unwrap();
+                        if i < 0 || i as usize >= guard.len() {
+                            Err(LatchError::IndexOutOfBounds { index: i, len: guard.len() })
                         } else {
-                            Ok(list[i as usize].clone())
+                            Ok(guard[i as usize].clone())
                         }
                     }
                     (Value::Map(map), Value::Str(key)) => {
-                        map.get(key)
+                        let guard = map.lock().unwrap();
+                        guard.get(key)
                             .cloned()
                             .ok_or(LatchError::KeyNotFound(key.clone()))
                     }
@@ -365,13 +392,14 @@ impl Interpreter {
                                 let map: HashMap<String, Value> = headers.into_iter()
                                     .map(|(k, v)| (k, Value::Str(v)))
                                     .collect();
-                                Ok(Value::Map(map))
+                                Ok(Value::new_map(map))
                             }
                             _ => Err(LatchError::KeyNotFound(field)),
                         }
                     }
                     Value::Map(map) => {
-                        map.get(&field)
+                        let guard = map.lock().unwrap();
+                        guard.get(&field)
                             .cloned()
                             .ok_or(LatchError::KeyNotFound(field))
                     }
@@ -402,7 +430,7 @@ impl Interpreter {
                 let s = self.eval_expr(*start)?.as_int()?;
                 let e = self.eval_expr(*end)?.as_int()?;
                 let list: Vec<Value> = (s..e).map(Value::Int).collect();
-                Ok(Value::List(list))
+                Ok(Value::new_list(list))
             }
 
             Expr::Pipe { expr, func } => {
@@ -435,14 +463,14 @@ impl Interpreter {
                         }
                     }
                     Expr::Fn { params, body } => {
-                        // Pipe into anonymous function
-                        self.call_closure(&params, &body, vec![val])
+                        // Pipe into anonymous function — call inline, no capture
+                        self.call_closure(&params, &body, vec![val], None)
                     }
                     other => {
                         // Try evaluating as a function value
                         let func_val = self.eval_expr(other)?;
-                        if let Value::Fn { params, body } = func_val {
-                            self.call_closure(&params, &body, vec![val])
+                        if let Value::Fn { params, body, captured_env } = func_val {
+                            self.call_closure(&params, &body, vec![val], captured_env.map(|e| *e))
                         } else {
                             Err(LatchError::TypeMismatch {
                                 expected: "function".into(),
@@ -458,7 +486,8 @@ impl Interpreter {
                 match val {
                     Value::Null => Ok(Value::Null),
                     Value::Map(map) => {
-                        Ok(map.get(&field).cloned().unwrap_or(Value::Null))
+                        let guard = map.lock().unwrap();
+                        Ok(guard.get(&field).cloned().unwrap_or(Value::Null))
                     }
                     Value::HttpResponse { status, body, headers } => {
                         match field.as_str() {
@@ -468,7 +497,7 @@ impl Interpreter {
                                 let map: HashMap<String, Value> = headers.into_iter()
                                     .map(|(k, v)| (k, Value::Str(v)))
                                     .collect();
-                                Ok(Value::Map(map))
+                                Ok(Value::new_map(map))
                             }
                             _ => Ok(Value::Null),
                         }
@@ -514,7 +543,8 @@ impl Interpreter {
         if matches!(op, BinOp::In) {
             return match &r {
                 Value::List(list) => {
-                    let found = list.iter().any(|item| values_equal(item, &l));
+                    let guard = list.lock().unwrap();
+                    let found = guard.iter().any(|item| values_equal(item, &l));
                     Ok(Value::Bool(found))
                 }
                 Value::Str(haystack) => {
@@ -522,8 +552,9 @@ impl Interpreter {
                     Ok(Value::Bool(haystack.contains(needle)))
                 }
                 Value::Map(map) => {
+                    let guard = map.lock().unwrap();
                     let key = l.as_str()?;
-                    Ok(Value::Bool(map.contains_key(key)))
+                    Ok(Value::Bool(guard.contains_key(key)))
                 }
                 _ => Err(LatchError::TypeMismatch {
                     expected: "list, string, or dict".into(),
@@ -631,9 +662,9 @@ impl Interpreter {
             }
             "len" => {
                 return match args.first() {
-                    Some(Value::List(l)) => Ok(Value::Int(l.len() as i64)),
+                    Some(Value::List(l)) => Ok(Value::Int(l.lock().unwrap().len() as i64)),
                     Some(Value::Str(s))  => Ok(Value::Int(s.len() as i64)),
-                    Some(Value::Map(m))  => Ok(Value::Int(m.len() as i64)),
+                    Some(Value::Map(m))  => Ok(Value::Int(m.lock().unwrap().len() as i64)),
                     _ => Err(LatchError::TypeMismatch {
                         expected: "list, string, or dict".into(),
                         found: args.first().map(|v| v.type_name()).unwrap_or("none").into(),
@@ -684,9 +715,9 @@ impl Interpreter {
             }
             "push" => {
                 if args.len() == 2 {
-                    if let Value::List(mut list) = args[0].clone() {
-                        list.push(args[1].clone());
-                        return Ok(Value::List(list));
+                    if let Value::List(ref list) = args[0] {
+                        list.lock().unwrap().push(args[1].clone());
+                        return Ok(Value::Null);
                     }
                 }
                 return Err(LatchError::TypeMismatch {
@@ -697,10 +728,11 @@ impl Interpreter {
             "keys" => {
                 return match args.first() {
                     Some(Value::Map(m)) => {
-                        let mut keys: Vec<String> = m.keys().cloned().collect();
+                        let guard = m.lock().unwrap();
+                        let mut keys: Vec<String> = guard.keys().cloned().collect();
                         keys.sort();
                         let keys: Vec<Value> = keys.into_iter().map(Value::Str).collect();
-                        Ok(Value::List(keys))
+                        Ok(Value::new_list(keys))
                     }
                     _ => Err(LatchError::TypeMismatch {
                         expected: "dict".into(),
@@ -711,10 +743,11 @@ impl Interpreter {
             "values" => {
                 return match args.first() {
                     Some(Value::Map(m)) => {
-                        let mut sorted_keys: Vec<String> = m.keys().cloned().collect();
+                        let guard = m.lock().unwrap();
+                        let mut sorted_keys: Vec<String> = guard.keys().cloned().collect();
                         sorted_keys.sort();
-                        let vals: Vec<Value> = sorted_keys.iter().map(|k| m[k].clone()).collect();
-                        Ok(Value::List(vals))
+                        let vals: Vec<Value> = sorted_keys.iter().map(|k| guard[k].clone()).collect();
+                        Ok(Value::new_list(vals))
                     }
                     _ => Err(LatchError::TypeMismatch {
                         expected: "dict".into(),
@@ -727,7 +760,7 @@ impl Interpreter {
                     let start = args[0].as_int()?;
                     let end = args[1].as_int()?;
                     let list: Vec<Value> = (start..end).map(Value::Int).collect();
-                    return Ok(Value::List(list));
+                    return Ok(Value::new_list(list));
                 }
                 return Err(LatchError::ArgCountMismatch {
                     name: "range".into(), expected: 2, found: args.len(),
@@ -740,7 +773,7 @@ impl Interpreter {
                     let parts: Vec<Value> = s.split(&delim)
                         .map(|p| Value::Str(p.to_string()))
                         .collect();
-                    return Ok(Value::List(parts));
+                    return Ok(Value::new_list(parts));
                 }
                 return Err(LatchError::ArgCountMismatch {
                     name: "split".into(), expected: 2, found: args.len(),
@@ -800,7 +833,8 @@ impl Interpreter {
                             Ok(Value::Bool(haystack.contains(needle.as_str())))
                         }
                         (Value::List(list), val) => {
-                            let found = list.iter().any(|item| values_equal(item, val));
+                            let guard = list.lock().unwrap();
+                            let found = guard.iter().any(|item| values_equal(item, val));
                             Ok(Value::Bool(found))
                         }
                         _ => Err(LatchError::TypeMismatch {
@@ -827,8 +861,9 @@ impl Interpreter {
 
             "sort" => {
                 return match args.into_iter().next() {
-                    Some(Value::List(mut list)) => {
-                        list.sort_by(|a, b| {
+                    Some(Value::List(list)) => {
+                        let mut vec = list.lock().unwrap().clone();
+                        vec.sort_by(|a, b| {
                             match (a, b) {
                                 (Value::Int(x), Value::Int(y)) => x.cmp(y),
                                 (Value::Float(x), Value::Float(y)) => x.partial_cmp(y).unwrap_or(std::cmp::Ordering::Equal),
@@ -836,7 +871,7 @@ impl Interpreter {
                                 _ => std::cmp::Ordering::Equal,
                             }
                         });
-                        Ok(Value::List(list))
+                        Ok(Value::new_list(vec))
                     }
                     _ => Err(LatchError::TypeMismatch {
                         expected: "list".into(),
@@ -854,15 +889,15 @@ impl Interpreter {
                 }
                 let list = args[0].clone().into_list()?;
                 let func = args[1].clone();
-                if let Value::Fn { params, body } = func {
+                if let Value::Fn { params, body, captured_env } = func {
                     let mut result = Vec::new();
                     for item in list {
-                        let val = self.call_closure(&params, &body, vec![item.clone()])?;
+                        let val = self.call_closure(&params, &body, vec![item.clone()], captured_env.as_deref().cloned())?;
                         if val.is_truthy() {
                             result.push(item);
                         }
                     }
-                    return Ok(Value::List(result));
+                    return Ok(Value::new_list(result));
                 }
                 return Err(LatchError::TypeMismatch {
                     expected: "fn".into(), found: args[1].type_name().into(),
@@ -878,13 +913,13 @@ impl Interpreter {
                 }
                 let list = args[0].clone().into_list()?;
                 let func = args[1].clone();
-                if let Value::Fn { params, body } = func {
+                if let Value::Fn { params, body, captured_env } = func {
                     let mut result = Vec::new();
                     for item in list {
-                        let val = self.call_closure(&params, &body, vec![item])?;
+                        let val = self.call_closure(&params, &body, vec![item], captured_env.as_deref().cloned())?;
                         result.push(val);
                     }
-                    return Ok(Value::List(result));
+                    return Ok(Value::new_list(result));
                 }
                 return Err(LatchError::TypeMismatch {
                     expected: "fn".into(), found: args[1].type_name().into(),
@@ -900,9 +935,9 @@ impl Interpreter {
                 }
                 let list = args[0].clone().into_list()?;
                 let func = args[1].clone();
-                if let Value::Fn { params, body } = func {
+                if let Value::Fn { params, body, captured_env } = func {
                     for item in list {
-                        self.call_closure(&params, &body, vec![item])?;
+                        self.call_closure(&params, &body, vec![item], captured_env.as_deref().cloned())?;
                     }
                     return Ok(Value::Null);
                 }
@@ -917,17 +952,25 @@ impl Interpreter {
         // User-defined functions
         let func = self.env.get(name).cloned();
         match func {
-            Some(Value::Fn { params, body }) => {
-                self.call_closure(&params, &body, args)
+            Some(Value::Fn { params, body, captured_env }) => {
+                self.call_closure(&params, &body, args, captured_env.map(|e| *e))
             }
             _ => Err(LatchError::UndefinedFunction(name.to_string())),
         }
     }
 
     /// Call a closure (Fn value) with the given arguments.
-    fn call_closure(&mut self, params: &[Param], body: &Block, args: Vec<Value>) -> Result<Value> {
-        let parent = std::mem::replace(&mut self.env, Env::new());
-        self.env = parent.child();
+    /// If `captured_env` is provided, use it as the parent scope (closure semantics).
+    /// Otherwise, use the current env as the parent (regular function call).
+    fn call_closure(&mut self, params: &[Param], body: &Block, args: Vec<Value>, captured_env: Option<Env>) -> Result<Value> {
+        // Save the caller's environment
+        let caller_env = std::mem::replace(&mut self.env, Env::new());
+
+        // Set up the function scope
+        self.env = match captured_env {
+            Some(cap) => cap.child(),            // closure: parent = captured env
+            None => caller_env.clone().child(),   // regular fn: parent = caller env
+        };
 
         for (param, arg) in params.iter().zip(args.into_iter()) {
             self.env.set(&param.name, arg);
@@ -935,8 +978,8 @@ impl Interpreter {
 
         let result = self.exec_block_inner(body.clone());
 
-        let child = std::mem::replace(&mut self.env, Env::new());
-        self.env = child.into_parent().unwrap();
+        // Restore the caller's environment
+        self.env = caller_env;
 
         match result {
             Ok(()) => Ok(Value::Null),

@@ -12,6 +12,7 @@ pub fn call(method: &str, args: Vec<Value>) -> Result<Value> {
             let output = match arg {
                 // Array form: proc.exec(["git", "status"]) — no shell, direct exec
                 Value::List(items) => {
+                    let items = items.lock().unwrap();
                     if items.is_empty() {
                         return Err(LatchError::GenericError("proc.exec: empty command list".into()));
                     }
@@ -53,8 +54,7 @@ pub fn call(method: &str, args: Vec<Value>) -> Result<Value> {
         "pipe" => {
             let cmds = args.first()
                 .ok_or_else(|| LatchError::ArgCountMismatch { name: "proc.pipe".into(), expected: 1, found: 0 })?
-                .as_list()?
-                .clone();
+                .as_list()?;
 
             let mut input = String::new();
 

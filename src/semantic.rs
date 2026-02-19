@@ -133,9 +133,7 @@ impl SemanticAnalyzer {
             }
 
             Stmt::IndexAssign { target, index, value } => {
-                if self.resolve(target).is_none() {
-                    self.errors.push(LatchError::UndeclaredAssign(target.clone()));
-                }
+                self.check_expr(target);
                 self.check_expr(index);
                 self.check_expr(value);
             }
@@ -307,27 +305,7 @@ impl SemanticAnalyzer {
                 self.check_expr(expr);
                 // Don't check func with normal check_expr because pipe injects
                 // an implicit first argument. Check sub-expressions manually.
-                match func.as_ref() {
-                    Expr::Call { name, args } => {
-                        // Pipe adds one implicit arg, so check arity with +1
-                        if let Some(SymbolInfo { kind: SymbolKind::Function { param_count }, .. }) = self.resolve(name) {
-                            let pc = *param_count;
-                            if args.len() + 1 != pc {
-                                self.errors.push(LatchError::ArgCountMismatch {
-                                    name: name.clone(),
-                                    expected: pc,
-                                    found: args.len() + 1,
-                                });
-                            }
-                        }
-                        for arg in args { self.check_expr(arg); }
-                    }
-                    Expr::ModuleCall { args, .. } => {
-                        // Module calls: just check args, skip arity
-                        for arg in args { self.check_expr(arg); }
-                    }
-                    _ => self.check_expr(func),
-                }
+                self.check_pipe_func(func);
             }
 
             Expr::List(items) => {
@@ -381,6 +359,35 @@ impl SemanticAnalyzer {
                     found,
                 });
             }
+        }
+    }
+
+    /// Check a pipe‐target expression, accounting for the implicit first argument.
+    fn check_pipe_func(&mut self, func: &Expr) {
+        match func {
+            Expr::Call { name, args } => {
+                // Pipe adds one implicit arg, so check arity with +1
+                if let Some(SymbolInfo { kind: SymbolKind::Function { param_count }, .. }) = self.resolve(name) {
+                    let pc = *param_count;
+                    if args.len() + 1 != pc {
+                        self.errors.push(LatchError::ArgCountMismatch {
+                            name: name.clone(),
+                            expected: pc,
+                            found: args.len() + 1,
+                        });
+                    }
+                }
+                for arg in args { self.check_expr(arg); }
+            }
+            Expr::ModuleCall { args, .. } => {
+                for arg in args { self.check_expr(arg); }
+            }
+            // `expr |> func() or default` — the OrDefault wraps the call
+            Expr::OrDefault { expr: inner, default } => {
+                self.check_pipe_func(inner);
+                self.check_expr(default);
+            }
+            _ => self.check_expr(func),
         }
     }
 }

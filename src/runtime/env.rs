@@ -37,7 +37,7 @@ pub fn call(method: &str, args: Vec<Value>) -> Result<Value> {
             let map: HashMap<String, Value> = std::env::vars()
                 .map(|(k, v)| (k, Value::Str(v)))
                 .collect();
-            Ok(Value::Map(map))
+            Ok(Value::new_map(map))
         }
 
         _ => Err(LatchError::UnknownMethod {

@@ -121,9 +121,9 @@ pub enum Stmt {
         value: Expr,
     },
 
-    /// Index assignment: `list[0] = 5` or `map["key"] = val`
+    /// Index assignment: `list[0] = 5`, `map["key"] = val`, or `cfg["db"]["port"] = 4000`
     IndexAssign {
-        target: String,
+        target: Expr,
         index: Expr,
         value: Expr,
     },

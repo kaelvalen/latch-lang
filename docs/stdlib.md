@@ -507,7 +507,7 @@ name := user?.name ?? "anonymous"
 latch run <file.lt>     # Execute a script
 latch check <file.lt>   # Static analysis only
 latch repl              # Interactive REPL
-latch version           # Print version (v0.2.0)
+latch version           # Print version (v0.2.2)
 ```
 
 ---

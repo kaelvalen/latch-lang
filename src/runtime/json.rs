@@ -50,13 +50,13 @@ fn json_to_latch(val: serde_json::Value) -> Value {
         }
         serde_json::Value::String(s) => Value::Str(s),
         serde_json::Value::Array(arr) => {
-            Value::List(arr.into_iter().map(json_to_latch).collect())
+            Value::new_list(arr.into_iter().map(json_to_latch).collect())
         }
         serde_json::Value::Object(obj) => {
             let map: HashMap<String, Value> = obj.into_iter()
                 .map(|(k, v)| (k, json_to_latch(v)))
                 .collect();
-            Value::Map(map)
+            Value::new_map(map)
         }
     }
 }
@@ -70,10 +70,12 @@ fn latch_to_json(val: &Value) -> serde_json::Value {
         Value::Float(n) => serde_json::json!(*n),
         Value::Str(s) => serde_json::Value::String(s.clone()),
         Value::List(items) => {
-            serde_json::Value::Array(items.iter().map(latch_to_json).collect())
+            let guard = items.lock().unwrap();
+            serde_json::Value::Array(guard.iter().map(latch_to_json).collect())
         }
         Value::Map(map) => {
-            let obj: serde_json::Map<String, serde_json::Value> = map.iter()
+            let guard = map.lock().unwrap();
+            let obj: serde_json::Map<String, serde_json::Value> = guard.iter()
                 .map(|(k, v)| (k.clone(), latch_to_json(v)))
                 .collect();
             serde_json::Value::Object(obj)

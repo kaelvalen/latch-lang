@@ -140,25 +140,37 @@ impl Parser {
             }
 
             Token::LBracket => {
-                // name[idx] = value  (index assignment)
+                // name[idx] = value  or  name[a][b] = value  (index assignment)
                 self.advance(); // skip [
-                let index = self.parse_expr()?;
+                let first_index = self.parse_expr()?;
                 self.expect(&Token::RBracket)?;
 
                 if matches!(self.peek(), Token::Eq) {
+                    // Simple: name[idx] = value
                     self.advance(); // skip =
                     let value = self.parse_expr()?;
-                    Ok(Stmt::IndexAssign { target: name, index, value })
+                    Ok(Stmt::IndexAssign { target: Expr::Ident(name), index: first_index, value })
                 } else {
-                    // Not an assignment — rewind and parse as expression
-                    // We already consumed name and [index], so build the expression manually
+                    // Build Expr::Index and continue postfix
                     let base = Expr::Index {
                         expr: Box::new(Expr::Ident(name)),
-                        index: Box::new(index),
+                        index: Box::new(first_index),
                     };
-                    // Continue parsing postfix operations
                     let expr = self.continue_postfix(base)?;
-                    Ok(Stmt::Expr(expr))
+
+                    // Check if this is a nested index assignment: expr[...][...] = value
+                    if matches!(self.peek(), Token::Eq) {
+                        self.advance(); // skip =
+                        let value = self.parse_expr()?;
+                        // Decompose: the outermost Expr::Index gives us target + index
+                        if let Expr::Index { expr: target, index } = expr {
+                            Ok(Stmt::IndexAssign { target: *target, index: *index, value })
+                        } else {
+                            Err(crate::error::LatchError::GenericError("Invalid assignment target".into()))
+                        }
+                    } else {
+                        Ok(Stmt::Expr(expr))
+                    }
                 }
             }
 
@@ -353,37 +365,50 @@ impl Parser {
     // ── Expressions (precedence climbing) ────────────────────
 
     fn parse_expr(&mut self) -> Result<Expr> {
-        let expr = self.parse_or_default()?;
-
-        // Handle `|>` pipe: `expr |> func(args)`
-        if matches!(self.peek(), Token::PipeGt) {
-            let mut result = expr;
-            while matches!(self.peek(), Token::PipeGt) {
-                self.advance();
-                let func_expr = self.parse_or_default()?;
-                result = Expr::Pipe {
-                    expr: Box::new(result),
-                    func: Box::new(func_expr),
-                };
-            }
-            return Ok(result);
-        }
-
-        Ok(expr)
+        self.parse_or_default()
     }
 
     fn parse_or_default(&mut self) -> Result<Expr> {
-        let expr = self.parse_null_coalesce()?;
+        let expr = self.parse_pipe()?;
 
         // Handle `or` default: `expr or default`
         if matches!(self.peek(), Token::KwOr) {
             self.advance();
-            let default = self.parse_null_coalesce()?;
+            let default = self.parse_pipe()?;
             return Ok(Expr::OrDefault {
                 expr: Box::new(expr),
                 default: Box::new(default),
             });
         }
+
+        Ok(expr)
+    }
+
+    fn parse_pipe(&mut self) -> Result<Expr> {
+        let expr = self.parse_null_coalesce()?;
+
+        // Handle `|>` pipe: `expr |> func(args)` (supports multi-line)
+        let saved = self.pos;
+        self.skip_newlines();
+        if matches!(self.peek(), Token::PipeGt) {
+            let mut result = expr;
+            while matches!(self.peek(), Token::PipeGt) {
+                self.advance();
+                let func_expr = self.parse_null_coalesce()?;
+                result = Expr::Pipe {
+                    expr: Box::new(result),
+                    func: Box::new(func_expr),
+                };
+                // Allow multi-line continuation
+                let saved_inner = self.pos;
+                self.skip_newlines();
+                if !matches!(self.peek(), Token::PipeGt) {
+                    self.pos = saved_inner;
+                }
+            }
+            return Ok(result);
+        }
+        self.pos = saved; // backtrack if no |> found after newlines
 
         Ok(expr)
     }

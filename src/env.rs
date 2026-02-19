@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::fmt;
+use std::sync::{Arc, Mutex};
 
 use crate::ast::{Block, Param};
 use crate::error::{LatchError, Result};
@@ -12,11 +13,12 @@ pub enum Value {
     Float(f64),
     Bool(bool),
     Str(String),
-    List(Vec<Value>),
-    Map(HashMap<String, Value>),
+    List(Arc<Mutex<Vec<Value>>>),
+    Map(Arc<Mutex<HashMap<String, Value>>>),
     Fn {
         params: Vec<Param>,
         body: Block,
+        captured_env: Option<Box<Env>>,
     },
     ProcessResult {
         stdout: String,
@@ -45,6 +47,16 @@ impl Value {
             Value::HttpResponse { .. }  => "response",
             Value::Null              => "null",
         }
+    }
+
+    /// Construct a new reference-counted list.
+    pub fn new_list(items: Vec<Value>) -> Value {
+        Value::List(Arc::new(Mutex::new(items)))
+    }
+
+    /// Construct a new reference-counted dict.
+    pub fn new_map(map: HashMap<String, Value>) -> Value {
+        Value::Map(Arc::new(Mutex::new(map)))
     }
 
     pub fn as_int(&self) -> Result<i64> {
@@ -90,9 +102,9 @@ impl Value {
         }
     }
 
-    pub fn as_list(&self) -> Result<&Vec<Value>> {
+    pub fn as_list(&self) -> Result<Vec<Value>> {
         match self {
-            Value::List(l) => Ok(l),
+            Value::List(l) => Ok(l.lock().unwrap().clone()),
             _ => Err(LatchError::TypeMismatch {
                 expected: "list".into(),
                 found: self.type_name().into(),
@@ -102,7 +114,7 @@ impl Value {
 
     pub fn into_list(self) -> Result<Vec<Value>> {
         match self {
-            Value::List(l) => Ok(l),
+            Value::List(l) => Ok(l.lock().unwrap().clone()),
             _ => Err(LatchError::TypeMismatch {
                 expected: "list".into(),
                 found: self.type_name().into(),
@@ -130,6 +142,7 @@ impl fmt::Display for Value {
             Value::Str(s) => write!(f, "{s}"),
             Value::Null => write!(f, "null"),
             Value::List(items) => {
+                let items = items.lock().unwrap();
                 write!(f, "[")?;
                 for (i, v) in items.iter().enumerate() {
                     if i > 0 { write!(f, ", ")?; }
@@ -138,6 +151,7 @@ impl fmt::Display for Value {
                 write!(f, "]")
             }
             Value::Map(map) => {
+                let map = map.lock().unwrap();
                 let mut sorted_entries: Vec<_> = map.iter().collect();
                 sorted_entries.sort_by_key(|(k, _)| (*k).clone());
                 write!(f, "{{")?;
@@ -195,19 +209,22 @@ impl Env {
 
     /// Mutate a list or map element in-place: `name[index] = val`.
     pub fn index_assign(&mut self, name: &str, index: &Value, val: Value) -> Result<()> {
-        // Find the variable in the scope chain and mutate it
-        if let Some(container) = self.vars.get_mut(name) {
+        // Find the variable in the scope chain and mutate it.
+        // With Arc<Mutex> values, mutation goes through the lock,
+        // so aliased lists/maps see the change.
+        if let Some(container) = self.vars.get(name) {
             match (container, index) {
                 (Value::List(list), Value::Int(i)) => {
                     let i = *i as usize;
-                    if i >= list.len() {
-                        return Err(LatchError::IndexOutOfBounds { index: i as i64, len: list.len() });
+                    let mut guard = list.lock().unwrap();
+                    if i >= guard.len() {
+                        return Err(LatchError::IndexOutOfBounds { index: i as i64, len: guard.len() });
                     }
-                    list[i] = val;
+                    guard[i] = val;
                     Ok(())
                 }
                 (Value::Map(map), Value::Str(key)) => {
-                    map.insert(key.clone(), val);
+                    map.lock().unwrap().insert(key.clone(), val);
                     Ok(())
                 }
                 _ => Err(LatchError::TypeMismatch {

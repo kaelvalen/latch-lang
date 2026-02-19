@@ -1,0 +1,48 @@
+print("=== SPEC TEST ===")
+
+# precedence
+print(2+3*4)        # 14
+print((2+3)*4)      # 20
+print(10-4-1)       # 5  (left assoc)
+
+# unary
+print(-3*2)         # -6
+
+# null logic
+x:=null
+print(x??5)         # 5
+print((x??5)+1)     # 6
+
+# pipe precedence
+print([3,1,2] |> sort())   # [1,2,3]
+
+# comparison chaining safety
+print(3>2 && 2>1)   # true
+
+# closure capture
+y:=10
+fn test(){
+    return y
+}
+print(test())       # 10
+
+# mutation visibility
+lst:=[1,2]
+fn change(){
+    lst[0]=99
+}
+change()
+print(lst)          # [99,2]
+
+# recursion
+fn fact(n){
+    if n<=1 { return 1 }
+    return n*fact(n-1)
+}
+print(fact(5))      # 120
+
+# json error fallback
+data:=json.parse("oops") or {"ok":false}
+print(data["ok"])   # false
+
+print("=== END SPEC TEST ===")

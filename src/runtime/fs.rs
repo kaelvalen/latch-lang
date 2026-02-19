@@ -46,7 +46,7 @@ pub fn call(method: &str, args: Vec<Value>) -> Result<Value> {
                     Err(e) => list.push(Value::Str(format!("error: {e}"))),
                 }
             }
-            Ok(Value::List(list))
+            Ok(Value::new_list(list))
         }
 
         "append" => {
@@ -76,7 +76,7 @@ pub fn call(method: &str, args: Vec<Value>) -> Result<Value> {
             let lines: Vec<Value> = content.lines()
                 .map(|l| Value::Str(l.to_string()))
                 .collect();
-            Ok(Value::List(lines))
+            Ok(Value::new_list(lines))
         }
 
         "mkdir" => {
@@ -117,7 +117,7 @@ pub fn call(method: &str, args: Vec<Value>) -> Result<Value> {
             map.insert("is_file".to_string(), Value::Bool(meta.is_file()));
             map.insert("is_dir".to_string(), Value::Bool(meta.is_dir()));
             map.insert("readonly".to_string(), Value::Bool(meta.permissions().readonly()));
-            Ok(Value::Map(map))
+            Ok(Value::new_map(map))
         }
 
         _ => Err(LatchError::UnknownMethod { module: "fs".into(), method: method.into() }),

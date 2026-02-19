@@ -154,7 +154,7 @@ fn main() {
         }
 
         Command::Version => {
-            println!("latch v0.2.0");
+            println!("latch v0.2.2");
         }
     }
 }
@@ -162,7 +162,7 @@ fn main() {
 // ── REPL ─────────────────────────────────────────────────────
 
 fn run_repl() {
-    println!("latch v0.2.0 — interactive REPL");
+    println!("latch v0.2.2 — interactive REPL");
     println!("Type expressions or statements. Use Ctrl+D to exit.\n");
 
     let stdin = io::stdin();

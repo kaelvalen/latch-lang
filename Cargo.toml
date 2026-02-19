@@ -1,6 +1,6 @@
 [package]
 name        = "latch-lang"
-version     = "0.2.0"
+version     = "0.2.1"
 edition     = "2021"
 authors     = ["kaelvalen"]
 description = "Latch — a minimal scripting language for local automation and tool orchestration"
