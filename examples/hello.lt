@@ -1,0 +1,64 @@
+# Latch Hello World — v0.1 feature showcase
+
+# 1. Değişken tanımlama
+name := "Latch"
+version: int := 1
+
+# 2. String interpolation
+print("Hello from ${name} v${version}!")
+
+# 3. Matematik
+x := 10 + 5 * 2
+print("10 + 5 * 2 = ${x}")
+
+# 4. if / else
+if x > 15 {
+    print("x is greater than 15")
+} else {
+    print("x is 15 or less")
+}
+
+# 5. Fonksiyon tanımlama ve çağırma
+fn greet(who: string) -> string {
+    return "Merhaba, ${who}!"
+}
+
+msg := greet("Dünya")
+print(msg)
+
+# 6. Liste ve for döngüsü
+items := ["elma", "armut", "kiraz"]
+for item in items {
+    print("  - ${item}")
+}
+
+# 7. Dosya yazma ve okuma
+fs.write("test_output.txt", "Latch buraya yazdı!")
+content := fs.read("test_output.txt")
+print("Dosyadan okunan: ${content}")
+
+# 8. Process çalıştırma
+result := proc.exec("echo 'Merhaba from shell'")
+print("Shell çıktısı: ${result.stdout}")
+
+# 9. or default — hata yakalama
+data := fs.read("olmayan_dosya.txt") or "varsayılan değer"
+print("or default: ${data}")
+
+# 10. try / catch
+try {
+    fs.read("bu_da_yok.txt")
+} catch e {
+    print("Hata yakalandı: ${e}")
+}
+
+# 11. Parallel
+files := ["a.txt", "b.txt", "c.txt"]
+parallel f in files workers=2 {
+    fs.write(f, "parallel yazıldı: ${f}")
+}
+print("Parallel yazma tamamlandı!")
+
+# Temizlik
+proc.exec("rm -f test_output.txt a.txt b.txt c.txt")
+print("Bitti!")
