@@ -28,15 +28,10 @@ esac
 
 TARGET="${TARGET_ARCH}-${TARGET_OS}"
 
-# ── Fetch latest release ─────────────────────────────────────
+# ── Helper: cargo fallback ────────────────────────────────────
 
-echo "→ Detecting latest Latch release..."
-LATEST=$(curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" | grep '"tag_name"' | sed -E 's/.*"([^"]+)".*/\1/')
-
-if [ -z "$LATEST" ]; then
-    echo "Error: Could not determine latest release."
-    echo ""
-    echo "Falling back to cargo install..."
+cargo_fallback() {
+    echo "→ Falling back to cargo install..."
     echo ""
     if command -v cargo &> /dev/null; then
         cargo install latch-lang
@@ -48,6 +43,17 @@ if [ -z "$LATEST" ]; then
         echo "Error: cargo not found. Install Rust first: https://rustup.rs"
         exit 1
     fi
+}
+
+# ── Fetch latest release ─────────────────────────────────────
+
+echo "→ Detecting latest Latch release..."
+LATEST=$(curl -sSL "https://api.github.com/repos/${REPO}/releases/latest" 2>/dev/null | grep '"tag_name"' | sed -E 's/.*"([^"]+)".*/\1/' || true)
+
+if [ -z "$LATEST" ]; then
+    echo "→ No releases found on GitHub."
+    echo ""
+    cargo_fallback
 fi
 
 DOWNLOAD_URL="https://github.com/${REPO}/releases/download/${LATEST}/latch-${LATEST}-${TARGET}.tar.gz"
@@ -70,18 +76,7 @@ if curl -fsSL "$DOWNLOAD_URL" -o "${TMPDIR}/latch.tar.gz"; then
     echo "✓ Latch ${LATEST} installed to ${INSTALL_DIR}/${BIN_NAME}"
 else
     echo "→ Pre-built binary not available for ${TARGET}."
-    echo "→ Building from source with cargo..."
-    echo ""
-    if command -v cargo &> /dev/null; then
-        cargo install latch-lang
-        echo ""
-        echo "✓ Latch installed via cargo!"
-        latch version
-        exit 0
-    else
-        echo "Error: cargo not found. Install Rust first: https://rustup.rs"
-        exit 1
-    fi
+    cargo_fallback
 fi
 
 # ── Check PATH ────────────────────────────────────────────────
