@@ -669,7 +669,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "latch"
+name = "latch-lang"
 version = "0.1.0"
 dependencies = [
  "anyhow",

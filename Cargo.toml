@@ -1,7 +1,16 @@
 [package]
-name    = "latch"
-version = "0.1.0"
-edition = "2021"
+name        = "latch-lang"
+version     = "0.1.0"
+edition     = "2021"
+authors     = ["kaelvalen"]
+description = "Latch — a minimal scripting language for local automation and tool orchestration"
+license     = "MIT"
+repository  = "https://github.com/kaelvalen/latch-lang"
+homepage    = "https://github.com/kaelvalen/latch-lang"
+readme      = "README.md"
+keywords    = ["scripting", "automation", "language", "cli", "devops"]
+categories  = ["command-line-utilities", "development-tools"]
+exclude     = ["target/", "examples/error_test.lt", "examples/stop_test.lt", "examples/stop_fail.lt"]
 
 [[bin]]
 name = "latch"

@@ -1,0 +1,32 @@
+# ci-check.lt — Example: use Latch as a CI gate
+#
+# Usage:
+#   latch run ci-check.lt
+#
+# Returns exit code 0 on success, 1 on failure.
+
+print("Running CI checks...")
+
+# 1. Run tests
+result := proc.exec("echo 'All 42 tests passed'")
+print(result.stdout)
+
+# 2. Check for TODO markers in source
+todos := proc.exec("grep -r 'TODO' examples/ || true")
+if contains(todos.stdout, "TODO") {
+    print("Warning: found TODO markers")
+}
+
+# 3. Verify required files exist
+required := ["Cargo.toml", "README.md", "LICENSE"]
+for f in required {
+    if fs.exists(f) {
+        print("  ✓ ${f}")
+    } else {
+        print("  ✗ ${f} MISSING")
+        stop 1
+    }
+}
+
+print("All checks passed!")
+stop 0

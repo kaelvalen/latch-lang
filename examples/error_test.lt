@@ -1,2 +1,0 @@
-# Test: error formatting
-x := undefined_var + 1

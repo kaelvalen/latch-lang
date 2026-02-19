@@ -1,3 +1,0 @@
-# Test: stop with non-zero exit code (CI failure case)
-print("CI check running...")
-stop 1

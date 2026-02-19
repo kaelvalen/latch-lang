@@ -1,0 +1,25 @@
+# Build
+/target/
+**/*.rs.bk
+
+# Cargo
+Cargo.lock
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# OS
+Thumbs.db
+.directory
+
+# Runtime artifacts
+*.lt.out
+test_output.txt
+a.txt
+b.txt
+c.txt

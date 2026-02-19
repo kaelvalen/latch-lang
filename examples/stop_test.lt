@@ -1,4 +1,0 @@
-# Test: stop statement with exit code
-print("Before stop")
-stop 0
-print("This should NOT print")
