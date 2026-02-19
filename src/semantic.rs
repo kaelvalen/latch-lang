@@ -90,8 +90,16 @@ impl SemanticAnalyzer {
         self.declare("range", SymbolInfo::function(2));
         self.declare("split", SymbolInfo::function(2));
         self.declare("trim", SymbolInfo::function(1));
+        self.declare("lower", SymbolInfo::function(1));
+        self.declare("upper", SymbolInfo::function(1));
+        self.declare("starts_with", SymbolInfo::function(2));
+        self.declare("ends_with", SymbolInfo::function(2));
         self.declare("contains", SymbolInfo::function(2));
         self.declare("replace", SymbolInfo::function(3));
+        self.declare("sort", SymbolInfo::function(1));
+        self.declare("filter", SymbolInfo::function(2));
+        self.declare("map", SymbolInfo::function(2));
+        self.declare("each", SymbolInfo::function(2));
 
         // Modules are not functions — they're resolved via ModuleCall,
         // but we register them as variables so `fs` doesn't trigger "undefined".
@@ -100,6 +108,9 @@ impl SemanticAnalyzer {
         self.declare("http", SymbolInfo::variable());
         self.declare("time", SymbolInfo::variable());
         self.declare("ai", SymbolInfo::variable());
+        self.declare("json", SymbolInfo::variable());
+        self.declare("env", SymbolInfo::variable());
+        self.declare("path", SymbolInfo::variable());
     }
 
     // ── Statement checking ───────────────────────────────────
@@ -118,6 +129,14 @@ impl SemanticAnalyzer {
                 if self.resolve(name).is_none() {
                     self.errors.push(LatchError::UndeclaredAssign(name.clone()));
                 }
+                self.check_expr(value);
+            }
+
+            Stmt::IndexAssign { target, index, value } => {
+                if self.resolve(target).is_none() {
+                    self.errors.push(LatchError::UndeclaredAssign(target.clone()));
+                }
+                self.check_expr(index);
                 self.check_expr(value);
             }
 
@@ -200,6 +219,13 @@ impl SemanticAnalyzer {
                 self.check_expr(expr);
             }
 
+            Stmt::CompoundAssign { name, value, .. } => {
+                if self.resolve(name).is_none() {
+                    self.errors.push(LatchError::UndeclaredAssign(name.clone()));
+                }
+                self.check_expr(value);
+            }
+
             Stmt::Expr(expr) => {
                 self.check_expr(expr);
             }
@@ -263,12 +289,67 @@ impl SemanticAnalyzer {
                 self.check_expr(expr);
             }
 
+            Expr::SafeAccess { expr, .. } => {
+                self.check_expr(expr);
+            }
+
+            Expr::NullCoalesce { expr, default } => {
+                self.check_expr(expr);
+                self.check_expr(default);
+            }
+
+            Expr::Range { start, end } => {
+                self.check_expr(start);
+                self.check_expr(end);
+            }
+
+            Expr::Pipe { expr, func } => {
+                self.check_expr(expr);
+                // Don't check func with normal check_expr because pipe injects
+                // an implicit first argument. Check sub-expressions manually.
+                match func.as_ref() {
+                    Expr::Call { name, args } => {
+                        // Pipe adds one implicit arg, so check arity with +1
+                        if let Some(SymbolInfo { kind: SymbolKind::Function { param_count }, .. }) = self.resolve(name) {
+                            let pc = *param_count;
+                            if args.len() + 1 != pc {
+                                self.errors.push(LatchError::ArgCountMismatch {
+                                    name: name.clone(),
+                                    expected: pc,
+                                    found: args.len() + 1,
+                                });
+                            }
+                        }
+                        for arg in args { self.check_expr(arg); }
+                    }
+                    Expr::ModuleCall { args, .. } => {
+                        // Module calls: just check args, skip arity
+                        for arg in args { self.check_expr(arg); }
+                    }
+                    _ => self.check_expr(func),
+                }
+            }
+
             Expr::List(items) => {
                 for item in items { self.check_expr(item); }
             }
 
             Expr::Map(entries) => {
                 for (_, v) in entries { self.check_expr(v); }
+            }
+
+            Expr::Fn { params, body } => {
+                self.push_scope();
+                let prev = self.current_fn.take();
+                self.current_fn = Some("<anonymous>".to_string());
+                for p in params {
+                    self.declare(&p.name, SymbolInfo::variable());
+                }
+                for s in body {
+                    self.check_stmt(s);
+                }
+                self.current_fn = prev;
+                self.pop_scope();
             }
 
             Expr::Interpolated(parts) => {
@@ -278,7 +359,7 @@ impl SemanticAnalyzer {
             }
 
             // Literals — no checks needed
-            Expr::Int(_) | Expr::Float(_) | Expr::Bool(_) | Expr::Str(_) => {}
+            Expr::Int(_) | Expr::Float(_) | Expr::Bool(_) | Expr::Str(_) | Expr::Null => {}
         }
     }
 
@@ -289,7 +370,7 @@ impl SemanticAnalyzer {
             Expr::Bool(_) => Some(Type::Bool),
             Expr::Str(_) | Expr::Interpolated(_) => Some(Type::Str),
             Expr::List(_) => Some(Type::List),
-            Expr::Map(_) => Some(Type::Map),
+            Expr::Map(_) => Some(Type::Dict),
             _ => None, // can't determine at compile time
         };
         if let Some(found) = found {

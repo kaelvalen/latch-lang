@@ -15,6 +15,7 @@ pub enum Expr {
     Float(f64),
     Bool(bool),
     Str(String),
+    Null,
     List(Vec<Expr>),
     Map(Vec<(String, Expr)>),
 
@@ -60,13 +61,44 @@ pub enum Expr {
         expr: Box<Expr>,
         field: String,
     },
+
+    /// Anonymous function: `fn(x) { return x + 1 }`
+    Fn {
+        params: Vec<Param>,
+        body: Block,
+    },
+
+    /// Null coalesce: `expr ?? default`
+    NullCoalesce {
+        expr: Box<Expr>,
+        default: Box<Expr>,
+    },
+
+    /// Range: `1..10`
+    Range {
+        start: Box<Expr>,
+        end: Box<Expr>,
+    },
+
+    /// Pipe: `expr |> func()`
+    Pipe {
+        expr: Box<Expr>,
+        func: Box<Expr>,
+    },
+
+    /// Safe field access: `expr?.field`
+    SafeAccess {
+        expr: Box<Expr>,
+        field: String,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum BinOp {
-    Add, Sub, Mul, Div,
+    Add, Sub, Mul, Div, Mod,
     Eq, NotEq, Lt, Gt, LtEq, GtEq,
     And, Or,
+    In,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -86,6 +118,13 @@ pub enum Stmt {
 
     Assign {
         name: String,
+        value: Expr,
+    },
+
+    /// Index assignment: `list[0] = 5` or `map["key"] = val`
+    IndexAssign {
+        target: String,
+        index: Expr,
         value: Expr,
     },
 
@@ -128,6 +167,13 @@ pub enum Stmt {
     /// `stop 1` — exit the script with a code
     Stop(Expr),
 
+    /// Compound assignment: `x += 1`, `x -= 2`, etc.
+    CompoundAssign {
+        name: String,
+        op: BinOp,
+        value: Expr,
+    },
+
     /// A bare expression used as a statement: `print("hi")`
     Expr(Expr),
 }
@@ -147,7 +193,7 @@ pub enum Type {
     Bool,
     Str,
     List,
-    Map,
+    Dict,
     Process,
     File,
     Any,

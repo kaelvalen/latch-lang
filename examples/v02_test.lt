@@ -1,0 +1,108 @@
+# v0.2.0 comprehensive test — all new features
+
+// ═══ 1. MODULO ═══
+print("--- modulo ---")
+print(10 % 3)
+print(17 % 5)
+print(10 % 2)
+
+// ═══ 2. TYPEOF dict ═══
+print("--- typeof dict ---")
+d := {"name": "latch", "ver": 2}
+print(typeof(d))
+
+// ═══ 3. map() HOF (renamed from map_list) ═══
+print("--- map HOF ---")
+nums := [1, 2, 3, 4]
+doubled := map(nums, fn(x) { return x * 2 })
+print(doubled)
+
+// ═══ 4. STRING UTILS ═══
+print("--- string utils ---")
+s := "Hello World"
+print(lower(s))
+print(upper(s))
+print(starts_with(s, "Hello"))
+print(ends_with(s, "World"))
+print(starts_with(s, "Bye"))
+
+// ═══ 5. fs.mkdir / stat / remove ═══
+print("--- fs extras ---")
+fs.mkdir("/tmp/latch_test_dir")
+stat := fs.stat("/tmp/latch_test_dir")
+print(stat.is_dir)
+fs.remove("/tmp/latch_test_dir")
+print(fs.exists("/tmp/latch_test_dir"))
+
+// ═══ 6. proc.exec array form ═══
+print("--- proc array ---")
+r := proc.exec(["echo", "hello from array"])
+print(trim(r.stdout))
+
+// ═══ 7. NULL COALESCE ?? ═══
+print("--- null coalesce ---")
+maybe := null
+x := maybe ?? 42
+print(x)
+y := "real value" ?? "fallback"
+// should be "real value" since not null
+print(y)
+
+// ═══ 8. IN operator ═══
+print("--- in operator ---")
+items := ["apple", "banana", "cherry"]
+print("banana" in items)
+print("grape" in items)
+print("lo" in "Hello World")
+cfg := {"host": "127.0.0.1", "port": 8080}
+print("host" in cfg)
+print("missing" in cfg)
+
+// ═══ 9. RANGE .. operator ═══
+print("--- range ---")
+r2 := 1..5
+print(r2)
+print(len(r2))
+
+// ═══ 10. PIPE |> operator ═══
+print("--- pipe ---")
+result := [3, 1, 4, 1, 5] |> sort()
+print(result)
+result2 := [10, 20, 30, 40] |> filter(fn(x) { return x > 15 })
+print(result2)
+
+// ═══ 11. COMPOUND ASSIGNMENTS ═══
+print("--- compound assign ---")
+count := 10
+count += 5
+print(count)
+count -= 3
+print(count)
+count *= 2
+print(count)
+count /= 4
+print(count)
+count %= 5
+print(count)
+
+// ═══ 12. SAFE ACCESS ?. ═══
+print("--- safe access ---")
+val := null
+print(val?.name)
+m := {"host": "localhost"}
+print(m?.host)
+print(m?.missing)
+
+// ═══ 13. keys/values on dict ═══
+print("--- keys/values ---")
+print(keys(d))
+print(values(d))
+
+// ═══ 14. filter + map combo ═══
+print("--- combos ---")
+big := filter(nums, fn(x) { return x > 2 })
+print(big)
+evens := filter(nums, fn(x) { return x % 2 == 0 })
+print(evens)
+
+print("=== ALL TESTS PASSED ===")

@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use crate::env::Value;
 use crate::error::{LatchError, Result};
 
@@ -15,14 +13,13 @@ pub fn call(method: &str, args: Vec<Value>) -> Result<Value> {
                 .map_err(|e| LatchError::HttpError(format!("http.get(\"{url}\"): {e}")))?;
 
             let status = response.status().as_u16() as i64;
+            let headers: std::collections::HashMap<String, String> = response.headers().iter()
+                .map(|(k, v)| (k.to_string(), v.to_str().unwrap_or("").to_string()))
+                .collect();
             let body = response.text()
                 .map_err(|e| LatchError::HttpError(format!("http.get response: {e}")))?;
 
-            let mut map = HashMap::new();
-            map.insert("body".to_string(), Value::Str(body));
-            map.insert("status".to_string(), Value::Int(status));
-
-            Ok(Value::Map(map))
+            Ok(Value::HttpResponse { status, body, headers })
         }
 
         "post" => {
@@ -40,14 +37,13 @@ pub fn call(method: &str, args: Vec<Value>) -> Result<Value> {
                 .map_err(|e| LatchError::HttpError(format!("http.post(\"{url}\"): {e}")))?;
 
             let status = response.status().as_u16() as i64;
+            let headers: std::collections::HashMap<String, String> = response.headers().iter()
+                .map(|(k, v)| (k.to_string(), v.to_str().unwrap_or("").to_string()))
+                .collect();
             let body = response.text()
                 .map_err(|e| LatchError::HttpError(format!("http.post response: {e}")))?;
 
-            let mut map = HashMap::new();
-            map.insert("body".to_string(), Value::Str(body));
-            map.insert("status".to_string(), Value::Int(status));
-
-            Ok(Value::Map(map))
+            Ok(Value::HttpResponse { status, body, headers })
         }
 
         _ => Err(LatchError::UnknownMethod { module: "http".into(), method: method.into() }),

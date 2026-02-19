@@ -20,6 +20,7 @@ pub enum Token {
     Minus,    // -
     Star,     // *
     Slash,    // /
+    Percent,  // %
     EqEq,     // ==
     NotEq,    // !=
     Lt,       // <
@@ -31,8 +32,17 @@ pub enum Token {
     Bang,     // !
     Arrow,    // ->
     Dot,      // .
+    DotDot,   // ..
     Comma,    // ,
     Colon,    // :
+    PlusEq,   // +=
+    MinusEq,  // -=
+    StarEq,   // *=
+    SlashEq,  // /=
+    PercentEq,// %=
+    QuestionQuestion, // ??
+    QuestionDot,      // ?.
+    PipeGt,   // |>
 
     // Grouping
     LBrace,   // {
@@ -56,6 +66,7 @@ pub enum Token {
     KwUse,
     KwOr,
     KwStop,
+    KwNull,
 
     // Other
     Newline,
@@ -222,6 +233,9 @@ impl Lexer {
                     if !self.at_end() && self.peek() == '|' {
                         self.advance();
                         tokens.push(Spanned { node: Token::Or, line, col });
+                    } else if !self.at_end() && self.peek() == '>' {
+                        self.advance();
+                        tokens.push(Spanned { node: Token::PipeGt, line, col });
                     } else {
                         return Err(LatchError::UnexpectedChar { ch: '|', line, col });
                     }
@@ -234,16 +248,92 @@ impl Lexer {
                     if !self.at_end() && self.peek() == '>' {
                         self.advance();
                         tokens.push(Spanned { node: Token::Arrow, line, col });
+                    } else if !self.at_end() && self.peek() == '=' {
+                        self.advance();
+                        tokens.push(Spanned { node: Token::MinusEq, line, col });
                     } else {
                         tokens.push(Spanned { node: Token::Minus, line, col });
                     }
                 }
 
-                '+' => { let s = self.simple(Token::Plus); tokens.push(s); }
-                '*' => { let s = self.simple(Token::Star); tokens.push(s); }
-                '/' => { let s = self.simple(Token::Slash); tokens.push(s); }
-                '.' => { let s = self.simple(Token::Dot); tokens.push(s); }
+                '+' => {
+                    let line = self.line;
+                    let col = self.col;
+                    self.advance();
+                    if !self.at_end() && self.peek() == '=' {
+                        self.advance();
+                        tokens.push(Spanned { node: Token::PlusEq, line, col });
+                    } else {
+                        tokens.push(Spanned { node: Token::Plus, line, col });
+                    }
+                }
+                '*' => {
+                    let line = self.line;
+                    let col = self.col;
+                    self.advance();
+                    if !self.at_end() && self.peek() == '=' {
+                        self.advance();
+                        tokens.push(Spanned { node: Token::StarEq, line, col });
+                    } else {
+                        tokens.push(Spanned { node: Token::Star, line, col });
+                    }
+                }
+                '/' => {
+                    let line = self.line;
+                    let col = self.col;
+                    self.advance(); // consume first /
+                    if !self.at_end() && self.peek() == '=' {
+                        self.advance();
+                        tokens.push(Spanned { node: Token::SlashEq, line, col });
+                        continue;
+                    }
+                    if !self.at_end() && self.peek() == '/' {
+                        // // line comment — skip to end of line
+                        self.advance(); // consume second /
+                        while !self.at_end() && self.peek() != '\n' {
+                            self.advance();
+                        }
+                    } else {
+                        tokens.push(Spanned { node: Token::Slash, line, col });
+                    }
+                }
+                '.' => {
+                    let line = self.line;
+                    let col = self.col;
+                    self.advance();
+                    if !self.at_end() && self.peek() == '.' {
+                        self.advance();
+                        tokens.push(Spanned { node: Token::DotDot, line, col });
+                    } else {
+                        tokens.push(Spanned { node: Token::Dot, line, col });
+                    }
+                }
                 ',' => { let s = self.simple(Token::Comma); tokens.push(s); }
+                '%' => {
+                    let line = self.line;
+                    let col = self.col;
+                    self.advance();
+                    if !self.at_end() && self.peek() == '=' {
+                        self.advance();
+                        tokens.push(Spanned { node: Token::PercentEq, line, col });
+                    } else {
+                        tokens.push(Spanned { node: Token::Percent, line, col });
+                    }
+                }
+                '?' => {
+                    let line = self.line;
+                    let col = self.col;
+                    self.advance();
+                    if !self.at_end() && self.peek() == '?' {
+                        self.advance();
+                        tokens.push(Spanned { node: Token::QuestionQuestion, line, col });
+                    } else if !self.at_end() && self.peek() == '.' {
+                        self.advance();
+                        tokens.push(Spanned { node: Token::QuestionDot, line, col });
+                    } else {
+                        return Err(LatchError::UnexpectedChar { ch: '?', line, col });
+                    }
+                }
                 '{' => { let s = self.simple(Token::LBrace); tokens.push(s); }
                 '}' => { let s = self.simple(Token::RBrace); tokens.push(s); }
                 '[' => { let s = self.simple(Token::LBracket); tokens.push(s); }
@@ -353,6 +443,7 @@ impl Lexer {
             "stop"     => Token::KwStop,
             "true"     => Token::Bool(true),
             "false"    => Token::Bool(false),
+            "null"     => Token::KwNull,
             _          => Token::Ident(s),
         };
 

@@ -6,18 +6,42 @@ use crate::error::{LatchError, Result};
 pub fn call(method: &str, args: Vec<Value>) -> Result<Value> {
     match method {
         "exec" => {
-            let cmd_str = args.first()
-                .ok_or_else(|| LatchError::ArgCountMismatch { name: "proc.exec".into(), expected: 1, found: 0 })?
-                .as_str()?
-                .to_string();
+            let arg = args.first()
+                .ok_or_else(|| LatchError::ArgCountMismatch { name: "proc.exec".into(), expected: 1, found: 0 })?;
 
-            let output = if cfg!(target_os = "windows") {
-                Command::new("cmd").args(["/C", &cmd_str]).output()
-            } else {
-                Command::new("sh").args(["-c", &cmd_str]).output()
+            let output = match arg {
+                // Array form: proc.exec(["git", "status"]) — no shell, direct exec
+                Value::List(items) => {
+                    if items.is_empty() {
+                        return Err(LatchError::GenericError("proc.exec: empty command list".into()));
+                    }
+                    let cmd_parts: Vec<String> = items.iter()
+                        .map(|v| match v {
+                            Value::Str(s) => Ok(s.clone()),
+                            other => Err(LatchError::TypeMismatch {
+                                expected: "string".into(),
+                                found: other.type_name().into(),
+                            }),
+                        })
+                        .collect::<Result<_>>()?;
+                    Command::new(&cmd_parts[0])
+                        .args(&cmd_parts[1..])
+                        .output()
+                        .map_err(|e| LatchError::IoError(format!("proc.exec: {e}")))?
+                }
+                // String form: proc.exec("ls -la") — via shell
+                Value::Str(cmd_str) => {
+                    if cfg!(target_os = "windows") {
+                        Command::new("cmd").args(["/C", cmd_str]).output()
+                    } else {
+                        Command::new("sh").args(["-c", cmd_str]).output()
+                    }.map_err(|e| LatchError::IoError(format!("proc.exec: {e}")))?
+                }
+                _ => return Err(LatchError::TypeMismatch {
+                    expected: "string or list".into(),
+                    found: arg.type_name().into(),
+                }),
             };
-
-            let output = output.map_err(|e| LatchError::IoError(format!("proc.exec: {e}")))?;
 
             let stdout = String::from_utf8_lossy(&output.stdout).to_string();
             let stderr = String::from_utf8_lossy(&output.stderr).to_string();

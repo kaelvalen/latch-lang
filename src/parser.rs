@@ -95,6 +95,7 @@ impl Parser {
     /// - `name := value`       (let)
     /// - `name: type := value` (let with annotation)
     /// - `name = value`        (assign)
+    /// - `name[idx] = value`   (index assign)
     /// - `name(...)` or `mod.method(...)` (expression statement)
     fn parse_ident_stmt(&mut self) -> Result<Stmt> {
         let name = match self.advance().node.clone() {
@@ -122,6 +123,43 @@ impl Parser {
                 self.advance(); // skip =
                 let value = self.parse_expr()?;
                 Ok(Stmt::Assign { name, value })
+            }
+
+            // Compound assignments: +=, -=, *=, /=, %=
+            Token::PlusEq | Token::MinusEq | Token::StarEq | Token::SlashEq | Token::PercentEq => {
+                let op = match self.advance().node.clone() {
+                    Token::PlusEq    => BinOp::Add,
+                    Token::MinusEq   => BinOp::Sub,
+                    Token::StarEq    => BinOp::Mul,
+                    Token::SlashEq   => BinOp::Div,
+                    Token::PercentEq => BinOp::Mod,
+                    _ => unreachable!(),
+                };
+                let value = self.parse_expr()?;
+                Ok(Stmt::CompoundAssign { name, op, value })
+            }
+
+            Token::LBracket => {
+                // name[idx] = value  (index assignment)
+                self.advance(); // skip [
+                let index = self.parse_expr()?;
+                self.expect(&Token::RBracket)?;
+
+                if matches!(self.peek(), Token::Eq) {
+                    self.advance(); // skip =
+                    let value = self.parse_expr()?;
+                    Ok(Stmt::IndexAssign { target: name, index, value })
+                } else {
+                    // Not an assignment — rewind and parse as expression
+                    // We already consumed name and [index], so build the expression manually
+                    let base = Expr::Index {
+                        expr: Box::new(Expr::Ident(name)),
+                        index: Box::new(index),
+                    };
+                    // Continue parsing postfix operations
+                    let expr = self.continue_postfix(base)?;
+                    Ok(Stmt::Expr(expr))
+                }
             }
 
             // Anything else: treat as expression starting with this ident
@@ -248,7 +286,7 @@ impl Parser {
                 "bool"    => Ok(Type::Bool),
                 "string"  => Ok(Type::Str),
                 "list"    => Ok(Type::List),
-                "map"     => Ok(Type::Map),
+                "dict"    => Ok(Type::Dict),
                 "process" => Ok(Type::Process),
                 "file"    => Ok(Type::File),
                 "any"     => Ok(Type::Any),
@@ -315,12 +353,32 @@ impl Parser {
     // ── Expressions (precedence climbing) ────────────────────
 
     fn parse_expr(&mut self) -> Result<Expr> {
-        let expr = self.parse_or_expr()?;
+        let expr = self.parse_or_default()?;
+
+        // Handle `|>` pipe: `expr |> func(args)`
+        if matches!(self.peek(), Token::PipeGt) {
+            let mut result = expr;
+            while matches!(self.peek(), Token::PipeGt) {
+                self.advance();
+                let func_expr = self.parse_or_default()?;
+                result = Expr::Pipe {
+                    expr: Box::new(result),
+                    func: Box::new(func_expr),
+                };
+            }
+            return Ok(result);
+        }
+
+        Ok(expr)
+    }
+
+    fn parse_or_default(&mut self) -> Result<Expr> {
+        let expr = self.parse_null_coalesce()?;
 
         // Handle `or` default: `expr or default`
         if matches!(self.peek(), Token::KwOr) {
             self.advance();
-            let default = self.parse_or_expr()?;
+            let default = self.parse_null_coalesce()?;
             return Ok(Expr::OrDefault {
                 expr: Box::new(expr),
                 default: Box::new(default),
@@ -328,6 +386,19 @@ impl Parser {
         }
 
         Ok(expr)
+    }
+
+    fn parse_null_coalesce(&mut self) -> Result<Expr> {
+        let mut left = self.parse_or_expr()?;
+        while matches!(self.peek(), Token::QuestionQuestion) {
+            self.advance();
+            let right = self.parse_or_expr()?;
+            left = Expr::NullCoalesce {
+                expr: Box::new(left),
+                default: Box::new(right),
+            };
+        }
+        Ok(left)
     }
 
     fn parse_or_expr(&mut self) -> Result<Expr> {
@@ -366,18 +437,32 @@ impl Parser {
     }
 
     fn parse_comparison(&mut self) -> Result<Expr> {
-        let mut left = self.parse_additive()?;
+        let mut left = self.parse_range()?;
         loop {
             let op = match self.peek() {
                 Token::Lt   => BinOp::Lt,
                 Token::Gt   => BinOp::Gt,
                 Token::LtEq => BinOp::LtEq,
                 Token::GtEq => BinOp::GtEq,
+                Token::KwIn => BinOp::In,
                 _ => break,
             };
             self.advance();
-            let right = self.parse_additive()?;
+            let right = self.parse_range()?;
             left = Expr::BinOp { op, left: Box::new(left), right: Box::new(right) };
+        }
+        Ok(left)
+    }
+
+    fn parse_range(&mut self) -> Result<Expr> {
+        let left = self.parse_additive()?;
+        if matches!(self.peek(), Token::DotDot) {
+            self.advance();
+            let right = self.parse_additive()?;
+            return Ok(Expr::Range {
+                start: Box::new(left),
+                end: Box::new(right),
+            });
         }
         Ok(left)
     }
@@ -401,8 +486,9 @@ impl Parser {
         let mut left = self.parse_unary()?;
         loop {
             let op = match self.peek() {
-                Token::Star  => BinOp::Mul,
-                Token::Slash => BinOp::Div,
+                Token::Star    => BinOp::Mul,
+                Token::Slash   => BinOp::Div,
+                Token::Percent => BinOp::Mod,
                 _ => break,
             };
             self.advance();
@@ -429,7 +515,12 @@ impl Parser {
     }
 
     fn parse_postfix(&mut self) -> Result<Expr> {
-        let mut expr = self.parse_primary()?;
+        let expr = self.parse_primary()?;
+        self.continue_postfix(expr)
+    }
+
+    /// Continue parsing postfix operations from an already-parsed base expression.
+    fn continue_postfix(&mut self, mut expr: Expr) -> Result<Expr> {
 
         loop {
             match self.peek() {
@@ -468,6 +559,18 @@ impl Parser {
                     let index = self.parse_expr()?;
                     self.expect(&Token::RBracket)?;
                     expr = Expr::Index { expr: Box::new(expr), index: Box::new(index) };
+                }
+
+                // safe access: expr?.field
+                Token::QuestionDot => {
+                    self.advance();
+                    let field = match self.advance().node.clone() {
+                        Token::Ident(n) => n,
+                        other => return Err(LatchError::UnexpectedToken {
+                            expected: "field name".into(), found: format!("{other:?}"), line: self.line(),
+                        }),
+                    };
+                    expr = Expr::SafeAccess { expr: Box::new(expr), field };
                 }
 
                 // call: expr(args) — only for Ident
@@ -510,6 +613,7 @@ impl Parser {
             Token::Float(n)  => { self.advance(); Ok(Expr::Float(n)) }
             Token::Bool(b)   => { self.advance(); Ok(Expr::Bool(b)) }
             Token::Str(s)    => { self.advance(); Ok(Expr::Str(s)) }
+            Token::KwNull    => { self.advance(); Ok(Expr::Null) }
             Token::Ident(n)  => { self.advance(); Ok(Expr::Ident(n)) }
 
             Token::InterpolatedStr(parts) => {
@@ -534,11 +638,49 @@ impl Parser {
                 Ok(Expr::List(elems))
             }
 
+            Token::LBrace => {
+                // Map literal: {"key": value, "key2": value2}
+                self.advance(); // skip {
+                let mut entries = Vec::new();
+                self.skip_newlines();
+                while !matches!(self.peek(), Token::RBrace | Token::EOF) {
+                    let key = match self.advance().node.clone() {
+                        Token::Str(s) => s,
+                        Token::Ident(s) => s,
+                        other => return Err(LatchError::UnexpectedToken {
+                            expected: "string or identifier key".into(),
+                            found: format!("{other:?}"),
+                            line: self.line(),
+                        }),
+                    };
+                    self.expect(&Token::Colon)?;
+                    let value = self.parse_expr()?;
+                    entries.push((key, value));
+                    self.skip_newlines();
+                    if matches!(self.peek(), Token::Comma) {
+                        self.advance();
+                        self.skip_newlines();
+                    }
+                }
+                self.expect(&Token::RBrace)?;
+                Ok(Expr::Map(entries))
+            }
+
             Token::LParen => {
                 self.advance();
                 let expr = self.parse_expr()?;
                 self.expect(&Token::RParen)?;
                 Ok(expr)
+            }
+
+            // Anonymous function: fn(x, y) { ... }
+            Token::KwFn => {
+                self.advance(); // skip 'fn'
+                self.expect(&Token::LParen)?;
+                let params = self.parse_params()?;
+                self.expect(&Token::RParen)?;
+                let body = self.parse_block()?;
+                Ok(Expr::Fn { params, body })
             }
 
             _ => {

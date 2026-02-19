@@ -23,6 +23,11 @@ pub enum Value {
         stderr: String,
         code: i32,
     },
+    HttpResponse {
+        status: i64,
+        body: String,
+        headers: HashMap<String, String>,
+    },
     Null,
 }
 
@@ -34,9 +39,10 @@ impl Value {
             Value::Bool(_)           => "bool",
             Value::Str(_)            => "string",
             Value::List(_)           => "list",
-            Value::Map(_)            => "map",
+            Value::Map(_)            => "dict",
             Value::Fn { .. }         => "fn",
             Value::ProcessResult { .. } => "process",
+            Value::HttpResponse { .. }  => "response",
             Value::Null              => "null",
         }
     }
@@ -132,8 +138,10 @@ impl fmt::Display for Value {
                 write!(f, "]")
             }
             Value::Map(map) => {
+                let mut sorted_entries: Vec<_> = map.iter().collect();
+                sorted_entries.sort_by_key(|(k, _)| (*k).clone());
                 write!(f, "{{")?;
-                for (i, (k, v)) in map.iter().enumerate() {
+                for (i, (k, v)) in sorted_entries.iter().enumerate() {
                     if i > 0 { write!(f, ", ")?; }
                     write!(f, "{k}: {v}")?;
                 }
@@ -142,6 +150,10 @@ impl fmt::Display for Value {
             Value::Fn { .. } => write!(f, "<fn>"),
             Value::ProcessResult { stdout, stderr, code } => {
                 write!(f, "ProcessResult(code={code}, stdout={stdout:?}, stderr={stderr:?})")
+            }
+            Value::HttpResponse { status, body, .. } => {
+                let preview = if body.len() > 80 { &body[..80] } else { body.as_str() };
+                write!(f, "HttpResponse(status={status}, body={preview:?}...)")
             }
         }
     }
@@ -176,6 +188,35 @@ impl Env {
             Ok(())
         } else if let Some(parent) = &mut self.parent {
             parent.assign(name, val)
+        } else {
+            Err(LatchError::UndefinedVariable(name.to_string()))
+        }
+    }
+
+    /// Mutate a list or map element in-place: `name[index] = val`.
+    pub fn index_assign(&mut self, name: &str, index: &Value, val: Value) -> Result<()> {
+        // Find the variable in the scope chain and mutate it
+        if let Some(container) = self.vars.get_mut(name) {
+            match (container, index) {
+                (Value::List(list), Value::Int(i)) => {
+                    let i = *i as usize;
+                    if i >= list.len() {
+                        return Err(LatchError::IndexOutOfBounds { index: i as i64, len: list.len() });
+                    }
+                    list[i] = val;
+                    Ok(())
+                }
+                (Value::Map(map), Value::Str(key)) => {
+                    map.insert(key.clone(), val);
+                    Ok(())
+                }
+                _ => Err(LatchError::TypeMismatch {
+                    expected: "list[int] or dict[string]".into(),
+                    found: "incompatible types".into(),
+                }),
+            }
+        } else if let Some(parent) = &mut self.parent {
+            parent.index_assign(name, index, val)
         } else {
             Err(LatchError::UndefinedVariable(name.to_string()))
         }

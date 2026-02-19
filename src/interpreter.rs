@@ -44,6 +44,21 @@ impl Interpreter {
                 self.env.assign(&name, val)?;
             }
 
+            Stmt::IndexAssign { target, index, value } => {
+                let idx = self.eval_expr(index)?;
+                let val = self.eval_expr(value)?;
+                self.env.index_assign(&target, &idx, val)?;
+            }
+
+            Stmt::CompoundAssign { name, op, value } => {
+                let current = self.env.get(&name)
+                    .cloned()
+                    .ok_or_else(|| LatchError::UndefinedVariable(name.clone()))?;
+                let rhs = self.eval_expr(value)?;
+                let result = self.eval_binop(op, current, rhs)?;
+                self.env.assign(&name, result)?;
+            }
+
             Stmt::If { cond, then, else_ } => {
                 let val = self.eval_expr(cond)?;
                 if val.is_truthy() {
@@ -214,6 +229,7 @@ impl Interpreter {
             Expr::Float(n) => Ok(Value::Float(n)),
             Expr::Bool(b)  => Ok(Value::Bool(b)),
             Expr::Str(s)   => Ok(Value::Str(s)),
+            Expr::Null     => Ok(Value::Null),
 
             Expr::List(items) => {
                 let vals: Vec<Value> = items.into_iter()
@@ -228,6 +244,10 @@ impl Interpreter {
                     map.insert(key, self.eval_expr(val_expr)?);
                 }
                 Ok(Value::Map(map))
+            }
+
+            Expr::Fn { params, body } => {
+                Ok(Value::Fn { params, body })
             }
 
             Expr::Ident(name) => {
@@ -294,6 +314,9 @@ impl Interpreter {
                     "http" => runtime::http::call(&method, evaluated),
                     "time" => runtime::time::call(&method, evaluated),
                     "ai"   => runtime::ai::call(&method, evaluated),
+                    "json" => runtime::json::call(&method, evaluated),
+                    "env"  => runtime::env::call(&method, evaluated),
+                    "path" => runtime::path::call(&method, evaluated),
                     _ => Err(LatchError::UnknownModule(module)),
                 }
             }
@@ -317,7 +340,7 @@ impl Interpreter {
                             .ok_or(LatchError::KeyNotFound(key.clone()))
                     }
                     _ => Err(LatchError::TypeMismatch {
-                        expected: "list[int] or map[string]".into(),
+                        expected: "list[int] or dict[string]".into(),
                         found: format!("{}[{}]", container.type_name(), idx.type_name()),
                     }),
                 }
@@ -334,13 +357,26 @@ impl Interpreter {
                             _ => Err(LatchError::KeyNotFound(field)),
                         }
                     }
+                    Value::HttpResponse { status, body, headers } => {
+                        match field.as_str() {
+                            "status"  => Ok(Value::Int(status)),
+                            "body"    => Ok(Value::Str(body)),
+                            "headers" => {
+                                let map: HashMap<String, Value> = headers.into_iter()
+                                    .map(|(k, v)| (k, Value::Str(v)))
+                                    .collect();
+                                Ok(Value::Map(map))
+                            }
+                            _ => Err(LatchError::KeyNotFound(field)),
+                        }
+                    }
                     Value::Map(map) => {
                         map.get(&field)
                             .cloned()
                             .ok_or(LatchError::KeyNotFound(field))
                     }
                     _ => Err(LatchError::TypeMismatch {
-                        expected: "map or process result".into(),
+                        expected: "dict, response, or process result".into(),
                         found: val.type_name().into(),
                     }),
                 }
@@ -352,17 +388,148 @@ impl Interpreter {
                     Err(_) => self.eval_expr(*default),
                 }
             }
+
+            Expr::NullCoalesce { expr, default } => {
+                let val = self.eval_expr(*expr)?;
+                if matches!(val, Value::Null) {
+                    self.eval_expr(*default)
+                } else {
+                    Ok(val)
+                }
+            }
+
+            Expr::Range { start, end } => {
+                let s = self.eval_expr(*start)?.as_int()?;
+                let e = self.eval_expr(*end)?.as_int()?;
+                let list: Vec<Value> = (s..e).map(Value::Int).collect();
+                Ok(Value::List(list))
+            }
+
+            Expr::Pipe { expr, func } => {
+                let val = self.eval_expr(*expr)?;
+                // func is a Call expression — inject val as first argument
+                match *func {
+                    Expr::Call { name, mut args } => {
+                        // Evaluate existing args, then prepend the piped value
+                        let mut evaluated = vec![val];
+                        for a in args.drain(..) {
+                            evaluated.push(self.eval_expr(a)?);
+                        }
+                        self.call_function(&name, evaluated)
+                    }
+                    Expr::ModuleCall { module, method, mut args } => {
+                        let mut evaluated = vec![val];
+                        for a in args.drain(..) {
+                            evaluated.push(self.eval_expr(a)?);
+                        }
+                        match module.as_str() {
+                            "fs"   => runtime::fs::call(&method, evaluated),
+                            "proc" => runtime::proc::call(&method, evaluated),
+                            "http" => runtime::http::call(&method, evaluated),
+                            "time" => runtime::time::call(&method, evaluated),
+                            "ai"   => runtime::ai::call(&method, evaluated),
+                            "json" => runtime::json::call(&method, evaluated),
+                            "env"  => runtime::env::call(&method, evaluated),
+                            "path" => runtime::path::call(&method, evaluated),
+                            _ => Err(LatchError::UnknownModule(module)),
+                        }
+                    }
+                    Expr::Fn { params, body } => {
+                        // Pipe into anonymous function
+                        self.call_closure(&params, &body, vec![val])
+                    }
+                    other => {
+                        // Try evaluating as a function value
+                        let func_val = self.eval_expr(other)?;
+                        if let Value::Fn { params, body } = func_val {
+                            self.call_closure(&params, &body, vec![val])
+                        } else {
+                            Err(LatchError::TypeMismatch {
+                                expected: "function".into(),
+                                found: func_val.type_name().into(),
+                            })
+                        }
+                    }
+                }
+            }
+
+            Expr::SafeAccess { expr, field } => {
+                let val = self.eval_expr(*expr)?;
+                match val {
+                    Value::Null => Ok(Value::Null),
+                    Value::Map(map) => {
+                        Ok(map.get(&field).cloned().unwrap_or(Value::Null))
+                    }
+                    Value::HttpResponse { status, body, headers } => {
+                        match field.as_str() {
+                            "status"  => Ok(Value::Int(status)),
+                            "body"    => Ok(Value::Str(body)),
+                            "headers" => {
+                                let map: HashMap<String, Value> = headers.into_iter()
+                                    .map(|(k, v)| (k, Value::Str(v)))
+                                    .collect();
+                                Ok(Value::Map(map))
+                            }
+                            _ => Ok(Value::Null),
+                        }
+                    }
+                    Value::ProcessResult { stdout, stderr, code } => {
+                        match field.as_str() {
+                            "stdout" => Ok(Value::Str(stdout)),
+                            "stderr" => Ok(Value::Str(stderr)),
+                            "code"   => Ok(Value::Int(code as i64)),
+                            _ => Ok(Value::Null),
+                        }
+                    }
+                    _ => Ok(Value::Null),
+                }
+            }
         }
     }
 
     // ── Binary operations ────────────────────────────────────
 
     fn eval_binop(&self, op: BinOp, l: Value, r: Value) -> Result<Value> {
+        // Null equality — handle before anything else
+        if matches!(op, BinOp::Eq | BinOp::NotEq) {
+            let is_eq = matches!((&l, &r), (Value::Null, Value::Null));
+            let either_null = matches!(&l, Value::Null) || matches!(&r, Value::Null);
+            if either_null {
+                return match op {
+                    BinOp::Eq => Ok(Value::Bool(is_eq)),
+                    BinOp::NotEq => Ok(Value::Bool(!is_eq)),
+                    _ => unreachable!(),
+                };
+            }
+        }
+
         // String concatenation
         if matches!(op, BinOp::Add) {
             if let (Value::Str(a), Value::Str(b)) = (&l, &r) {
                 return Ok(Value::Str(format!("{a}{b}")));
             }
+        }
+
+        // `in` operator: value in container
+        if matches!(op, BinOp::In) {
+            return match &r {
+                Value::List(list) => {
+                    let found = list.iter().any(|item| values_equal(item, &l));
+                    Ok(Value::Bool(found))
+                }
+                Value::Str(haystack) => {
+                    let needle = l.as_str()?;
+                    Ok(Value::Bool(haystack.contains(needle)))
+                }
+                Value::Map(map) => {
+                    let key = l.as_str()?;
+                    Ok(Value::Bool(map.contains_key(key)))
+                }
+                _ => Err(LatchError::TypeMismatch {
+                    expected: "list, string, or dict".into(),
+                    found: r.type_name().into(),
+                }),
+            };
         }
 
         // Numeric operations
@@ -410,13 +577,17 @@ impl Interpreter {
                 if b == 0 { return Err(LatchError::DivisionByZero); }
                 Ok(Value::Int(a / b))
             }
+            BinOp::Mod   => {
+                if b == 0 { return Err(LatchError::DivisionByZero); }
+                Ok(Value::Int(a % b))
+            }
             BinOp::Eq    => Ok(Value::Bool(a == b)),
             BinOp::NotEq => Ok(Value::Bool(a != b)),
             BinOp::Lt    => Ok(Value::Bool(a < b)),
             BinOp::Gt    => Ok(Value::Bool(a > b)),
             BinOp::LtEq  => Ok(Value::Bool(a <= b)),
             BinOp::GtEq  => Ok(Value::Bool(a >= b)),
-            BinOp::And | BinOp::Or => Err(LatchError::TypeMismatch {
+            BinOp::And | BinOp::Or | BinOp::In => Err(LatchError::TypeMismatch {
                 expected: "bool".into(), found: "int".into(),
             }),
         }
@@ -431,13 +602,17 @@ impl Interpreter {
                 if b == 0.0 { return Err(LatchError::DivisionByZero); }
                 Ok(Value::Float(a / b))
             }
+            BinOp::Mod   => {
+                if b == 0.0 { return Err(LatchError::DivisionByZero); }
+                Ok(Value::Float(a % b))
+            }
             BinOp::Eq    => Ok(Value::Bool(a == b)),
             BinOp::NotEq => Ok(Value::Bool(a != b)),
             BinOp::Lt    => Ok(Value::Bool(a < b)),
             BinOp::Gt    => Ok(Value::Bool(a > b)),
             BinOp::LtEq  => Ok(Value::Bool(a <= b)),
             BinOp::GtEq  => Ok(Value::Bool(a >= b)),
-            BinOp::And | BinOp::Or => Err(LatchError::TypeMismatch {
+            BinOp::And | BinOp::Or | BinOp::In => Err(LatchError::TypeMismatch {
                 expected: "bool".into(), found: "float".into(),
             }),
         }
@@ -460,7 +635,7 @@ impl Interpreter {
                     Some(Value::Str(s))  => Ok(Value::Int(s.len() as i64)),
                     Some(Value::Map(m))  => Ok(Value::Int(m.len() as i64)),
                     _ => Err(LatchError::TypeMismatch {
-                        expected: "list, string, or map".into(),
+                        expected: "list, string, or dict".into(),
                         found: args.first().map(|v| v.type_name()).unwrap_or("none").into(),
                     }),
                 };
@@ -522,11 +697,13 @@ impl Interpreter {
             "keys" => {
                 return match args.first() {
                     Some(Value::Map(m)) => {
-                        let keys: Vec<Value> = m.keys().map(|k| Value::Str(k.clone())).collect();
+                        let mut keys: Vec<String> = m.keys().cloned().collect();
+                        keys.sort();
+                        let keys: Vec<Value> = keys.into_iter().map(Value::Str).collect();
                         Ok(Value::List(keys))
                     }
                     _ => Err(LatchError::TypeMismatch {
-                        expected: "map".into(),
+                        expected: "dict".into(),
                         found: args.first().map(|v| v.type_name()).unwrap_or("none").into(),
                     }),
                 };
@@ -534,11 +711,13 @@ impl Interpreter {
             "values" => {
                 return match args.first() {
                     Some(Value::Map(m)) => {
-                        let vals: Vec<Value> = m.values().cloned().collect();
+                        let mut sorted_keys: Vec<String> = m.keys().cloned().collect();
+                        sorted_keys.sort();
+                        let vals: Vec<Value> = sorted_keys.iter().map(|k| m[k].clone()).collect();
                         Ok(Value::List(vals))
                     }
                     _ => Err(LatchError::TypeMismatch {
-                        expected: "map".into(),
+                        expected: "dict".into(),
                         found: args.first().map(|v| v.type_name()).unwrap_or("none").into(),
                     }),
                 };
@@ -576,6 +755,44 @@ impl Interpreter {
                     }),
                 };
             }
+            "lower" => {
+                return match args.first() {
+                    Some(Value::Str(s)) => Ok(Value::Str(s.to_lowercase())),
+                    _ => Err(LatchError::TypeMismatch {
+                        expected: "string".into(),
+                        found: args.first().map(|v| v.type_name()).unwrap_or("none").into(),
+                    }),
+                };
+            }
+            "upper" => {
+                return match args.first() {
+                    Some(Value::Str(s)) => Ok(Value::Str(s.to_uppercase())),
+                    _ => Err(LatchError::TypeMismatch {
+                        expected: "string".into(),
+                        found: args.first().map(|v| v.type_name()).unwrap_or("none").into(),
+                    }),
+                };
+            }
+            "starts_with" => {
+                if args.len() == 2 {
+                    let s = args[0].as_str()?;
+                    let prefix = args[1].as_str()?;
+                    return Ok(Value::Bool(s.starts_with(prefix)));
+                }
+                return Err(LatchError::ArgCountMismatch {
+                    name: "starts_with".into(), expected: 2, found: args.len(),
+                });
+            }
+            "ends_with" => {
+                if args.len() == 2 {
+                    let s = args[0].as_str()?;
+                    let suffix = args[1].as_str()?;
+                    return Ok(Value::Bool(s.ends_with(suffix)));
+                }
+                return Err(LatchError::ArgCountMismatch {
+                    name: "ends_with".into(), expected: 2, found: args.len(),
+                });
+            }
             "contains" => {
                 if args.len() == 2 {
                     return match (&args[0], &args[1]) {
@@ -583,9 +800,7 @@ impl Interpreter {
                             Ok(Value::Bool(haystack.contains(needle.as_str())))
                         }
                         (Value::List(list), val) => {
-                            let found = list.iter().any(|item| {
-                                format!("{item}") == format!("{val}")
-                            });
+                            let found = list.iter().any(|item| values_equal(item, val));
                             Ok(Value::Bool(found))
                         }
                         _ => Err(LatchError::TypeMismatch {
@@ -609,6 +824,93 @@ impl Interpreter {
                     name: "replace".into(), expected: 3, found: args.len(),
                 });
             }
+
+            "sort" => {
+                return match args.into_iter().next() {
+                    Some(Value::List(mut list)) => {
+                        list.sort_by(|a, b| {
+                            match (a, b) {
+                                (Value::Int(x), Value::Int(y)) => x.cmp(y),
+                                (Value::Float(x), Value::Float(y)) => x.partial_cmp(y).unwrap_or(std::cmp::Ordering::Equal),
+                                (Value::Str(x), Value::Str(y)) => x.cmp(y),
+                                _ => std::cmp::Ordering::Equal,
+                            }
+                        });
+                        Ok(Value::List(list))
+                    }
+                    _ => Err(LatchError::TypeMismatch {
+                        expected: "list".into(),
+                        found: "invalid args".into(),
+                    }),
+                };
+            }
+
+            // filter(list, fn) — returns items where fn(item) is truthy
+            "filter" => {
+                if args.len() != 2 {
+                    return Err(LatchError::ArgCountMismatch {
+                        name: "filter".into(), expected: 2, found: args.len(),
+                    });
+                }
+                let list = args[0].clone().into_list()?;
+                let func = args[1].clone();
+                if let Value::Fn { params, body } = func {
+                    let mut result = Vec::new();
+                    for item in list {
+                        let val = self.call_closure(&params, &body, vec![item.clone()])?;
+                        if val.is_truthy() {
+                            result.push(item);
+                        }
+                    }
+                    return Ok(Value::List(result));
+                }
+                return Err(LatchError::TypeMismatch {
+                    expected: "fn".into(), found: args[1].type_name().into(),
+                });
+            }
+
+            // map(list, fn) — returns [fn(item) for each item]
+            "map" => {
+                if args.len() != 2 {
+                    return Err(LatchError::ArgCountMismatch {
+                        name: "map".into(), expected: 2, found: args.len(),
+                    });
+                }
+                let list = args[0].clone().into_list()?;
+                let func = args[1].clone();
+                if let Value::Fn { params, body } = func {
+                    let mut result = Vec::new();
+                    for item in list {
+                        let val = self.call_closure(&params, &body, vec![item])?;
+                        result.push(val);
+                    }
+                    return Ok(Value::List(result));
+                }
+                return Err(LatchError::TypeMismatch {
+                    expected: "fn".into(), found: args[1].type_name().into(),
+                });
+            }
+
+            // each(list, fn) — runs fn(item) for each item, returns null
+            "each" => {
+                if args.len() != 2 {
+                    return Err(LatchError::ArgCountMismatch {
+                        name: "each".into(), expected: 2, found: args.len(),
+                    });
+                }
+                let list = args[0].clone().into_list()?;
+                let func = args[1].clone();
+                if let Value::Fn { params, body } = func {
+                    for item in list {
+                        self.call_closure(&params, &body, vec![item])?;
+                    }
+                    return Ok(Value::Null);
+                }
+                return Err(LatchError::TypeMismatch {
+                    expected: "fn".into(), found: args[1].type_name().into(),
+                });
+            }
+
             _ => {}
         }
 
@@ -616,25 +918,44 @@ impl Interpreter {
         let func = self.env.get(name).cloned();
         match func {
             Some(Value::Fn { params, body }) => {
-                let parent = std::mem::replace(&mut self.env, Env::new());
-                self.env = parent.child();
-
-                for (param, arg) in params.iter().zip(args.into_iter()) {
-                    self.env.set(&param.name, arg);
-                }
-
-                let result = self.exec_block_inner(body);
-
-                let child = std::mem::replace(&mut self.env, Env::new());
-                self.env = child.into_parent().unwrap();
-
-                match result {
-                    Ok(()) => Ok(Value::Null),
-                    Err(LatchError::ReturnSignal(val)) => Ok(val),
-                    Err(e) => Err(e),
-                }
+                self.call_closure(&params, &body, args)
             }
             _ => Err(LatchError::UndefinedFunction(name.to_string())),
         }
+    }
+
+    /// Call a closure (Fn value) with the given arguments.
+    fn call_closure(&mut self, params: &[Param], body: &Block, args: Vec<Value>) -> Result<Value> {
+        let parent = std::mem::replace(&mut self.env, Env::new());
+        self.env = parent.child();
+
+        for (param, arg) in params.iter().zip(args.into_iter()) {
+            self.env.set(&param.name, arg);
+        }
+
+        let result = self.exec_block_inner(body.clone());
+
+        let child = std::mem::replace(&mut self.env, Env::new());
+        self.env = child.into_parent().unwrap();
+
+        match result {
+            Ok(()) => Ok(Value::Null),
+            Err(LatchError::ReturnSignal(val)) => Ok(val),
+            Err(e) => Err(e),
+        }
+    }
+}
+
+/// Structural equality for Latch values (used by `in`, `contains`, `==`).
+fn values_equal(a: &Value, b: &Value) -> bool {
+    match (a, b) {
+        (Value::Int(x), Value::Int(y)) => x == y,
+        (Value::Float(x), Value::Float(y)) => x == y,
+        (Value::Int(x), Value::Float(y)) => (*x as f64) == *y,
+        (Value::Float(x), Value::Int(y)) => *x == (*y as f64),
+        (Value::Bool(x), Value::Bool(y)) => x == y,
+        (Value::Str(x), Value::Str(y)) => x == y,
+        (Value::Null, Value::Null) => true,
+        _ => false,
     }
 }
