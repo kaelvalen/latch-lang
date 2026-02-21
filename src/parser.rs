@@ -185,14 +185,39 @@ impl Parser {
     }
 
     fn parse_if(&mut self) -> Result<Stmt> {
-        self.advance(); // skip 'if'
+        self.advance(); // skip 'if' or 'elif'
         let cond = self.parse_expr()?;
         let then = self.parse_block()?;
 
         self.skip_newlines();
-        let else_ = if matches!(self.peek(), Token::KwElse) {
+        let else_ = if matches!(self.peek(), Token::KwElif) {
+            // elif chain - recursively parse as another if statement
+            Some(Box::new(self.parse_if_elif()?))
+        } else if matches!(self.peek(), Token::KwElse) {
             self.advance();
-            Some(self.parse_block()?)
+            // For else, we create a dummy statement to hold the block
+            let else_block = self.parse_block()?;
+            Some(Box::new(Stmt::Expr(Expr::Fn { params: vec![], body: else_block })))
+        } else {
+            None
+        };
+
+        Ok(Stmt::If { cond, then, else_ })
+    }
+
+    // Helper for elif chains
+    fn parse_if_elif(&mut self) -> Result<Stmt> {
+        self.advance(); // skip 'elif'
+        let cond = self.parse_expr()?;
+        let then = self.parse_block()?;
+
+        self.skip_newlines();
+        let else_ = if matches!(self.peek(), Token::KwElif) {
+            Some(Box::new(self.parse_if_elif()?))
+        } else if matches!(self.peek(), Token::KwElse) {
+            self.advance();
+            let else_block = self.parse_block()?;
+            Some(Box::new(Stmt::Expr(Expr::Fn { params: vec![], body: else_block })))
         } else {
             None
         };
@@ -371,6 +396,19 @@ impl Parser {
     fn parse_or_default(&mut self) -> Result<Expr> {
         let expr = self.parse_pipe()?;
 
+        // Handle ternary operator: `cond ? true_expr : false_expr`
+        if matches!(self.peek(), Token::Question) {
+            self.advance(); // skip '?'
+            let true_branch = self.parse_or_default()?;
+            self.expect(&Token::Colon)?;
+            let false_branch = self.parse_or_default()?;
+            return Ok(Expr::Ternary {
+                cond: Box::new(expr),
+                true_branch: Box::new(true_branch),
+                false_branch: Box::new(false_branch),
+            });
+        }
+
         // Handle `or` default: `expr or default`
         if matches!(self.peek(), Token::KwOr) {
             self.advance();
@@ -525,7 +563,7 @@ impl Parser {
 
     fn parse_unary(&mut self) -> Result<Expr> {
         match self.peek() {
-            Token::Bang => {
+            Token::Bang | Token::KwNot => {
                 self.advance();
                 let expr = self.parse_unary()?;
                 Ok(Expr::UnaryOp { op: UnaryOp::Not, expr: Box::new(expr) })
@@ -578,12 +616,56 @@ impl Parser {
                     }
                 }
 
-                // index: expr[index]
+                // index: expr[index] or slice: expr[start:end]
                 Token::LBracket => {
                     self.advance();
-                    let index = self.parse_expr()?;
-                    self.expect(&Token::RBracket)?;
-                    expr = Expr::Index { expr: Box::new(expr), index: Box::new(index) };
+                    
+                    // Check for slice notation (contains :)
+                    let saved_pos = self.pos;
+                    let mut found_colon = false;
+                    let mut bracket_depth = 1;
+                    
+                    // Scan ahead to find if there's a colon at the top bracket level
+                    let mut scan_pos = self.pos;
+                    while scan_pos < self.tokens.len() && bracket_depth > 0 {
+                        match self.tokens[scan_pos].node {
+                            Token::LBracket => bracket_depth += 1,
+                            Token::RBracket => bracket_depth -= 1,
+                            Token::Colon if bracket_depth == 1 => {
+                                found_colon = true;
+                                break;
+                            }
+                            _ => {}
+                        }
+                        scan_pos += 1;
+                    }
+                    
+                    self.pos = saved_pos; // Reset position
+                    
+                    if found_colon {
+                        // Parse slice: start:end
+                        let start = if matches!(self.peek(), Token::Colon) {
+                            None
+                        } else {
+                            Some(Box::new(self.parse_expr()?))
+                        };
+                        
+                        self.expect(&Token::Colon)?;
+                        
+                        let end = if matches!(self.peek(), Token::RBracket) {
+                            None
+                        } else {
+                            Some(Box::new(self.parse_expr()?))
+                        };
+                        
+                        self.expect(&Token::RBracket)?;
+                        expr = Expr::Slice { expr: Box::new(expr), start, end };
+                    } else {
+                        // Parse regular index
+                        let index = self.parse_expr()?;
+                        self.expect(&Token::RBracket)?;
+                        expr = Expr::Index { expr: Box::new(expr), index: Box::new(index) };
+                    }
                 }
 
                 // safe access: expr?.field

@@ -1,0 +1,26 @@
+# Test time subtraction
+start := time.ms()
+print("Start time (ms): ${start}")
+
+# Do some work
+total := 0
+for i in 0..1000 {
+    total = total + i
+}
+
+end := time.ms()
+print("End time (ms): ${end}")
+
+# Calculate elapsed time (this now works with numeric subtraction!)
+elapsed := end - start
+print("Elapsed time: ${elapsed} ms")
+
+# Verify we can do math with time values
+if elapsed >= 0 {
+    print("✓ Time subtraction works! Elapsed: ${elapsed} ms")
+} else {
+    print("✗ Time subtraction gave negative value")
+}
+
+print("Time test completed!")
+stop 0

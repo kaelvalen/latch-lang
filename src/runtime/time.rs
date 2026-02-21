@@ -16,6 +16,12 @@ pub fn call(method: &str, args: Vec<Value>) -> Result<Value> {
             Ok(Value::Str(now))
         }
 
+        "ms" => {
+            // Return milliseconds since epoch for easy subtraction
+            let ms = chrono::Utc::now().timestamp_millis();
+            Ok(Value::Int(ms))
+        }
+
         _ => Err(LatchError::UnknownMethod { module: "time".into(), method: method.into() }),
     }
 }

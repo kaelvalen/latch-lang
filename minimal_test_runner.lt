@@ -1,0 +1,69 @@
+# ===============================
+# LATCH MINIMAL TEST RUNNER
+# ===============================
+
+print("=== LATCH TEST SUITE START ===")
+
+# Test results
+total_tests := 0
+passed_tests := 0
+
+# Helper function to run test
+fn run_test(test_name, test_file) {
+    print("\n--- Running ${test_name} ---")
+    total_tests = total_tests + 1
+    
+    try {
+        result := proc.exec(["latch", "run", test_file])
+        if result.code == 0 {
+            print("✓ PASSED")
+            passed_tests = passed_tests + 1
+            return true
+        } else {
+            print("✗ FAILED")
+            return false
+        }
+    } catch e {
+        print("✗ ERROR")
+        return false
+    }
+}
+
+# Run tests
+print("Starting test execution...")
+
+print("Test 1: Comprehensive Stress Test")
+run_test("Test1", "comprehensive_stress_test.lt")
+
+print("Test 2: Edge Cases Test")
+run_test("Test2", "edge_cases_test_simple.lt")
+
+print("Test 3: Original Stress Test")
+run_test("Test3", "stress.lt")
+
+# Results
+print("\n" + "="*50)
+print("           TEST RESULTS SUMMARY")
+print("="*50)
+
+print("Total Tests: ${total_tests}")
+print("Passed: ${passed_tests}")
+
+failed_count := total_tests - passed_tests
+print("Failed: ${failed_count}")
+
+success_rate := 0
+if total_tests > 0 {
+    success_rate = (passed_tests * 100) / total_tests
+}
+
+print("Success Rate: ${success_rate}")
+
+if success_rate == 100 {
+    print("\n🎉 ALL TESTS PASSED!")
+    print("Latch Lang is working correctly!")
+    stop 0
+} else {
+    print("\n❌ Some tests failed.")
+    stop 1
+}

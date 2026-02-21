@@ -86,8 +86,22 @@ impl Interpreter {
                 let val = self.eval_expr(cond)?;
                 if val.is_truthy() {
                     self.exec_block(then)?;
-                } else if let Some(else_block) = else_ {
-                    self.exec_block(else_block)?;
+                } else if let Some(else_stmt) = else_ {
+                    // Check if it's an elif (another If) or regular else block
+                    match *else_stmt {
+                        Stmt::If { .. } => {
+                            // elif chain - execute the nested if
+                            self.exec_stmt(*else_stmt)?;
+                        }
+                        Stmt::Expr(Expr::Fn { body, .. }) => {
+                            // Regular else block - execute the body
+                            self.exec_block(body)?;
+                        }
+                        _ => {
+                            // Fallback - try to execute as statement
+                            self.exec_stmt(*else_stmt)?;
+                        }
+                    }
                 }
             }
 
@@ -513,6 +527,57 @@ impl Interpreter {
                     _ => Ok(Value::Null),
                 }
             }
+
+            Expr::Ternary { cond, true_branch, false_branch } => {
+                let condition = self.eval_expr(*cond)?;
+                if condition.is_truthy() {
+                    self.eval_expr(*true_branch)
+                } else {
+                    self.eval_expr(*false_branch)
+                }
+            }
+
+            Expr::Slice { expr, start, end } => {
+                let list_val = self.eval_expr(*expr)?;
+                match list_val {
+                    Value::List(list) => {
+                        let guard = list.lock().unwrap();
+                        let len = guard.len() as i64;
+                        
+                        // Evaluate start index
+                        let start_idx = match start {
+                            Some(s) => {
+                                let s_val = self.eval_expr(*s)?;
+                                let s_int = s_val.as_int()?;
+                                if s_int < 0 { len + s_int } else { s_int }
+                            }
+                            None => 0,
+                        };
+                        
+                        // Evaluate end index
+                        let end_idx = match end {
+                            Some(e) => {
+                                let e_val = self.eval_expr(*e)?;
+                                let e_int = e_val.as_int()?;
+                                if e_int < 0 { len + e_int } else { e_int }
+                            }
+                            None => len,
+                        };
+                        
+                        // Clamp indices
+                        let start_idx = start_idx.max(0).min(len) as usize;
+                        let end_idx = end_idx.max(0).min(len) as usize;
+                        
+                        // Extract slice
+                        let sliced: Vec<Value> = guard[start_idx..end_idx].to_vec();
+                        Ok(Value::new_list(sliced))
+                    }
+                    _ => Err(LatchError::TypeMismatch {
+                        expected: "list".into(),
+                        found: list_val.type_name().into(),
+                    }),
+                }
+            }
         }
     }
 
@@ -589,6 +654,26 @@ impl Interpreter {
                 _ => Err(LatchError::TypeMismatch {
                     expected: "numeric".into(),
                     found: "string".into(),
+                }),
+            },
+
+            // Equality for lists
+            (Value::List(_), Value::List(_)) => match op {
+                BinOp::Eq    => Ok(Value::Bool(values_equal(&l, &r))),
+                BinOp::NotEq => Ok(Value::Bool(!values_equal(&l, &r))),
+                _ => Err(LatchError::TypeMismatch {
+                    expected: "numeric".into(),
+                    found: "list".into(),
+                }),
+            },
+
+            // Equality for dicts
+            (Value::Map(_), Value::Map(_)) => match op {
+                BinOp::Eq    => Ok(Value::Bool(values_equal(&l, &r))),
+                BinOp::NotEq => Ok(Value::Bool(!values_equal(&l, &r))),
+                _ => Err(LatchError::TypeMismatch {
+                    expected: "numeric".into(),
+                    found: "dict".into(),
                 }),
             },
 
@@ -859,6 +944,160 @@ impl Interpreter {
                 });
             }
 
+            // repeat(string, count) — repeats string count times
+            "repeat" => {
+                if args.len() == 2 {
+                    let s = args[0].as_str()?.to_string();
+                    let count = args[1].as_int()?;
+                    if count < 0 {
+                        return Err(LatchError::GenericError("repeat count cannot be negative".into()));
+                    }
+                    return Ok(Value::Str(s.repeat(count as usize)));
+                }
+                return Err(LatchError::ArgCountMismatch {
+                    name: "repeat".into(), expected: 2, found: args.len(),
+                });
+            }
+
+            // assert(condition, message) — throws error if condition is falsy
+            "assert" => {
+                if args.len() >= 1 {
+                    let condition = args[0].is_truthy();
+                    if !condition {
+                        let message = if args.len() >= 2 {
+                            format!("{}", args[1])
+                        } else {
+                            "Assertion failed".to_string()
+                        };
+                        return Err(LatchError::GenericError(message));
+                    }
+                    return Ok(Value::Null);
+                }
+                return Err(LatchError::ArgCountMismatch {
+                    name: "assert".into(), expected: 1, found: args.len(),
+                });
+            }
+
+            // sum(list) — returns sum of all numbers in list
+            "sum" => {
+                if args.len() == 1 {
+                    if let Value::List(list) = &args[0] {
+                        let guard = list.lock().unwrap();
+                        let mut total = 0i64;
+                        let mut float_total = 0.0f64;
+                        let mut has_float = false;
+                        
+                        for item in guard.iter() {
+                            match item {
+                                Value::Int(n) => {
+                                    if has_float {
+                                        float_total += *n as f64;
+                                    } else {
+                                        total += n;
+                                    }
+                                }
+                                Value::Float(n) => {
+                                    if !has_float {
+                                        has_float = true;
+                                        float_total = total as f64;
+                                    }
+                                    float_total += n;
+                                }
+                                _ => {
+                                    return Err(LatchError::TypeMismatch {
+                                        expected: "list of numbers".into(),
+                                        found: format!("list containing {}", item.type_name()),
+                                    });
+                                }
+                            }
+                        }
+                        
+                        if has_float {
+                            return Ok(Value::Float(float_total));
+                        } else {
+                            return Ok(Value::Int(total));
+                        }
+                    }
+                    return Err(LatchError::TypeMismatch {
+                        expected: "list".into(),
+                        found: args[0].type_name().into(),
+                    });
+                }
+                return Err(LatchError::ArgCountMismatch {
+                    name: "sum".into(), expected: 1, found: args.len(),
+                });
+            }
+
+            // max(list) — returns maximum value in list
+            "max" => {
+                if args.len() == 1 {
+                    if let Value::List(list) = &args[0] {
+                        let guard = list.lock().unwrap();
+                        if guard.is_empty() {
+                            return Err(LatchError::GenericError("max() called on empty list".into()));
+                        }
+                        
+                        let mut max_val = guard[0].clone();
+                        for item in guard.iter().skip(1) {
+                            let is_greater = match (&max_val, item) {
+                                (Value::Int(a), Value::Int(b)) => a < b,
+                                (Value::Float(a), Value::Float(b)) => a < b,
+                                (Value::Int(a), Value::Float(b)) => (*a as f64) < *b,
+                                (Value::Float(a), Value::Int(b)) => *a < (*b as f64),
+                                (Value::Str(a), Value::Str(b)) => a < b,
+                                _ => false,
+                            };
+                            if is_greater {
+                                max_val = item.clone();
+                            }
+                        }
+                        return Ok(max_val);
+                    }
+                    return Err(LatchError::TypeMismatch {
+                        expected: "list".into(),
+                        found: args[0].type_name().into(),
+                    });
+                }
+                return Err(LatchError::ArgCountMismatch {
+                    name: "max".into(), expected: 1, found: args.len(),
+                });
+            }
+
+            // min(list) — returns minimum value in list
+            "min" => {
+                if args.len() == 1 {
+                    if let Value::List(list) = &args[0] {
+                        let guard = list.lock().unwrap();
+                        if guard.is_empty() {
+                            return Err(LatchError::GenericError("min() called on empty list".into()));
+                        }
+                        
+                        let mut min_val = guard[0].clone();
+                        for item in guard.iter().skip(1) {
+                            let is_less = match (&min_val, item) {
+                                (Value::Int(a), Value::Int(b)) => a > b,
+                                (Value::Float(a), Value::Float(b)) => a > b,
+                                (Value::Int(a), Value::Float(b)) => (*a as f64) > *b,
+                                (Value::Float(a), Value::Int(b)) => *a > (*b as f64),
+                                (Value::Str(a), Value::Str(b)) => a > b,
+                                _ => false,
+                            };
+                            if is_less {
+                                min_val = item.clone();
+                            }
+                        }
+                        return Ok(min_val);
+                    }
+                    return Err(LatchError::TypeMismatch {
+                        expected: "list".into(),
+                        found: args[0].type_name().into(),
+                    });
+                }
+                return Err(LatchError::ArgCountMismatch {
+                    name: "min".into(), expected: 1, found: args.len(),
+                });
+            }
+
             "sort" => {
                 return match args.into_iter().next() {
                     Some(Value::List(list)) => {
@@ -999,6 +1238,24 @@ fn values_equal(a: &Value, b: &Value) -> bool {
         (Value::Bool(x), Value::Bool(y)) => x == y,
         (Value::Str(x), Value::Str(y)) => x == y,
         (Value::Null, Value::Null) => true,
+        (Value::List(x), Value::List(y)) => {
+            let x_guard = x.lock().unwrap();
+            let y_guard = y.lock().unwrap();
+            if x_guard.len() != y_guard.len() {
+                return false;
+            }
+            x_guard.iter().zip(y_guard.iter()).all(|(a, b)| values_equal(a, b))
+        }
+        (Value::Map(x), Value::Map(y)) => {
+            let x_guard = x.lock().unwrap();
+            let y_guard = y.lock().unwrap();
+            if x_guard.len() != y_guard.len() {
+                return false;
+            }
+            x_guard.iter().all(|(k, v)| {
+                y_guard.get(k).map(|yv| values_equal(v, yv)).unwrap_or(false)
+            })
+        }
         _ => false,
     }
 }

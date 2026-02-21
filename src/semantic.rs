@@ -96,6 +96,11 @@ impl SemanticAnalyzer {
         self.declare("ends_with", SymbolInfo::function(2));
         self.declare("contains", SymbolInfo::function(2));
         self.declare("replace", SymbolInfo::function(3));
+        self.declare("repeat", SymbolInfo::function(2));
+        self.declare("assert", SymbolInfo::function(2)); // assert(condition, message)
+        self.declare("sum", SymbolInfo::function(1));
+        self.declare("max", SymbolInfo::function(1));
+        self.declare("min", SymbolInfo::function(1));
         self.declare("sort", SymbolInfo::function(1));
         self.declare("filter", SymbolInfo::function(2));
         self.declare("map", SymbolInfo::function(2));
@@ -174,7 +179,14 @@ impl SemanticAnalyzer {
                 self.pop_scope();
                 if let Some(e) = else_ {
                     self.push_scope();
-                    for s in e { self.check_stmt(s); }
+                    // Handle both elif (If) and else block
+                    match &**e {
+                        Stmt::If { .. } => self.check_stmt(e),
+                        Stmt::Expr(Expr::Fn { body, .. }) => {
+                            for s in body { self.check_stmt(s); }
+                        }
+                        _ => self.check_stmt(e),
+                    }
                     self.pop_scope();
                 }
             }
@@ -334,6 +346,20 @@ impl SemanticAnalyzer {
                 // We don't deep-check interpolation sub-expressions in semantic
                 // because they're re-parsed at runtime. Could be improved.
                 let _ = parts;
+            }
+
+            // Ternary operator: cond ? true_expr : false_expr
+            Expr::Ternary { cond, true_branch, false_branch } => {
+                self.check_expr(cond);
+                self.check_expr(true_branch);
+                self.check_expr(false_branch);
+            }
+
+            // Slice: list[1:5], list[2:], list[:-1]
+            Expr::Slice { expr, start, end } => {
+                self.check_expr(expr);
+                if let Some(s) = start { self.check_expr(s); }
+                if let Some(e) = end { self.check_expr(e); }
             }
 
             // Literals — no checks needed

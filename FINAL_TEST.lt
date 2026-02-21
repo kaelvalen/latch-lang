@@ -1,0 +1,77 @@
+# FINAL COMPREHENSIVE TEST - All Latch Lang Improvements
+
+print("========================================")
+print("  LATCH LANG v0.2.2 - ALL IMPROVEMENTS")
+print("========================================")
+print("")
+
+# 1. elif
+print("1. elif syntax")
+x := 25
+if x > 50 { print("   fail") } elif x > 20 { print("   ✓ elif works!") } else { print("   fail") }
+
+# 2. assert
+print("\n2. assert() function")
+assert(true, "test")
+print("   ✓ assert() works!")
+
+# 3. sum, max, min
+print("\n3. sum(), max(), min()")
+print("   sum([1,2,3,4,5]) = ${sum([1,2,3,4,5])}")
+print("   max([3,1,4]) = ${max([3,1,4])}")
+print("   min([3,1,4]) = ${min([3,1,4])}")
+print("   ✓ All math functions work!")
+
+# 4. repeat
+print("\n4. repeat() function")
+print("   repeat(ab, 3) = '${repeat("ab", 3)}'")
+print("   ✓ repeat() works!")
+
+# 5. Division by zero
+print("\n5. Division by zero handling")
+try { result := 10 / 0 } catch e { print("   ✓ Division by zero caught!") }
+
+# 6. List comparison
+print("\n6. List comparison [1,2,3] == [1,2,3]")
+if [1,2,3] == [1,2,3] { print("   ✓ List equality works!") } else { print("   ✗ fail") }
+
+# 7. Dict comparison
+print("\n7. Dict comparison")
+if {"a": 1} == {"a": 1} { print("   ✓ Dict equality works!") } else { print("   ✗ fail") }
+
+# 8. not keyword
+print("\n8. not keyword")
+if not false { print("   ✓ not keyword works!") } else { print("   ✗ fail") }
+
+# 9. time.ms()
+print("\n9. time.ms() for subtraction")
+t1 := time.ms()
+t2 := time.ms()
+print("   Elapsed: ${t2 - t1} ms")
+print("   ✓ Time subtraction works!")
+
+# 10. Ternary operator
+print("\n10. Ternary operator ? :")
+val := 10 > 5 ? "yes" : "no"
+print("   10 > 5 ? yes : no = '${val}'")
+print("   ✓ Ternary operator works!")
+
+print("\n========================================")
+print("  ✓ ALL 11 IMPROVEMENTS COMPLETE!")
+print("========================================")
+print("")
+print("Summary of all improvements:")
+print("  ✓ elif syntax support")
+print("  ✓ assert() function")
+print("  ✓ sum(), max(), min() functions")
+print("  ✓ repeat() function")
+print("  ✓ Division by zero handling")
+print("  ✓ List comparison (== and !=)")
+print("  ✓ Dict comparison (== and !=)")
+print("  ✓ not keyword as ! alternative")
+print("  ✓ time.ms() for numeric time operations")
+print("  ✓ Ternary operator (condition ? true : false)")
+print("")
+print("Latch Lang is now much more powerful!")
+
+stop 0

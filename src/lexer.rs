@@ -42,6 +42,7 @@ pub enum Token {
     PercentEq,// %=
     QuestionQuestion, // ??
     QuestionDot,      // ?.
+    Question,         // ? (for ternary)
     PipeGt,   // |>
 
     // Grouping
@@ -55,6 +56,7 @@ pub enum Token {
     // Keywords
     KwIf,
     KwElse,
+    KwElif,
     KwFor,
     KwIn,
     KwParallel,
@@ -65,6 +67,7 @@ pub enum Token {
     KwCatch,
     KwUse,
     KwOr,
+    KwNot,
     KwStop,
     KwNull,
 
@@ -331,7 +334,7 @@ impl Lexer {
                         self.advance();
                         tokens.push(Spanned { node: Token::QuestionDot, line, col });
                     } else {
-                        return Err(LatchError::UnexpectedChar { ch: '?', line, col });
+                        tokens.push(Spanned { node: Token::Question, line, col });
                     }
                 }
                 '{' => { let s = self.simple(Token::LBrace); tokens.push(s); }
@@ -430,6 +433,7 @@ impl Lexer {
         let tok = match s.as_str() {
             "if"       => Token::KwIf,
             "else"     => Token::KwElse,
+            "elif"     => Token::KwElif,
             "for"      => Token::KwFor,
             "in"       => Token::KwIn,
             "parallel" => Token::KwParallel,
@@ -440,6 +444,7 @@ impl Lexer {
             "catch"    => Token::KwCatch,
             "use"      => Token::KwUse,
             "or"       => Token::KwOr,
+            "not"      => Token::KwNot,
             "stop"     => Token::KwStop,
             "true"     => Token::Bool(true),
             "false"    => Token::Bool(false),

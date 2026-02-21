@@ -1,0 +1,27 @@
+# Complex elif test
+x := 25
+
+if x > 50 {
+    print("large")
+} elif x > 30 {
+    print("medium-large")
+} elif x > 15 {
+    print("medium")
+} else {
+    print("small")
+}
+
+# Nested if-elif
+y := 8
+if y > 5 {
+    if y > 10 {
+        print("y is > 10")
+    } elif y > 7 {
+        print("y is 7-10")
+    } else {
+        print("y is 5-7")
+    }
+}
+
+print("All elif tests passed!")
+stop 0

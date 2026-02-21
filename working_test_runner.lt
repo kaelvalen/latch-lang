@@ -1,0 +1,85 @@
+# Latch Minimal Test Runner
+
+print("=== LATCH TEST SUITE START ===")
+
+total_tests := 0
+passed_tests := 0
+
+# Test 1
+print("Test 1: Comprehensive Stress Test")
+total_tests = total_tests + 1
+try {
+    result := proc.exec(["latch", "run", "comprehensive_stress_test.lt"])
+    if result.code == 0 {
+        print("✓ PASSED")
+        passed_tests = passed_tests + 1
+    } else {
+        print("✗ FAILED")
+    }
+} catch e {
+    print("✗ ERROR")
+}
+
+# Test 2
+print("Test 2: Edge Cases Test")
+total_tests = total_tests + 1
+try {
+    result := proc.exec(["latch", "run", "edge_cases_test_simple.lt"])
+    if result.code == 0 {
+        print("✓ PASSED")
+        passed_tests = passed_tests + 1
+    } else {
+        print("✗ FAILED")
+    }
+} catch e {
+    print("✗ ERROR")
+}
+
+# Test 3
+print("Test 3: Original Stress Test")
+total_tests = total_tests + 1
+try {
+    result := proc.exec(["latch", "run", "stress.lt"])
+    if result.code == 0 {
+        print("✓ PASSED")
+        passed_tests = passed_tests + 1
+    } else {
+        print("✗ FAILED")
+    }
+} catch e {
+    print("✗ ERROR")
+}
+
+# Results
+print("\n==================================================")
+print("           TEST RESULTS SUMMARY")
+print("==================================================")
+
+print("Total Tests: ")
+print(total_tests)
+
+print("Passed: ")
+print(passed_tests)
+
+failed_count := total_tests - passed_tests
+print("Failed: ")
+print(failed_count)
+
+success_rate := 0
+if total_tests > 0 {
+    success_rate = (passed_tests * 100) / total_tests
+}
+
+print("Success Rate: ")
+print(success_rate)
+
+print("\n==================================================")
+
+if success_rate == 100 {
+    print("🎉 ALL TESTS PASSED!")
+    print("Latch Lang is working correctly!")
+    stop 0
+} else {
+    print("❌ Some tests failed.")
+    stop 1
+}

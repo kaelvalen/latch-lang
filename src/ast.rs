@@ -91,6 +91,20 @@ pub enum Expr {
         expr: Box<Expr>,
         field: String,
     },
+
+    /// Ternary operator: `cond ? true_expr : false_expr`
+    Ternary {
+        cond: Box<Expr>,
+        true_branch: Box<Expr>,
+        false_branch: Box<Expr>,
+    },
+
+    /// Slice: `list[1:5]`, `list[2:]`, `list[:-1]`
+    Slice {
+        expr: Box<Expr>,
+        start: Option<Box<Expr>>,
+        end: Option<Box<Expr>>,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -131,7 +145,7 @@ pub enum Stmt {
     If {
         cond: Expr,
         then: Block,
-        else_: Option<Block>,
+        else_: Option<Box<Stmt>>, // Box<Stmt::If> for elif, Box<Stmt::Block> for else
     },
 
     For {

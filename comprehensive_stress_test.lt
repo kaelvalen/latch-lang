@@ -1,0 +1,367 @@
+# ===============================
+# LATCH COMPREHENSIVE STRESS TEST
+# Performance, Memory, Parallel & Edge Cases
+# ===============================
+
+print("=== LATCH COMPREHENSIVE STRESS TEST START ===")
+start_time := time.now()
+
+# ===============================
+# 1. PERFORMANCE BENCHMARKS
+# ===============================
+
+print("\n--- PERFORMANCE BENCHMARKS ---")
+
+# Large string creation
+large_string := ""
+for i in 0..10000 {
+    large_string += "x"
+}
+print("Large string creation: ${len(large_string)} chars")
+
+# Large data operations
+bench_start := time.now()
+large_list := range(0, 10000)
+filtered := filter(large_list, fn(x) { return x % 2 == 0 })
+mapped := map(filtered, fn(x) { return x * 2 })
+sorted := sort(mapped)
+bench_end := time.now()
+print("Large list operations (10k items): ${bench_end} - ${bench_start} ms")
+
+# String operations stress
+bench_start := time.now()
+result := ""
+for i in 0..1000 {
+    result += "item_${i},"
+}
+split_result := split(result, ",")
+bench_end := time.now()
+print("String concatenation (1000 iterations): ${bench_end} - ${bench_start} ms")
+
+# JSON operations
+bench_start := time.now()
+large_json := "{\"data\":["
+for i in 0..1000 {
+    if i > 0 { large_json += "," }
+    large_json += "{\"id\":${i},\"value\":\"item_${i}\"}"
+}
+large_json += "]}"
+parsed := json.parse(large_json)
+bench_end := time.now()
+print("JSON parse (1000 items): ${bench_end} - ${bench_start} ms")
+
+# ===============================
+# 2. MEMORY STRESS TESTS
+# ===============================
+
+print("\n--- MEMORY STRESS TESTS ---")
+
+# Deep nested structures
+deep_dict := {}
+current := deep_dict
+for i in 0..100 {
+    next := {}
+    current["level"] = i
+    current["next"] = next
+    current = next
+}
+print("Deep nested dict (100 levels): Created")
+
+# Large array operations
+huge_array := []
+for i in 0..5000 {
+    large_str := ""
+    for j in 0..100 {
+        large_str += "x"
+    }
+    push(huge_array, {"id": i, "data": large_str})
+}
+print("Large array (5k items with 100char strings): Created")
+
+# Memory cleanup test
+huge_array := null
+deep_dict := null
+print("Memory cleanup: Variables set to null")
+
+# ===============================
+# 3. PARALLEL EXECUTION STRESS
+# ===============================
+
+print("\n--- PARALLEL EXECUTION STRESS ---")
+
+# High concurrency test
+parallel_start := time.now()
+parallel i in 0..100 workers=10 {
+    # Simulate work with string operations
+    temp := ""
+    for j in 0..50 {
+        temp += "worker_${i}_item_${j},"
+    }
+    result := split(temp, ",")
+    # File operations in parallel
+    fs.write("tmp_worker_${i}.txt", "Worker ${i} completed")
+}
+parallel_end := time.now()
+print("Parallel execution (100 workers, 10 threads): ${parallel_end} - ${parallel_start} ms")
+
+# Cleanup parallel test files
+parallel i in 0..100 workers=20 {
+    fs.remove("tmp_worker_${i}.txt")
+}
+print("Parallel cleanup: Completed")
+
+# ===============================
+# 4. FILESYSTEM STRESS
+# ===============================
+
+print("\n--- FILESYSTEM STRESS ---")
+
+# Create directory structure
+fs.mkdir("stress_test_dir")
+for i in 0..100 {
+    dir_path := "stress_test_dir/subdir_${i}"
+    fs.mkdir(dir_path)
+    for j in 0..10 {
+        file_path := path.join(dir_path, "file_${j}.txt")
+        content := ""
+for k in 0..50 {
+    content += "Content for file ${j} in dir ${i}\n"
+}
+        fs.write(file_path, content)
+    }
+}
+print("Filesystem: Created 100 dirs with 10 files each")
+
+# Bulk file operations
+bench_start := time.now()
+all_files := fs.glob("stress_test_dir/**/*.txt")
+total_size := 0
+for file in all_files {
+    content := fs.read(file)
+    total_size += len(content)
+}
+bench_end := time.now()
+print("Bulk file read (${len(all_files)} files): ${bench_end} - ${bench_start} ms")
+print("Total content size: ${total_size} chars")
+
+# Cleanup
+fs.remove("stress_test_dir")
+print("Filesystem: Cleanup completed")
+
+# ===============================
+# 5. NETWORK & HTTP STRESS
+# ===============================
+
+print("\n--- NETWORK & HTTP STRESS ---")
+
+# Multiple HTTP requests (using a public API)
+parallel i in 0..20 workers=5 {
+    try {
+        # Using httpbin.org for testing
+        resp := http.get("https://httpbin.org/get?test_id=${i}")
+        if resp.status == 200 {
+            print("HTTP request ${i}: Success")
+        } else {
+            print("HTTP request ${i}: Status ${resp.status}")
+        }
+    } catch e {
+        print("HTTP request ${i}: Failed - ${typeof(e)}")
+    }
+}
+
+# ===============================
+# 6. RECURSION & COMPLEX LOGIC
+# ===============================
+
+print("\n--- RECURSION & COMPLEX LOGIC ---")
+
+# Recursive factorial
+fn factorial(n) {
+    if n <= 1 {
+        return 1
+    } else {
+        return n * factorial(n - 1)
+    }
+}
+
+bench_start := time.now()
+fact_result := factorial(20)
+bench_end := time.now()
+print("Recursive factorial(20): ${fact_result} in ${bench_end} - ${bench_start} ms")
+
+# Complex nested loops
+bench_start := time.now()
+matrix := []
+for i in 0..50 {
+    row := []
+    for j in 0..50 {
+        push(row, i * j + (i + j))
+    }
+    push(matrix, row)
+}
+bench_end := time.now()
+print("Matrix creation (50x50): ${bench_end} - ${bench_start} ms")
+
+# ===============================
+# 7. ERROR HANDLING STRESS
+# ===============================
+
+print("\n--- ERROR HANDLING STRESS ---")
+
+# Multiple error scenarios
+error_count := 0
+for i in 0..100 {
+    try {
+        # Intentional errors
+        if i % 3 == 0 {
+            x := int("not_a_number")
+        }
+        if i % 3 == 1 {
+            content := fs.read("nonexistent_file_${i}.txt")
+        }
+        if i % 3 == 2 {
+            # Division by zero
+            result := 10 / 0
+        }
+    } catch e {
+        error_count += 1
+    }
+}
+print("Error handling: ${error_count}/100 errors caught successfully")
+
+# ===============================
+# 8. TYPE COERCION STRESS
+# ===============================
+
+print("\n--- TYPE COERCION STRESS ---")
+
+# Mixed type operations
+mixed_results := []
+for i in 0..1000 {
+    if i % 4 == 0 {
+        # String to number
+        num := int("${i}")
+        push(mixed_results, num * 2)
+    }
+    if i % 4 == 1 {
+        # Number to string
+        str := str(i)
+        push(mixed_results, "num_${str}")
+    }
+    if i % 4 == 2 {
+        # Float operations
+        f := float(i) / 3.0
+        push(mixed_results, f)
+    }
+    if i % 4 == 3 {
+        # Boolean operations
+        b := i > 500
+        push(mixed_results, b)
+    }
+}
+print("Type coercion: ${len(mixed_results)} mixed operations completed")
+
+# ===============================
+# 9. ENVIRONMENT & PROCESS STRESS
+# ===============================
+
+print("\n--- ENVIRONMENT & PROCESS STRESS ---")
+
+# Bulk environment operations
+for i in 0..50 {
+    env.set("LATCH_TEST_${i}", "value_${i}")
+}
+
+all_env := env.list()
+test_env_count := 0
+for key in keys(all_env) {
+    if starts_with(key, "LATCH_TEST_") {
+        test_env_count += 1
+    }
+}
+print("Environment: Set and retrieved ${test_env_count} variables")
+
+# Process execution stress
+bench_start := time.now()
+parallel i in 0..20 workers=5 {
+    result := proc.exec("echo 'Process ${i} completed'")
+    if result.code == 0 {
+        print("Process ${i}: ${trim(result.stdout)}")
+    }
+}
+bench_end := time.now()
+print("Process execution (20 parallel): ${bench_end} - ${bench_start} ms")
+
+# Cleanup environment
+for i in 0..50 {
+    env.set("LATCH_TEST_${i}", "")
+}
+
+# ===============================
+# 10. PIPE OPERATOR STRESS
+# ===============================
+
+print("\n--- PIPE OPERATOR STRESS ---")
+
+bench_start := time.now()
+# Complex pipe chain
+result := range(0, 5000)
+    |> filter(fn(x) { return x % 2 == 0 })
+    |> map(fn(x) { return x * 3 })
+    |> filter(fn(x) { return x > 100 })
+    |> map(fn(x) { return str(x) })
+    |> filter(fn(s) { return contains(s, "6") })
+bench_end := time.now()
+print("Complex pipe chain (5k items): ${len(result)} results in ${bench_end} - ${bench_start} ms")
+
+# ===============================
+# 11. SAFE ACCESS STRESS
+# ===============================
+
+print("\n--- SAFE ACCESS STRESS ---")
+
+# Deep safe access chains
+test_data := {
+    "level1": {
+        "level2": {
+            "level3": {
+                "level4": {
+                    "value": "deep_value"
+                }
+            }
+        }
+    }
+}
+
+bench_start := time.now()
+for i in 0..10000 {
+    result := test_data?.level1?.level2?.level3?.level4?.value ?? "default"
+}
+bench_end := time.now()
+print("Safe access stress (10k deep accesses): ${bench_end} - ${bench_start} ms")
+
+# ===============================
+# 12. FINAL BENCHMARK SUMMARY
+# ===============================
+
+print("\n--- BENCHMARK SUMMARY ---")
+end_time := time.now()
+print("Total test execution time: ${end_time}")
+print("Start time: ${start_time}")
+
+# System info
+print("\n--- SYSTEM INFO ---")
+print("Platform: Available via env vars")
+print("Memory usage: Check system monitor")
+print("CPU usage: Check system monitor")
+
+# Cleanup any remaining temp files
+try {
+    fs.remove("tmp.txt")
+} catch e {
+    # Ignore if file doesn't exist
+}
+
+print("\n=== LATCH COMPREHENSIVE STRESS TEST COMPLETED ===")
+print("All performance, memory, parallel, and edge case tests executed")
+stop 0
