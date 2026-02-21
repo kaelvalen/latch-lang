@@ -27,6 +27,11 @@ impl SymbolInfo {
     fn variable() -> Self {
         SymbolInfo { kind: SymbolKind::Variable, type_ann: None }
     }
+
+    fn constant() -> Self {
+        SymbolInfo { kind: SymbolKind::Variable, type_ann: None }
+    }
+
     fn function(param_count: usize) -> Self {
         SymbolInfo { kind: SymbolKind::Function { param_count }, type_ann: None }
     }
@@ -208,14 +213,21 @@ impl SemanticAnalyzer {
                 self.pop_scope();
             }
 
-            Stmt::Try { body, catch_var, catch_body } => {
+            Stmt::Try { body, catch_var, catch_body, finally_body } => {
                 self.push_scope();
                 for s in body { self.check_stmt(s); }
                 self.pop_scope();
+
                 self.push_scope();
                 self.declare(catch_var, SymbolInfo::variable());
                 for s in catch_body { self.check_stmt(s); }
                 self.pop_scope();
+
+                if let Some(finally_block) = finally_body {
+                    self.push_scope();
+                    for s in finally_block { self.check_stmt(s); }
+                    self.pop_scope();
+                }
             }
 
             Stmt::Use(path) => {
@@ -229,6 +241,29 @@ impl SemanticAnalyzer {
                 self.check_expr(expr);
             }
 
+            Stmt::Const { name, type_ann, value } => {
+                self.check_expr(value);
+                if let Some(ann) = type_ann {
+                    self.check_literal_type(name, ann, value);
+                }
+                self.declare(name, SymbolInfo::constant());
+            }
+
+            Stmt::Yield(expr) => {
+                self.check_expr(expr);
+            }
+
+            Stmt::While { cond, body } => {
+                self.check_expr(cond);
+                self.push_scope();
+                for s in body { self.check_stmt(s); }
+                self.pop_scope();
+            }
+
+            Stmt::Break => {}
+
+            Stmt::Continue => {}
+
             Stmt::CompoundAssign { name, value, .. } => {
                 if self.resolve(name).is_none() {
                     self.errors.push(LatchError::UndeclaredAssign(name.clone()));
@@ -238,6 +273,41 @@ impl SemanticAnalyzer {
 
             Stmt::Expr(expr) => {
                 self.check_expr(expr);
+            }
+
+            Stmt::Class { name, fields, methods } => {
+                self.declare(name, SymbolInfo::variable());
+                for (field_name, type_ann, default) in fields {
+                    if let Some(ann) = type_ann {
+                        // Type checking would go here
+                    }
+                    if let Some(val) = default {
+                        self.check_expr(val);
+                    }
+                }
+                for (method_name, params, body) in methods {
+                    self.push_scope();
+                    for param in params {
+                        self.declare(&param.name, SymbolInfo::variable());
+                    }
+                    for s in body { self.check_stmt(s); }
+                    self.pop_scope();
+                }
+            }
+
+            Stmt::Export(names) => {
+                for name in names {
+                    if self.resolve(name).is_none() {
+                        self.errors.push(LatchError::UndefinedVariable(name.clone()));
+                    }
+                }
+            }
+
+            Stmt::Import { items, module } => {
+                // For now, declare all imported items as variables
+                for item in items {
+                    self.declare(item, SymbolInfo::variable());
+                }
             }
         }
     }
@@ -252,7 +322,7 @@ impl SemanticAnalyzer {
                 }
             }
 
-            Expr::Call { name, args } => {
+            Expr::Call { name, args, kwargs: _ } => {
                 match self.resolve(name) {
                     None => {
                         self.errors.push(LatchError::UndefinedFunction(name.clone()));
@@ -355,6 +425,18 @@ impl SemanticAnalyzer {
                 self.check_expr(false_branch);
             }
 
+            // List comprehension: [body for var in iter if cond]
+            Expr::ListComp { body, var, iter, cond } => {
+                self.check_expr(iter);
+                self.push_scope();
+                self.declare(var, SymbolInfo::variable());
+                self.check_expr(body);
+                if let Some(c) = cond {
+                    self.check_expr(c);
+                }
+                self.pop_scope();
+            }
+
             // Slice: list[1:5], list[2:], list[:-1]
             Expr::Slice { expr, start, end } => {
                 self.check_expr(expr);
@@ -391,7 +473,7 @@ impl SemanticAnalyzer {
     /// Check a pipe‐target expression, accounting for the implicit first argument.
     fn check_pipe_func(&mut self, func: &Expr) {
         match func {
-            Expr::Call { name, args } => {
+            Expr::Call { name, args, kwargs: _ } => {
                 // Pipe adds one implicit arg, so check arity with +1
                 if let Some(SymbolInfo { kind: SymbolKind::Function { param_count }, .. }) = self.resolve(name) {
                     let pc = *param_count;

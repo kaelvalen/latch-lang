@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 
 use rayon::prelude::*;
 
@@ -171,7 +172,7 @@ impl Interpreter {
                 return Err(LatchError::ReturnSignal(val));
             }
 
-            Stmt::Try { body, catch_var, catch_body } => {
+            Stmt::Try { body, catch_var, catch_body, finally_body } => {
                 // Execute body in its own scope
                 let parent = std::mem::replace(&mut self.env, Env::new());
                 self.env = parent.child();
@@ -181,18 +182,41 @@ impl Interpreter {
                 let child = std::mem::replace(&mut self.env, Env::new());
                 self.env = child.into_parent().unwrap();
 
-                if let Err(e) = result {
+                let catch_result = if let Err(e) = result {
                     // Don't catch return signals
                     if matches!(e, LatchError::ReturnSignal(_)) {
+                        // Execute finally before returning
+                        if let Some(finally_block) = finally_body {
+                            let _ = self.exec_block_inner(finally_block);
+                        }
                         return Err(e);
                     }
                     let parent = std::mem::replace(&mut self.env, Env::new());
                     self.env = parent.child();
                     self.env.set(&catch_var, Value::Str(format!("{e}")));
-                    self.exec_block_inner(catch_body)?;
+                    let res = self.exec_block_inner(catch_body);
                     let child = std::mem::replace(&mut self.env, Env::new());
                     self.env = child.into_parent().unwrap();
+                    res
+                } else {
+                    Ok(())
+                };
+
+                // Execute finally block if present
+                if let Some(finally_block) = finally_body {
+                    let parent = std::mem::replace(&mut self.env, Env::new());
+                    self.env = parent.child();
+                    let finally_result = self.exec_block_inner(finally_block);
+                    let child = std::mem::replace(&mut self.env, Env::new());
+                    self.env = child.into_parent().unwrap();
+                    
+                    // Finally errors override catch results
+                    if finally_result.is_err() {
+                        return finally_result;
+                    }
                 }
+
+                catch_result?;
             }
 
             Stmt::Use(path) => {
@@ -206,14 +230,89 @@ impl Interpreter {
                 self.run(ast)?;
             }
 
+            Stmt::Const { name, type_ann: _, value } => {
+                let val = self.eval_expr(value)?;
+                self.env.set(&name, val);
+            }
+
+            Stmt::Yield(expr) => {
+                let val = self.eval_expr(expr)?;
+                return Err(LatchError::YieldSignal(val));
+            }
+
             Stmt::Stop(expr) => {
                 let val = self.eval_expr(expr)?;
                 let code = val.as_int().unwrap_or(1) as i32;
                 return Err(LatchError::StopSignal(code));
             }
 
+            Stmt::While { cond, body } => {
+                loop {
+                    let val = self.eval_expr(cond.clone())?;
+                    if !val.is_truthy() {
+                        break;
+                    }
+                    // Execute body in its own scope
+                    let parent = std::mem::replace(&mut self.env, Env::new());
+                    self.env = parent.child();
+                    for s in &body {
+                        match self.exec_stmt(s.clone()) {
+                            Ok(()) => {}
+                            Err(LatchError::BreakSignal) => {
+                                let child = std::mem::replace(&mut self.env, Env::new());
+                                self.env = child.into_parent().unwrap();
+                                return Ok(());
+                            }
+                            Err(LatchError::ContinueSignal) => {
+                                break;
+                            }
+                            Err(e) => {
+                                let child = std::mem::replace(&mut self.env, Env::new());
+                                self.env = child.into_parent().unwrap();
+                                return Err(e);
+                            }
+                        }
+                    }
+                    let child = std::mem::replace(&mut self.env, Env::new());
+                    self.env = child.into_parent().unwrap();
+                }
+            }
+
+            Stmt::Break => {
+                return Err(LatchError::BreakSignal);
+            }
+
+            Stmt::Continue => {
+                return Err(LatchError::ContinueSignal);
+            }
+
             Stmt::Expr(expr) => {
                 self.eval_expr(expr)?;
+            }
+
+            Stmt::Class { name, fields, methods } => {
+                // Store class info in environment as a special value
+                let class_info = Value::Str(format!("<class {}>", name));
+                self.env.set(&name, class_info);
+            }
+
+            Stmt::Export(names) => {
+                // Mark names as exported (store in special exports map)
+                for name in names {
+                    if let Some(val) = self.env.get(&name) {
+                        self.env.set(&format!("__export_{}", name), val.clone());
+                    }
+                }
+            }
+
+            Stmt::Import { items, module } => {
+                // Import from module (load and extract exported values)
+                // This is a simplified version - full module system would need more work
+                for item in items {
+                    let export_key = format!("__export_{}", item);
+                    // For now, create a placeholder
+                    self.env.set(&item, Value::Str(format!("<imported {} from {}>", item, module)));
+                }
             }
         }
 
@@ -335,7 +434,7 @@ impl Interpreter {
                 }
             }
 
-            Expr::Call { name, args } => {
+            Expr::Call { name, args, kwargs: _ } => {
                 let evaluated: Vec<Value> = args.into_iter()
                     .map(|a| self.eval_expr(a))
                     .collect::<Result<_>>()?;
@@ -451,7 +550,7 @@ impl Interpreter {
                 let val = self.eval_expr(*expr)?;
                 // func is a Call expression — inject val as first argument
                 match *func {
-                    Expr::Call { name, mut args } => {
+                    Expr::Call { name, mut args, kwargs: _ } => {
                         // Evaluate existing args, then prepend the piped value
                         let mut evaluated = vec![val];
                         for a in args.drain(..) {
@@ -535,6 +634,39 @@ impl Interpreter {
                 } else {
                     self.eval_expr(*false_branch)
                 }
+            }
+
+            Expr::ListComp { body, var, iter, cond } => {
+                let iterable = self.eval_expr(*iter)?;
+                let items = iterable.into_list()?;
+                let mut result = Vec::new();
+                
+                for item in items {
+                    // Create new scope for the comprehension
+                    let parent = std::mem::replace(&mut self.env, Env::new());
+                    self.env = parent.child();
+                    
+                    // Set loop variable
+                    self.env.set(&var, item);
+                    
+                    // Check condition if present
+                    let include = if let Some(ref c) = cond {
+                        self.eval_expr(*c.clone())?.is_truthy()
+                    } else {
+                        true
+                    };
+                    
+                    if include {
+                        let val = self.eval_expr(*body.clone())?;
+                        result.push(val);
+                    }
+                    
+                    // Restore parent scope
+                    let child = std::mem::replace(&mut self.env, Env::new());
+                    self.env = child.into_parent().unwrap();
+                }
+                
+                Ok(Value::new_list(result))
             }
 
             Expr::Slice { expr, start, end } => {
@@ -665,6 +797,25 @@ impl Interpreter {
                     expected: "numeric".into(),
                     found: "list".into(),
                 }),
+            },
+
+            // List multiplication: list * int or int * list
+            (Value::List(list), Value::Int(n)) | (Value::Int(n), Value::List(list)) => {
+                if op == BinOp::Mul {
+                    if *n < 0 {
+                        return Err(LatchError::GenericError("cannot multiply list by negative number".into()));
+                    }
+                    let guard = list.lock().unwrap();
+                    let mut result = Vec::new();
+                    for _ in 0..*n {
+                        result.extend(guard.clone());
+                    }
+                    return Ok(Value::new_list(result));
+                }
+                Err(LatchError::TypeMismatch {
+                    expected: "numeric".into(),
+                    found: "list and int".into(),
+                })
             },
 
             // Equality for dicts
@@ -810,6 +961,170 @@ impl Interpreter {
                     found: "invalid args".into(),
                 });
             }
+
+            // extend(list, items) - append all items from another list
+            "extend" => {
+                if args.len() == 2 {
+                    if let (Value::List(ref list), Value::List(ref items)) = (&args[0], &args[1]) {
+                        let mut guard = list.lock().unwrap();
+                        let items_guard = items.lock().unwrap();
+                        for item in items_guard.iter() {
+                            guard.push(item.clone());
+                        }
+                        return Ok(Value::Null);
+                    }
+                }
+                return Err(LatchError::TypeMismatch {
+                    expected: "list, list".into(),
+                    found: "invalid args".into(),
+                });
+            }
+
+            // insert(list, index, value) - insert at specific index
+            "insert" => {
+                if args.len() == 3 {
+                    if let Value::List(ref list) = args[0] {
+                        let index = args[1].as_int()?;
+                        let mut guard = list.lock().unwrap();
+                        let idx = if index < 0 {
+                            (guard.len() as i64 + index).max(0) as usize
+                        } else {
+                            index.min(guard.len() as i64) as usize
+                        };
+                        guard.insert(idx, args[2].clone());
+                        return Ok(Value::Null);
+                    }
+                }
+                return Err(LatchError::TypeMismatch {
+                    expected: "list, index, value".into(),
+                    found: "invalid args".into(),
+                });
+            }
+
+            // remove(list, value) - remove first occurrence of value
+            "remove" => {
+                if args.len() == 2 {
+                    if let Value::List(ref list) = args[0] {
+                        let mut guard = list.lock().unwrap();
+                        let val = &args[1];
+                        if let Some(pos) = guard.iter().position(|x| values_equal(x, val)) {
+                            guard.remove(pos);
+                            return Ok(Value::Null);
+                        }
+                        return Err(LatchError::GenericError("value not found in list".into()));
+                    }
+                }
+                return Err(LatchError::TypeMismatch {
+                    expected: "list, value".into(),
+                    found: "invalid args".into(),
+                });
+            }
+
+            // pop(list, index?) - remove and return item at index (default last)
+            "pop" => {
+                if args.len() >= 1 {
+                    if let Value::List(ref list) = args[0] {
+                        let mut guard = list.lock().unwrap();
+                        if guard.is_empty() {
+                            return Err(LatchError::GenericError("pop from empty list".into()));
+                        }
+                        let index = if args.len() >= 2 {
+                            let idx = args[1].as_int()?;
+                            if idx < 0 {
+                                (guard.len() as i64 + idx).max(0) as usize
+                            } else {
+                                idx as usize
+                            }
+                        } else {
+                            guard.len() - 1
+                        };
+                        if index >= guard.len() {
+                            return Err(LatchError::GenericError("pop index out of range".into()));
+                        }
+                        return Ok(guard.remove(index));
+                    }
+                }
+                return Err(LatchError::TypeMismatch {
+                    expected: "list, [index]".into(),
+                    found: "invalid args".into(),
+                });
+            }
+
+            // list_clear(list) - remove all items from list
+            "list_clear" => {
+                if args.len() == 1 {
+                    if let Value::List(ref list) = args[0] {
+                        list.lock().unwrap().clear();
+                        return Ok(Value::Null);
+                    }
+                }
+                return Err(LatchError::TypeMismatch {
+                    expected: "list".into(),
+                    found: "invalid args".into(),
+                });
+            }
+
+            // index(list, value) - find index of value
+            "index" => {
+                if args.len() == 2 {
+                    if let Value::List(ref list) = args[0] {
+                        let guard = list.lock().unwrap();
+                        let val = &args[1];
+                        if let Some(pos) = guard.iter().position(|x| values_equal(x, val)) {
+                            return Ok(Value::Int(pos as i64));
+                        }
+                        return Err(LatchError::GenericError("value not found in list".into()));
+                    }
+                }
+                return Err(LatchError::TypeMismatch {
+                    expected: "list, value".into(),
+                    found: "invalid args".into(),
+                });
+            }
+
+            // count(list, value) - count occurrences of value
+            "count" => {
+                if args.len() == 2 {
+                    if let Value::List(ref list) = args[0] {
+                        let guard = list.lock().unwrap();
+                        let val = &args[1];
+                        let cnt = guard.iter().filter(|x| values_equal(x, val)).count();
+                        return Ok(Value::Int(cnt as i64));
+                    }
+                }
+                return Err(LatchError::TypeMismatch {
+                    expected: "list, value".into(),
+                    found: "invalid args".into(),
+                });
+            }
+
+            // reverse(list) - reverse list in place
+            "reverse" => {
+                if args.len() == 1 {
+                    if let Value::List(ref list) = args[0] {
+                        list.lock().unwrap().reverse();
+                        return Ok(Value::Null);
+                    }
+                }
+                return Err(LatchError::TypeMismatch {
+                    expected: "list".into(),
+                    found: "invalid args".into(),
+                });
+            }
+
+            // list_copy(list) - return shallow copy of list
+            "list_copy" => {
+                if args.len() == 1 {
+                    if let Value::List(ref list) = args[0] {
+                        let guard = list.lock().unwrap();
+                        return Ok(Value::new_list(guard.clone()));
+                    }
+                }
+                return Err(LatchError::TypeMismatch {
+                    expected: "list".into(),
+                    found: "invalid args".into(),
+                });
+            }
             "keys" => {
                 return match args.first() {
                     Some(Value::Map(m)) => {
@@ -824,6 +1139,178 @@ impl Interpreter {
                         found: args.first().map(|v| v.type_name()).unwrap_or("none").into(),
                     }),
                 };
+            }
+
+            // values(dict) - return list of values (already exists, keeping for reference)
+
+            // get(dict, key, default?) - safe access with default
+            "get" => {
+                if args.len() >= 2 {
+                    if let Value::Map(ref m) = args[0] {
+                        let guard = m.lock().unwrap();
+                        let key = args[1].as_str()?;
+                        if let Some(val) = guard.get(key) {
+                            return Ok(val.clone());
+                        }
+                        // Return default if provided, otherwise null
+                        if args.len() >= 3 {
+                            return Ok(args[2].clone());
+                        }
+                        return Ok(Value::Null);
+                    }
+                }
+                return Err(LatchError::TypeMismatch {
+                    expected: "dict, key, [default]".into(),
+                    found: "invalid args".into(),
+                });
+            }
+
+            // pop(dict, key, default?) - remove and return value
+            "pop" => {
+                if args.len() >= 2 {
+                    if let Value::Map(ref m) = args[0] {
+                        let mut guard = m.lock().unwrap();
+                        let key = args[1].as_str()?;
+                        if let Some(val) = guard.remove(key) {
+                            return Ok(val);
+                        }
+                        if args.len() >= 3 {
+                            return Ok(args[2].clone());
+                        }
+                        return Err(LatchError::GenericError(format!("key not found: {}", key)));
+                    }
+                }
+                return Err(LatchError::TypeMismatch {
+                    expected: "dict, key, [default]".into(),
+                    found: "invalid args".into(),
+                });
+            }
+
+            // popitem(dict) - remove and return (key, value) as list
+            "popitem" => {
+                if args.len() == 1 {
+                    if let Value::Map(ref m) = args[0] {
+                        let mut guard = m.lock().unwrap();
+                        if let Some(key) = guard.keys().next().cloned() {
+                            if let Some(val) = guard.remove(&key) {
+                                return Ok(Value::new_list(vec![Value::Str(key), val]));
+                            }
+                        }
+                        return Err(LatchError::GenericError("popitem from empty dict".into()));
+                    }
+                }
+                return Err(LatchError::TypeMismatch {
+                    expected: "dict".into(),
+                    found: "invalid args".into(),
+                });
+            }
+
+            // update(dict, other) - merge dictionaries
+            "update" => {
+                if args.len() == 2 {
+                    if let (Value::Map(ref m), Value::Map(ref other)) = (&args[0], &args[1]) {
+                        let mut guard = m.lock().unwrap();
+                        let other_guard = other.lock().unwrap();
+                        for (k, v) in other_guard.iter() {
+                            guard.insert(k.clone(), v.clone());
+                        }
+                        return Ok(Value::Null);
+                    }
+                }
+                return Err(LatchError::TypeMismatch {
+                    expected: "dict, dict".into(),
+                    found: "invalid args".into(),
+                });
+            }
+
+            // setdefault(dict, key, default) - get or insert default
+            "setdefault" => {
+                if args.len() == 3 {
+                    if let Value::Map(ref m) = args[0] {
+                        let mut guard = m.lock().unwrap();
+                        let key = args[1].as_str()?;
+                        if let Some(val) = guard.get(key) {
+                            return Ok(val.clone());
+                        }
+                        guard.insert(key.to_string(), args[2].clone());
+                        return Ok(args[2].clone());
+                    }
+                }
+                return Err(LatchError::TypeMismatch {
+                    expected: "dict, key, default".into(),
+                    found: "invalid args".into(),
+                });
+            }
+
+            // dict_clear(dict) - remove all items
+            "dict_clear" => {
+                if args.len() == 1 {
+                    if let Value::Map(ref m) = args[0] {
+                        m.lock().unwrap().clear();
+                        return Ok(Value::Null);
+                    }
+                }
+                return Err(LatchError::TypeMismatch {
+                    expected: "dict".into(),
+                    found: "invalid args".into(),
+                });
+            }
+
+            // dict_copy(dict) - shallow copy
+            "dict_copy" => {
+                if args.len() == 1 {
+                    if let Value::Map(ref m) = args[0] {
+                        let guard = m.lock().unwrap();
+                        let copy: HashMap<String, Value> = guard.clone();
+                        return Ok(Value::Map(Arc::new(Mutex::new(copy))));
+                    }
+                }
+                return Err(LatchError::TypeMismatch {
+                    expected: "dict".into(),
+                    found: "invalid args".into(),
+                });
+            }
+
+            // items(dict) - return list of [key, value] pairs
+            "items" => {
+                if args.len() == 1 {
+                    if let Value::Map(ref m) = args[0] {
+                        let guard = m.lock().unwrap();
+                        let mut items: Vec<Value> = Vec::new();
+                        let mut sorted_keys: Vec<String> = guard.keys().cloned().collect();
+                        sorted_keys.sort();
+                        for key in sorted_keys {
+                            if let Some(val) = guard.get(&key) {
+                                items.push(Value::new_list(vec![Value::Str(key), val.clone()]));
+                            }
+                        }
+                        return Ok(Value::new_list(items));
+                    }
+                }
+                return Err(LatchError::TypeMismatch {
+                    expected: "dict".into(),
+                    found: "invalid args".into(),
+                });
+            }
+
+            // fromkeys(keys, value) - create dict from keys
+            "fromkeys" => {
+                if args.len() == 2 {
+                    if let Value::List(ref keys) = args[0] {
+                        let guard = keys.lock().unwrap();
+                        let value = args[1].clone();
+                        let mut map = HashMap::new();
+                        for key in guard.iter() {
+                            let k = key.as_str()?;
+                            map.insert(k.to_string(), value.clone());
+                        }
+                        return Ok(Value::Map(Arc::new(Mutex::new(map))));
+                    }
+                }
+                return Err(LatchError::TypeMismatch {
+                    expected: "list, value".into(),
+                    found: "invalid args".into(),
+                });
             }
             "values" => {
                 return match args.first() {
@@ -945,6 +1432,113 @@ impl Interpreter {
             }
 
             // repeat(string, count) — repeats string count times
+            // str_find(string, substring) - find index of substring, -1 if not found
+            "str_find" => {
+                if args.len() == 2 {
+                    let s = args[0].as_str()?;
+                    let sub = args[1].as_str()?;
+                    return Ok(Value::Int(s.find(sub).map(|i| i as i64).unwrap_or(-1)));
+                }
+                return Err(LatchError::ArgCountMismatch {
+                    name: "str_find".into(), expected: 2, found: args.len(),
+                });
+            }
+
+            // str_rfind(string, substring) - find last index of substring
+            "str_rfind" => {
+                if args.len() == 2 {
+                    let s = args[0].as_str()?;
+                    let sub = args[1].as_str()?;
+                    return Ok(Value::Int(s.rfind(sub).map(|i| i as i64).unwrap_or(-1)));
+                }
+                return Err(LatchError::ArgCountMismatch {
+                    name: "str_rfind".into(), expected: 2, found: args.len(),
+                });
+            }
+
+            // str_count(string, substring) - count occurrences
+            "str_count" => {
+                if args.len() == 2 {
+                    let s = args[0].as_str()?;
+                    let sub = args[1].as_str()?;
+                    let count = s.matches(sub).count();
+                    return Ok(Value::Int(count as i64));
+                }
+                return Err(LatchError::ArgCountMismatch {
+                    name: "str_count".into(), expected: 2, found: args.len(),
+                });
+            }
+
+            // str_join(list, separator) - join list elements with separator
+            "str_join" => {
+                if args.len() == 2 {
+                    if let Value::List(list) = &args[0] {
+                        let guard = list.lock().unwrap();
+                        let sep = args[1].as_str()?;
+                        let parts: Vec<String> = guard.iter()
+                            .map(|v| format!("{}", v))
+                            .collect();
+                        return Ok(Value::Str(parts.join(sep)));
+                    }
+                }
+                return Err(LatchError::TypeMismatch {
+                    expected: "list, string".into(),
+                    found: "invalid args".into(),
+                });
+            }
+
+            // str_splitlines(string) - split on newlines
+            "str_splitlines" => {
+                if args.len() == 1 {
+                    let s = args[0].as_str()?;
+                    let lines: Vec<Value> = s.lines()
+                        .map(|line| Value::Str(line.to_string()))
+                        .collect();
+                    return Ok(Value::new_list(lines));
+                }
+                return Err(LatchError::ArgCountMismatch {
+                    name: "str_splitlines".into(), expected: 1, found: args.len(),
+                });
+            }
+
+            // str_isdigit(string) - check if all characters are digits
+            "str_isdigit" => {
+                if args.len() == 1 {
+                    let s = args[0].as_str()?;
+                    return Ok(Value::Bool(s.chars().all(|c| c.is_ascii_digit())));
+                }
+                return Err(LatchError::ArgCountMismatch {
+                    name: "str_isdigit".into(), expected: 1, found: args.len(),
+                });
+            }
+
+            // str_isalpha(string) - check if all characters are alphabetic
+            "str_isalpha" => {
+                if args.len() == 1 {
+                    let s = args[0].as_str()?;
+                    return Ok(Value::Bool(s.chars().all(|c| c.is_alphabetic())));
+                }
+                return Err(LatchError::ArgCountMismatch {
+                    name: "str_isalpha".into(), expected: 1, found: args.len(),
+                });
+            }
+
+            // str_capitalize(string) - capitalize first character
+            "str_capitalize" => {
+                if args.len() == 1 {
+                    let s = args[0].as_str()?;
+                    let mut result = String::new();
+                    let mut chars = s.chars();
+                    if let Some(first) = chars.next() {
+                        result.push(first.to_ascii_uppercase());
+                        result.extend(chars.map(|c| c.to_ascii_lowercase()));
+                    }
+                    return Ok(Value::Str(result));
+                }
+                return Err(LatchError::ArgCountMismatch {
+                    name: "str_capitalize".into(), expected: 1, found: args.len(),
+                });
+            }
             "repeat" => {
                 if args.len() == 2 {
                     let s = args[0].as_str()?.to_string();
@@ -956,6 +1550,116 @@ impl Interpreter {
                 }
                 return Err(LatchError::ArgCountMismatch {
                     name: "repeat".into(), expected: 2, found: args.len(),
+                });
+            }
+
+            // str_strip(string, chars?) - strip whitespace or specified chars
+            "str_strip" => {
+                if args.len() >= 1 {
+                    let s = args[0].as_str()?;
+                    let result = if args.len() >= 2 {
+                        let chars = args[1].as_str()?;
+                        s.trim_matches(|c: char| chars.contains(c)).to_string()
+                    } else {
+                        s.trim().to_string()
+                    };
+                    return Ok(Value::Str(result));
+                }
+                return Err(LatchError::ArgCountMismatch {
+                    name: "str_strip".into(), expected: 1, found: args.len(),
+                });
+            }
+
+            // str_lstrip(string, chars?) - strip from left
+            "str_lstrip" => {
+                if args.len() >= 1 {
+                    let s = args[0].as_str()?;
+                    let result = if args.len() >= 2 {
+                        let chars = args[1].as_str()?;
+                        s.trim_start_matches(|c: char| chars.contains(c)).to_string()
+                    } else {
+                        s.trim_start().to_string()
+                    };
+                    return Ok(Value::Str(result));
+                }
+                return Err(LatchError::ArgCountMismatch {
+                    name: "str_lstrip".into(), expected: 1, found: args.len(),
+                });
+            }
+
+            // str_rstrip(string, chars?) - strip from right
+            "str_rstrip" => {
+                if args.len() >= 1 {
+                    let s = args[0].as_str()?;
+                    let result = if args.len() >= 2 {
+                        let chars = args[1].as_str()?;
+                        s.trim_end_matches(|c: char| chars.contains(c)).to_string()
+                    } else {
+                        s.trim_end().to_string()
+                    };
+                    return Ok(Value::Str(result));
+                }
+                return Err(LatchError::ArgCountMismatch {
+                    name: "str_rstrip".into(), expected: 1, found: args.len(),
+                });
+            }
+
+            // str_replace(string, old, new, count?) - replace with optional count
+            "str_replace" => {
+                if args.len() >= 3 {
+                    let s = args[0].as_str()?;
+                    let old = args[1].as_str()?;
+                    let new = args[2].as_str()?;
+                    let result = if args.len() >= 4 {
+                        let count = args[3].as_int()? as usize;
+                        s.replacen(old, new, count)
+                    } else {
+                        s.replace(old, new)
+                    };
+                    return Ok(Value::Str(result));
+                }
+                return Err(LatchError::ArgCountMismatch {
+                    name: "str_replace".into(), expected: 3, found: args.len(),
+                });
+            }
+
+            // str_split(string, delimiter, maxsplit?) - split with optional max
+            "str_split" => {
+                if args.len() >= 2 {
+                    let s = args[0].as_str()?;
+                    let delim = args[1].as_str()?;
+                    let parts: Vec<Value> = if args.len() >= 3 {
+                        let maxsplit = args[2].as_int()? as usize;
+                        s.splitn(maxsplit + 1, delim).map(|p| Value::Str(p.to_string())).collect()
+                    } else {
+                        s.split(delim).map(|p| Value::Str(p.to_string())).collect()
+                    };
+                    return Ok(Value::new_list(parts));
+                }
+                return Err(LatchError::ArgCountMismatch {
+                    name: "str_split".into(), expected: 2, found: args.len(),
+                });
+            }
+
+            // str_upper(string) - uppercase
+            "str_upper" => {
+                if args.len() == 1 {
+                    let s = args[0].as_str()?;
+                    return Ok(Value::Str(s.to_uppercase()));
+                }
+                return Err(LatchError::ArgCountMismatch {
+                    name: "str_upper".into(), expected: 1, found: args.len(),
+                });
+            }
+
+            // str_lower(string) - lowercase
+            "str_lower" => {
+                if args.len() == 1 {
+                    let s = args[0].as_str()?;
+                    return Ok(Value::Str(s.to_lowercase()));
+                }
+                return Err(LatchError::ArgCountMismatch {
+                    name: "str_lower".into(), expected: 1, found: args.len(),
                 });
             }
 
@@ -1211,8 +1915,23 @@ impl Interpreter {
             None => caller_env.clone().child(),   // regular fn: parent = caller env
         };
 
-        for (param, arg) in params.iter().zip(args.into_iter()) {
-            self.env.set(&param.name, arg);
+        // Bind parameters to arguments (with default values if needed)
+        for (i, param) in params.iter().enumerate() {
+            if i < args.len() {
+                // Use provided argument
+                self.env.set(&param.name, args[i].clone());
+            } else if let Some(ref default_expr) = param.default {
+                // Use default value
+                let default_val = self.eval_expr(default_expr.clone())?;
+                self.env.set(&param.name, default_val);
+            } else {
+                // Missing argument without default
+                return Err(LatchError::ArgCountMismatch {
+                    name: param.name.clone(),
+                    expected: params.len(),
+                    found: args.len(),
+                });
+            }
         }
 
         let result = self.exec_block_inner(body.clone());

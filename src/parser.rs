@@ -83,6 +83,14 @@ impl Parser {
             Token::KwStop     => self.parse_stop(),
             Token::KwTry      => self.parse_try(),
             Token::KwUse      => self.parse_use(),
+            Token::KwWhile    => self.parse_while(),
+            Token::KwBreak    => { self.advance(); Ok(Stmt::Break) },
+            Token::KwContinue => { self.advance(); Ok(Stmt::Continue) },
+            Token::KwConst    => self.parse_const(),
+            Token::KwYield    => self.parse_yield(),
+            Token::KwClass    => self.parse_class(),
+            Token::KwExport   => self.parse_export(),
+            Token::KwImport   => self.parse_import(),
             Token::Ident(_)   => self.parse_ident_stmt(),
             _                 => {
                 let expr = self.parse_expr()?;
@@ -305,7 +313,14 @@ impl Parser {
             } else {
                 None
             };
-            params.push(Param { name, type_ann });
+            // Check for default value: = expr
+            let default = if matches!(self.peek(), Token::Eq) {
+                self.advance(); // skip '='
+                Some(self.parse_expr()?)
+            } else {
+                None
+            };
+            params.push(Param { name, type_ann, default });
             if matches!(self.peek(), Token::Comma) {
                 self.advance();
             } else {
@@ -361,7 +376,181 @@ impl Parser {
             }),
         };
         let catch_body = self.parse_block()?;
-        Ok(Stmt::Try { body, catch_var, catch_body })
+        
+        // Check for finally clause
+        let finally_body = if matches!(self.peek(), Token::KwFinally) {
+            self.advance(); // skip 'finally'
+            Some(self.parse_block()?)
+        } else {
+            None
+        };
+        
+        Ok(Stmt::Try { body, catch_var, catch_body, finally_body })
+    }
+
+    fn parse_while(&mut self) -> Result<Stmt> {
+        self.advance(); // skip 'while'
+        let cond = self.parse_expr()?;
+        let body = self.parse_block()?;
+        Ok(Stmt::While { cond, body })
+    }
+
+    fn parse_const(&mut self) -> Result<Stmt> {
+        self.advance(); // skip 'const'
+        let name = match self.advance().node.clone() {
+            Token::Ident(n) => n,
+            other => return Err(LatchError::UnexpectedToken {
+                expected: "identifier".into(),
+                found: format!("{:?}", other),
+                line: self.line(),
+            }),
+        };
+        
+        // Optional type annotation
+        let type_ann = if matches!(self.peek(), Token::Colon) {
+            self.advance(); // skip ':'
+            Some(self.parse_type()?)
+        } else {
+            None
+        };
+        
+        self.expect(&Token::Eq)?;
+        let value = self.parse_expr()?;
+        Ok(Stmt::Const { name, type_ann, value })
+    }
+
+    fn parse_yield(&mut self) -> Result<Stmt> {
+        self.advance(); // skip 'yield'
+        let expr = self.parse_expr()?;
+        Ok(Stmt::Yield(expr))
+    }
+
+    fn parse_class(&mut self) -> Result<Stmt> {
+        self.advance(); // skip 'class'
+        let name = match self.advance().node.clone() {
+            Token::Ident(n) => n,
+            other => return Err(LatchError::UnexpectedToken {
+                expected: "class name".into(),
+                found: format!("{:?}", other),
+                line: self.line(),
+            }),
+        };
+        
+        let body = self.parse_block()?;
+        let mut fields = Vec::new();
+        let mut methods = Vec::new();
+        
+        // Parse class body
+        for stmt in body {
+            match stmt {
+                Stmt::Let { name, type_ann, value } => {
+                    fields.push((name, type_ann, Some(value)));
+                }
+                Stmt::Fn { name, params, return_type: _, body } => {
+                    methods.push((name, params, body));
+                }
+                _ => {}
+            }
+        }
+        
+        Ok(Stmt::Class { name, fields, methods })
+    }
+
+    fn parse_export(&mut self) -> Result<Stmt> {
+        self.advance(); // skip 'export'
+        
+        // Check for block syntax: export { a, b, c }
+        if matches!(self.peek(), Token::LBrace) {
+            self.advance(); // skip '{'
+            let mut names = Vec::new();
+            while !matches!(self.peek(), Token::RBrace | Token::EOF) {
+                let name = match self.advance().node.clone() {
+                    Token::Ident(n) => n,
+                    other => return Err(LatchError::UnexpectedToken {
+                        expected: "identifier".into(),
+                        found: format!("{:?}", other),
+                        line: self.line(),
+                    }),
+                };
+                names.push(name);
+                if matches!(self.peek(), Token::Comma) {
+                    self.advance();
+                }
+            }
+            self.expect(&Token::RBrace)?;
+            Ok(Stmt::Export(names))
+        } else {
+            // Single export: export foo
+            let name = match self.advance().node.clone() {
+                Token::Ident(n) => n,
+                other => return Err(LatchError::UnexpectedToken {
+                    expected: "identifier".into(),
+                    found: format!("{:?}", other),
+                    line: self.line(),
+                }),
+            };
+            Ok(Stmt::Export(vec![name]))
+        }
+    }
+
+    fn parse_import(&mut self) -> Result<Stmt> {
+        self.advance(); // skip 'import'
+        
+        // Parse import list: { a, b, c } or single item
+        let items = if matches!(self.peek(), Token::LBrace) {
+            self.advance(); // skip '{'
+            let mut names = Vec::new();
+            while !matches!(self.peek(), Token::RBrace | Token::EOF) {
+                let name = match self.advance().node.clone() {
+                    Token::Ident(n) => n,
+                    other => return Err(LatchError::UnexpectedToken {
+                        expected: "identifier".into(),
+                        found: format!("{:?}", other),
+                        line: self.line(),
+                    }),
+                };
+                names.push(name);
+                if matches!(self.peek(), Token::Comma) {
+                    self.advance();
+                }
+            }
+            self.expect(&Token::RBrace)?;
+            names
+        } else {
+            // Single import
+            let name = match self.advance().node.clone() {
+                Token::Ident(n) => n,
+                other => return Err(LatchError::UnexpectedToken {
+                    expected: "identifier".into(),
+                    found: format!("{:?}", other),
+                    line: self.line(),
+                }),
+            };
+            vec![name]
+        };
+        
+        // Expect 'from' keyword
+        if !matches!(self.peek(), Token::KwUse) {
+            return Err(LatchError::UnexpectedToken {
+                expected: "from".into(),
+                found: format!("{:?}", self.peek()),
+                line: self.line(),
+            });
+        }
+        self.advance(); // skip 'from'
+        
+        // Parse module path (as string or ident)
+        let module = match self.advance().node.clone() {
+            Token::Str(s) => s,
+            Token::Ident(s) => s,
+            other => return Err(LatchError::UnexpectedToken {
+                expected: "module path".into(),
+                found: format!("{:?}", other),
+                line: self.line(),
+            }),
+        };
+        
+        Ok(Stmt::Import { items, module })
     }
 
     fn parse_use(&mut self) -> Result<Stmt> {
@@ -686,7 +875,7 @@ impl Parser {
                     let args = self.parse_args()?;
                     self.expect(&Token::RParen)?;
                     if let Expr::Ident(name) = expr {
-                        expr = Expr::Call { name, args };
+                        expr = Expr::Call { name, args, kwargs: Vec::new() };
                     }
                 }
 
@@ -731,18 +920,57 @@ impl Parser {
 
             Token::LBracket => {
                 self.advance(); // skip [
-                let mut elems = Vec::new();
-                self.skip_newlines();
-                while !matches!(self.peek(), Token::RBracket | Token::EOF) {
-                    elems.push(self.parse_expr()?);
+                
+                // Check if this is a list comprehension by looking for 'for' keyword
+                let saved_pos = self.pos;
+                let is_comprehension = self.scan_for_list_comprehension();
+                self.pos = saved_pos;
+                
+                if is_comprehension {
+                    // Parse list comprehension: [expr for var in iter if cond]
+                    let body = self.parse_expr()?;
+                    self.expect(&Token::KwFor)?;
+                    let var = match self.advance().node.clone() {
+                        Token::Ident(n) => n,
+                        other => return Err(LatchError::UnexpectedToken {
+                            expected: "loop variable".into(),
+                            found: format!("{:?}", other),
+                            line: self.line(),
+                        }),
+                    };
+                    self.expect(&Token::KwIn)?;
+                    let iter = self.parse_expr()?;
+                    
+                    // Optional condition: if expr
+                    let cond = if matches!(self.peek(), Token::KwIf) {
+                        self.advance(); // skip 'if'
+                        Some(Box::new(self.parse_expr()?))
+                    } else {
+                        None
+                    };
+                    
+                    self.expect(&Token::RBracket)?;
+                    Ok(Expr::ListComp { 
+                        body: Box::new(body), 
+                        var, 
+                        iter: Box::new(iter), 
+                        cond 
+                    })
+                } else {
+                    // Parse regular list literal
+                    let mut elems = Vec::new();
                     self.skip_newlines();
-                    if matches!(self.peek(), Token::Comma) {
-                        self.advance();
+                    while !matches!(self.peek(), Token::RBracket | Token::EOF) {
+                        elems.push(self.parse_expr()?);
                         self.skip_newlines();
+                        if matches!(self.peek(), Token::Comma) {
+                            self.advance();
+                            self.skip_newlines();
+                        }
                     }
+                    self.expect(&Token::RBracket)?;
+                    Ok(Expr::List(elems))
                 }
-                self.expect(&Token::RBracket)?;
-                Ok(Expr::List(elems))
             }
 
             Token::LBrace => {
@@ -799,6 +1027,23 @@ impl Parser {
                 })
             }
         }
+    }
+
+    /// Check if the current position is a list comprehension by scanning for 'for' keyword
+    fn scan_for_list_comprehension(&self) -> bool {
+        let mut depth = 1; // bracket depth
+        let mut pos = self.pos;
+        
+        while pos < self.tokens.len() && depth > 0 {
+            match self.tokens[pos].node {
+                Token::LBracket => depth += 1,
+                Token::RBracket => depth -= 1,
+                Token::KwFor if depth == 1 => return true,
+                _ => {}
+            }
+            pos += 1;
+        }
+        false
     }
 
     /// Convert lexer StringParts into AST StringParts by

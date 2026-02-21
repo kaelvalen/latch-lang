@@ -33,6 +33,16 @@ pub fn call(method: &str, args: Vec<Value>) -> Result<Value> {
             Ok(Value::Bool(true))
         }
 
+        "remove" => {
+            let key = args.first()
+                .ok_or_else(|| LatchError::ArgCountMismatch {
+                    name: "env.remove".into(), expected: 1, found: 0,
+                })?
+                .as_str()?;
+            unsafe { std::env::remove_var(key); }
+            Ok(Value::Bool(true))
+        }
+
         "list" => {
             let map: HashMap<String, Value> = std::env::vars()
                 .map(|(k, v)| (k, Value::Str(v)))

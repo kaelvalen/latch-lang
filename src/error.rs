@@ -61,6 +61,10 @@ pub enum LatchError {
     UnknownModule(String),
     UnknownMethod { module: String, method: String },
     IoError(String),
+    FileError(String),
+    NetworkError(String),
+    TypeError(String),
+    ValueError(String),
     HttpError(String),
     AiError(String),
     ProcessFailed { code: i32, stderr: String },
@@ -71,6 +75,9 @@ pub enum LatchError {
     // ── Internal signals (not user-facing) ───────────────────
     ReturnSignal(crate::env::Value),
     StopSignal(i32),
+    BreakSignal,
+    ContinueSignal,
+    YieldSignal(crate::env::Value),
 
     GenericError(String),
 }
@@ -181,6 +188,10 @@ impl LatchError {
             Self::UnknownModule(m) => format!("Unknown module '{m}'"),
             Self::UnknownMethod { module, method } => format!("Unknown method '{module}.{method}'"),
             Self::IoError(msg) => msg.clone(),
+            Self::FileError(msg) => msg.clone(),
+            Self::NetworkError(msg) => msg.clone(),
+            Self::TypeError(msg) => msg.clone(),
+            Self::ValueError(msg) => msg.clone(),
             Self::HttpError(msg) => msg.clone(),
             Self::AiError(msg) => msg.clone(),
             Self::ProcessFailed { code, stderr } => format!("Process exited with code {code}: {stderr}"),
@@ -189,6 +200,9 @@ impl LatchError {
             Self::KeyNotFound(k) => format!("Key '{k}' not found in dict"),
             Self::ReturnSignal(_) => "internal return signal".into(),
             Self::StopSignal(code) => format!("Script stopped with exit code {code}"),
+            Self::BreakSignal => "internal break signal".into(),
+            Self::ContinueSignal => "internal continue signal".into(),
+            Self::YieldSignal(_) => "internal yield signal".into(),
             Self::GenericError(msg) => msg.clone(),
         }
     }

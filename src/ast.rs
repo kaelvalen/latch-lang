@@ -37,6 +37,7 @@ pub enum Expr {
     Call {
         name: String,
         args: Vec<Expr>,
+        kwargs: Vec<(String, Expr)>,  // Keyword arguments
     },
 
     ModuleCall {
@@ -84,6 +85,14 @@ pub enum Expr {
     Pipe {
         expr: Box<Expr>,
         func: Box<Expr>,
+    },
+
+    /// List comprehension: `[x*2 for x in list]` or `[x for x in list if x > 0]`
+    ListComp {
+        body: Box<Expr>,           // The expression to generate (e.g., x*2)
+        var: String,               // Loop variable (e.g., x)
+        iter: Box<Expr>,           // Iterable (e.g., list)
+        cond: Option<Box<Expr>>,   // Optional condition (e.g., x > 0)
     },
 
     /// Safe field access: `expr?.field`
@@ -174,9 +183,32 @@ pub enum Stmt {
         body: Block,
         catch_var: String,
         catch_body: Block,
+        finally_body: Option<Block>,
     },
 
     Use(String),
+
+    /// `yield value` — for generators
+    Yield(Expr),
+
+    /// Constant declaration: `const PI = 3.14`
+    Const {
+        name: String,
+        type_ann: Option<Type>,
+        value: Expr,
+    },
+
+    /// `while condition { body }`
+    While {
+        cond: Expr,
+        body: Block,
+    },
+
+    /// `break` — exit the innermost loop
+    Break,
+
+    /// `continue` — skip to the next iteration of the innermost loop
+    Continue,
 
     /// `stop 1` — exit the script with a code
     Stop(Expr),
@@ -190,6 +222,22 @@ pub enum Stmt {
 
     /// A bare expression used as a statement: `print("hi")`
     Expr(Expr),
+
+    /// Class declaration: `class Point { x: int, y: int, fn move() { ... } }`
+    Class {
+        name: String,
+        fields: Vec<(String, Option<Type>, Option<Expr>)>, // name, type, default
+        methods: Vec<(String, Vec<Param>, Block)>, // name, params, body
+    },
+
+    /// Export statement: `export { foo, bar }` or `export foo`
+    Export(Vec<String>),
+
+    /// Import statement: `import { foo, bar } from "module"`
+    Import {
+        items: Vec<String>,
+        module: String,
+    },
 }
 
 pub type Block = Vec<Stmt>;
@@ -198,6 +246,7 @@ pub type Block = Vec<Stmt>;
 pub struct Param {
     pub name: String,
     pub type_ann: Option<Type>,
+    pub default: Option<Expr>,  // Default value for optional parameter
 }
 
 #[derive(Debug, Clone, PartialEq)]

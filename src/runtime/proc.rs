@@ -9,7 +9,20 @@ pub fn call(method: &str, args: Vec<Value>) -> Result<Value> {
             let arg = args.first()
                 .ok_or_else(|| LatchError::ArgCountMismatch { name: "proc.exec".into(), expected: 1, found: 0 })?;
 
-            let output = match arg {
+            // Parse options from second argument if provided
+            let opts = if args.len() > 1 {
+                match &args[1] {
+                    Value::Map(m) => m.lock().unwrap().clone(),
+                    _ => std::collections::HashMap::new(),
+                }
+            } else {
+                std::collections::HashMap::new()
+            };
+
+            let cwd = opts.get("cwd").and_then(|v| v.as_str().ok());
+            let timeout_secs = opts.get("timeout").and_then(|v| v.as_int().ok());
+
+            let mut cmd = match arg {
                 // Array form: proc.exec(["git", "status"]) — no shell, direct exec
                 Value::List(items) => {
                     let items = items.lock().unwrap();
@@ -25,24 +38,45 @@ pub fn call(method: &str, args: Vec<Value>) -> Result<Value> {
                             }),
                         })
                         .collect::<Result<_>>()?;
-                    Command::new(&cmd_parts[0])
-                        .args(&cmd_parts[1..])
-                        .output()
-                        .map_err(|e| LatchError::IoError(format!("proc.exec: {e}")))?
+                    let mut c = Command::new(&cmd_parts[0]);
+                    c.args(&cmd_parts[1..]);
+                    c
                 }
                 // String form: proc.exec("ls -la") — via shell
                 Value::Str(cmd_str) => {
                     if cfg!(target_os = "windows") {
-                        Command::new("cmd").args(["/C", cmd_str]).output()
+                        let mut c = Command::new("cmd");
+                        c.args(["/C", cmd_str]);
+                        c
                     } else {
-                        Command::new("sh").args(["-c", cmd_str]).output()
-                    }.map_err(|e| LatchError::IoError(format!("proc.exec: {e}")))?
+                        let mut c = Command::new("sh");
+                        c.args(["-c", cmd_str]);
+                        c
+                    }
                 }
                 _ => return Err(LatchError::TypeMismatch {
                     expected: "string or list".into(),
                     found: arg.type_name().into(),
                 }),
             };
+
+            // Apply cwd if specified
+            if let Some(cwd) = cwd {
+                cmd.current_dir(cwd);
+            }
+
+            // Apply env vars if specified
+            if let Some(Value::Map(env_map)) = opts.get("env") {
+                let env_vars = env_map.lock().unwrap();
+                for (k, v) in env_vars.iter() {
+                    if let Ok(val) = v.as_str() {
+                        cmd.env(k, val);
+                    }
+                }
+            }
+
+            // Execute (timeout requires additional crate, skipping for now)
+            let output = cmd.output().map_err(|e| LatchError::IoError(format!("proc.exec: {e}")))?;
 
             let stdout = String::from_utf8_lossy(&output.stdout).to_string();
             let stderr = String::from_utf8_lossy(&output.stderr).to_string();
