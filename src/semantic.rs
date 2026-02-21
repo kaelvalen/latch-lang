@@ -89,10 +89,39 @@ impl SemanticAnalyzer {
         self.declare("int", SymbolInfo::function(1));
         self.declare("float", SymbolInfo::function(1));
         self.declare("typeof", SymbolInfo::function(1));
+        
+        // List operations
         self.declare("push", SymbolInfo::function(2));
+        self.declare("extend", SymbolInfo::function(2));
+        self.declare("insert", SymbolInfo::function(3));
+        self.declare("remove", SymbolInfo::function(2));
+        self.declare("pop", SymbolInfo::function(2)); // list pop with optional index
+        self.declare("list_clear", SymbolInfo::function(1));
+        self.declare("list_copy", SymbolInfo::function(1));
+        self.declare("index", SymbolInfo::function(2));
+        self.declare("count", SymbolInfo::function(2));
+        self.declare("reverse", SymbolInfo::function(1));
+        
+        // Dict operations
         self.declare("keys", SymbolInfo::function(1));
         self.declare("values", SymbolInfo::function(1));
+        self.declare("get", SymbolInfo::function(3)); // dict, key, default
+        self.declare("popitem", SymbolInfo::function(1));
+        self.declare("update", SymbolInfo::function(2));
+        self.declare("setdefault", SymbolInfo::function(3));
+        self.declare("items", SymbolInfo::function(1));
+        self.declare("fromkeys", SymbolInfo::function(2));
+        self.declare("dict_clear", SymbolInfo::function(1));
+        self.declare("dict_copy", SymbolInfo::function(1));
+        
+        // Math/utility
         self.declare("range", SymbolInfo::function(2));
+        self.declare("sum", SymbolInfo::function(1));
+        self.declare("max", SymbolInfo::function(1));
+        self.declare("min", SymbolInfo::function(1));
+        self.declare("assert", SymbolInfo::function(2));
+        
+        // String operations
         self.declare("split", SymbolInfo::function(2));
         self.declare("trim", SymbolInfo::function(1));
         self.declare("lower", SymbolInfo::function(1));
@@ -102,10 +131,25 @@ impl SemanticAnalyzer {
         self.declare("contains", SymbolInfo::function(2));
         self.declare("replace", SymbolInfo::function(3));
         self.declare("repeat", SymbolInfo::function(2));
-        self.declare("assert", SymbolInfo::function(2)); // assert(condition, message)
-        self.declare("sum", SymbolInfo::function(1));
-        self.declare("max", SymbolInfo::function(1));
-        self.declare("min", SymbolInfo::function(1));
+        
+        // String methods (str_*)
+        self.declare("str_strip", SymbolInfo::function(2));
+        self.declare("str_lstrip", SymbolInfo::function(2));
+        self.declare("str_rstrip", SymbolInfo::function(2));
+        self.declare("str_replace", SymbolInfo::function(4));
+        self.declare("str_split", SymbolInfo::function(3));
+        self.declare("str_upper", SymbolInfo::function(1));
+        self.declare("str_lower", SymbolInfo::function(1));
+        self.declare("str_find", SymbolInfo::function(2));
+        self.declare("str_rfind", SymbolInfo::function(2));
+        self.declare("str_count", SymbolInfo::function(2));
+        self.declare("str_join", SymbolInfo::function(2));
+        self.declare("str_splitlines", SymbolInfo::function(1));
+        self.declare("str_isdigit", SymbolInfo::function(1));
+        self.declare("str_isalpha", SymbolInfo::function(1));
+        self.declare("str_capitalize", SymbolInfo::function(1));
+        
+        // Higher-order functions
         self.declare("sort", SymbolInfo::function(1));
         self.declare("filter", SymbolInfo::function(2));
         self.declare("map", SymbolInfo::function(2));
@@ -121,6 +165,10 @@ impl SemanticAnalyzer {
         self.declare("json", SymbolInfo::variable());
         self.declare("env", SymbolInfo::variable());
         self.declare("path", SymbolInfo::variable());
+        self.declare("regex", SymbolInfo::variable());
+        self.declare("csv", SymbolInfo::variable());
+        self.declare("base64", SymbolInfo::variable());
+        self.declare("hash", SymbolInfo::variable());
     }
 
     // ── Statement checking ───────────────────────────────────

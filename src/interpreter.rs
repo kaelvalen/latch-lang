@@ -112,11 +112,35 @@ impl Interpreter {
                     let parent = std::mem::replace(&mut self.env, Env::new());
                     self.env = parent.child();
                     self.env.set(&var, item);
+                    
+                    // Execute body with break/continue handling
+                    let mut should_continue = false;
                     for s in &body {
-                        self.exec_stmt(s.clone())?;
+                        match self.exec_stmt(s.clone()) {
+                            Ok(()) => {}
+                            Err(LatchError::BreakSignal) => {
+                                let child = std::mem::replace(&mut self.env, Env::new());
+                                self.env = child.into_parent().unwrap();
+                                return Ok(());
+                            }
+                            Err(LatchError::ContinueSignal) => {
+                                should_continue = true;
+                                break;
+                            }
+                            Err(e) => {
+                                let child = std::mem::replace(&mut self.env, Env::new());
+                                self.env = child.into_parent().unwrap();
+                                return Err(e);
+                            }
+                        }
                     }
+                    
                     let child = std::mem::replace(&mut self.env, Env::new());
                     self.env = child.into_parent().unwrap();
+                    
+                    if should_continue {
+                        continue;
+                    }
                 }
             }
 
@@ -1022,7 +1046,9 @@ impl Interpreter {
             }
 
             // pop(list, index?) - remove and return item at index (default last)
+            // pop(dict, key, default?) - remove and return value from dict
             "pop" => {
+                // Try list pop first (1 or 2 args)
                 if args.len() >= 1 {
                     if let Value::List(ref list) = args[0] {
                         let mut guard = list.lock().unwrap();
@@ -1044,9 +1070,24 @@ impl Interpreter {
                         }
                         return Ok(guard.remove(index));
                     }
+                    
+                    // Try dict pop (2 or 3 args)
+                    if let Value::Map(ref m) = args[0] {
+                        if args.len() >= 2 {
+                            let mut guard = m.lock().unwrap();
+                            let key = args[1].as_str()?;
+                            if let Some(val) = guard.remove(key) {
+                                return Ok(val);
+                            }
+                            if args.len() >= 3 {
+                                return Ok(args[2].clone());
+                            }
+                            return Err(LatchError::GenericError(format!("key not found: {}", key)));
+                        }
+                    }
                 }
                 return Err(LatchError::TypeMismatch {
-                    expected: "list, [index]".into(),
+                    expected: "list, [index] or dict, key, [default]".into(),
                     found: "invalid args".into(),
                 });
             }
@@ -1158,27 +1199,6 @@ impl Interpreter {
                             return Ok(args[2].clone());
                         }
                         return Ok(Value::Null);
-                    }
-                }
-                return Err(LatchError::TypeMismatch {
-                    expected: "dict, key, [default]".into(),
-                    found: "invalid args".into(),
-                });
-            }
-
-            // pop(dict, key, default?) - remove and return value
-            "pop" => {
-                if args.len() >= 2 {
-                    if let Value::Map(ref m) = args[0] {
-                        let mut guard = m.lock().unwrap();
-                        let key = args[1].as_str()?;
-                        if let Some(val) = guard.remove(key) {
-                            return Ok(val);
-                        }
-                        if args.len() >= 3 {
-                            return Ok(args[2].clone());
-                        }
-                        return Err(LatchError::GenericError(format!("key not found: {}", key)));
                     }
                 }
                 return Err(LatchError::TypeMismatch {
