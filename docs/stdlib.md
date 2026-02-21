@@ -1,7 +1,7 @@
 # Latch Standard Library Reference
 
-> **Version**: 0.2.0  
-> **Status**: Locked — these names are stable and will not change.
+> **Version**: 0.3.0  
+> **Status**: Complete — all features documented.
 
 ---
 
@@ -14,10 +14,32 @@
 | `str` | `str(value)` | `string` | Convert any value to its string representation |
 | `int` | `int(value)` | `int` | Parse string/float to integer |
 | `float` | `float(value)` | `float` | Parse string/int to float |
-| `typeof` | `typeof(value)` | `string` | Return the type name of a value (`"int"`, `"string"`, `"dict"`, `"null"`, etc.) |
+| `typeof` | `typeof(value)` | `string` | Return the type name of a value |
+| `sum` | `sum(list)` | `int/float` | Sum all numbers in a list |
+| `max` | `max(list)` | `value` | Maximum value in a list |
+| `min` | `min(list)` | `value` | Minimum value in a list |
+| `assert` | `assert(cond, msg?)` | `null` | Assert condition is truthy, error if not |
 | `push` | `push(list, value)` | `list` | Return a new list with value appended |
+| `extend` | `extend(list, items)` | `null` | Append all items from another list |
+| `insert` | `insert(list, index, value)` | `null` | Insert value at specific index |
+| `remove` | `remove(list, value)` | `null` | Remove first occurrence of value |
+| `pop` | `pop(list, index?)` | `value` | Remove and return item at index (default last) |
+| `list_clear` | `list_clear(list)` | `null` | Remove all items from list |
+| `list_copy` | `list_copy(list)` | `list` | Return shallow copy of list |
+| `index` | `index(list, value)` | `int` | Find index of value in list |
+| `count` | `count(list, value)` | `int` | Count occurrences of value in list |
+| `reverse` | `reverse(list)` | `null` | Reverse list in place |
 | `keys` | `keys(dict)` | `list` | Return sorted list of keys from a dict |
-| `values` | `values(dict)` | `list` | Return list of values (sorted by key) from a dict |
+| `values` | `values(dict)` | `list` | Return list of values (sorted by key) |
+| `get` | `get(dict, key, default?)` | `value` | Safe dict access with optional default |
+| `pop` | `pop(dict, key, default?)` | `value` | Remove and return value from dict |
+| `popitem` | `popitem(dict)` | `list` | Remove and return [key, value] as list |
+| `update` | `update(dict, other)` | `null` | Merge two dictionaries |
+| `setdefault` | `setdefault(dict, key, default)` | `value` | Get or insert default value |
+| `dict_clear` | `dict_clear(dict)` | `null` | Remove all items from dict |
+| `dict_copy` | `dict_copy(dict)` | `dict` | Shallow copy of dict |
+| `items` | `items(dict)` | `list` | Return [[k1,v1], [k2,v2]] pairs |
+| `fromkeys` | `fromkeys(keys, value)` | `dict` | Create dict from keys with same value |
 | `range` | `range(start, end)` | `list` | Generate list of integers `[start, end)` |
 | `split` | `split(str, delim)` | `list` | Split a string by delimiter |
 | `trim` | `trim(str)` | `string` | Remove leading/trailing whitespace |
@@ -27,10 +49,11 @@
 | `ends_with` | `ends_with(str, suffix)` | `bool` | Check if string ends with suffix |
 | `contains` | `contains(haystack, needle)` | `bool` | Check if string/list contains a value |
 | `replace` | `replace(str, from, to)` | `string` | Replace all occurrences of `from` with `to` |
-| `sort` | `sort(list)` | `list` | Sort a list (int, float, or string) in ascending order |
+| `repeat` | `repeat(str, count)` | `string` | Repeat string count times |
+| `sort` | `sort(list)` | `list` | Sort a list (int, float, or string) |
 | `filter` | `filter(list, fn)` | `list` | Keep items where `fn(item)` is truthy |
-| `map` | `map(list, fn)` | `list` | Transform each item: `[fn(item) for item in list]` |
-| `each` | `each(list, fn)` | `null` | Run `fn(item)` for each item (side-effects only) |
+| `map` | `map(list, fn)` | `list` | Transform each item |
+| `each` | `each(list, fn)` | `null` | Run `fn(item)` for each item (side-effects) |
 
 ```python
 # Examples
@@ -40,9 +63,29 @@ str(42)                   # → "42"
 int("7")                  # → 7
 float("3.14")             # → 3.14
 typeof(x)                 # → "string"
+
+# List operations
 push([1, 2], 3)           # → [1, 2, 3]
+extend(list_a, list_b)    # Append all items
+insert([1, 3], 1, 2)      # → [1, 2, 3]
+remove([1, 2, 3], 2)      # → [1, 3]
+pop([1, 2, 3])            # → 3, list is now [1, 2]
+list_copy([1, 2])         # → [1, 2]
+index([1, 2, 3], 2)       # → 1
+count([1, 2, 2, 3], 2)    # → 2
+reverse([1, 2, 3])        # → [3, 2, 1]
+sum([1, 2, 3])            # → 6
+max([3, 1, 4])            # → 4
+min([3, 1, 4])            # → 1
+
+# Dict operations
 keys({"b": 2, "a": 1})   # → ["a", "b"]  (sorted)
 values({"b": 2, "a": 1}) # → [1, 2]      (by key order)
+get(cfg, "key", "default") # Safe access with default
+update(dict_a, dict_b)    # Merge dicts
+items({"a": 1})           # → [["a", 1]]
+
+# String operations
 range(0, 5)               # → [0, 1, 2, 3, 4]
 split("a,b,c", ",")       # → ["a", "b", "c"]
 trim("  hi  ")            # → "hi"
@@ -52,10 +95,16 @@ starts_with("hello", "he")  # → true
 ends_with("hello", "lo")    # → true
 contains("hello", "ell")    # → true
 replace("foo", "o", "0")    # → "f00"
-sort([3, 1, 2])              # → [1, 2, 3]
+repeat("ab", 3)           # → "ababab"
+
+# Higher-order functions
+sort([3, 1, 2])           # → [1, 2, 3]
 filter([1, 2, 5, 8], fn(x) { return x > 3 })         # → [5, 8]
 map([1, 2, 3], fn(x) { return x * 2 })                # → [2, 4, 6]
 each(items, fn(item) { print(item) })
+
+# Assert
+assert(x > 0, "x must be positive")
 ```
 
 ---
@@ -143,9 +192,12 @@ each(items, fn(item) { print(item) })
 | `append` | `fs.append(path, data)` | `bool` | Append string to file (create if missing) |
 | `readlines` | `fs.readlines(path)` | `list` | Read file as a list of lines |
 | `exists` | `fs.exists(path)` | `bool` | Check if a path exists |
-| `glob` | `fs.glob(pattern)` | `list` | Find files matching a glob pattern |
 | `mkdir` | `fs.mkdir(path)` | `bool` | Create directory (and parents) |
-| `remove` | `fs.remove(path)` | `bool` | Remove file or directory (recursive) |
+| `remove` | `fs.remove(path)` | `bool` | Remove file or empty directory |
+| `rmdir` | `fs.rmdir(path)` | `bool` | Remove directory recursively |
+| `rename` | `fs.rename(old, new)` | `bool` | Rename/move file or directory |
+| `walk` | `fs.walk(path)` | `list` | Recursively list all files in directory |
+| `glob` | `fs.glob(pattern)` | `list` | Find files matching a glob pattern |
 | `stat` | `fs.stat(path)` | `dict` | File metadata: `size`, `is_file`, `is_dir`, `readonly` |
 
 ```python
@@ -154,12 +206,10 @@ fs.write("out.txt", "hello")
 fs.append("log.txt", "new line\n")
 lines := fs.readlines("data.csv")
 if fs.exists("data.json") { ... }
-files := fs.glob("src/**/*.rs")
 fs.mkdir("build/output")
 fs.remove("tmp/cache")
-info := fs.stat("file.txt")
-print(info.size)       # bytes
-print(info.is_file)    # true
+files := fs.walk("src/")
+fs.rename("old.txt", "new.txt")
 ```
 
 ### `proc` — Process Execution
@@ -231,14 +281,16 @@ output := {"status": "ok"} |> json.stringify()
 |--------|-----------|---------|-------------|
 | `get` | `env.get(key)` | `string` | Read an environment variable (error if missing) |
 | `set` | `env.set(key, val)` | `bool` | Set an environment variable for the process |
+| `remove` | `env.remove(key)` | `bool` | Remove an environment variable |
 | `list` | `env.list()` | `dict` | Return all environment variables as a dict |
 
-> **Note**: `env.set()` only affects the current Latch process and any child
-> processes spawned via `proc.exec()`. It does **not** propagate to the parent shell.
+> **Note**: `env.set()` and `env.remove()` only affect the current Latch process and any child
+> processes spawned via `proc.exec()`. They do **not** propagate to the parent shell.
 
 ```python
 home := env.get("HOME") or "/tmp"
 env.set("MY_APP_MODE", "production")
+env.remove("TEMP_VAR")
 all := env.list()
 ```
 
@@ -285,6 +337,92 @@ print("Elapsed from ${start} to ${time.now()}")
 ```python
 answer := ai.ask("What is Rust?")
 summary := ai.summarize(fs.read("long_doc.txt"))
+```
+
+### String Methods (`str_*`)
+
+| Method | Signature | Returns | Description |
+|--------|-----------|---------|-------------|
+| `str_strip` | `str_strip(str, chars?)` | `string` | Strip whitespace or specified chars from both ends |
+| `str_lstrip` | `str_lstrip(str, chars?)` | `string` | Strip from left side only |
+| `str_rstrip` | `str_rstrip(str, chars?)` | `string` | Strip from right side only |
+| `str_replace` | `str_replace(str, old, new, count?)` | `string` | Replace occurrences with optional count limit |
+| `str_split` | `str_split(str, delim, maxsplit?)` | `list` | Split string with optional max splits |
+| `str_upper` | `str_upper(str)` | `string` | Convert to uppercase |
+| `str_lower` | `str_lower(str)` | `string` | Convert to lowercase |
+| `str_find` | `str_find(str, sub)` | `int` | Find first index of substring (-1 if not found) |
+| `str_rfind` | `str_rfind(str, sub)` | `int` | Find last index of substring (-1 if not found) |
+| `str_count` | `str_count(str, sub)` | `int` | Count occurrences of substring |
+| `str_join` | `str_join(list, sep)` | `string` | Join list elements with separator |
+| `str_splitlines` | `str_splitlines(str)` | `list` | Split on newlines |
+| `str_isdigit` | `str_isdigit(str)` | `bool` | Check if all chars are digits |
+| `str_isalpha` | `str_isalpha(str)` | `bool` | Check if all chars are alphabetic |
+| `str_capitalize` | `str_capitalize(str)` | `string` | Capitalize first char, lowercase rest |
+
+```python
+str_strip("  hello  ")              # → "hello"
+str_strip("...hello...", ".")       # → "hello"
+str_replace("foo", "o", "0", 1)     # → "f0o" (only first)
+str_split("a,b,c", ",", 1)          # → ["a", "b,c"]
+str_find("hello", "ll")             # → 2
+str_join(["a", "b", "c"], "-")      # → "a-b-c"
+str_capitalize("HELLO")             # → "Hello"
+```
+
+### `regex` — Regular Expressions
+
+| Method | Signature | Returns | Description |
+|--------|-----------|---------|-------------|
+| `match` | `regex.match(pattern, str)` | `bool` | Check if pattern matches entire string |
+| `search` | `regex.search(pattern, str)` | `dict?` | Search for pattern, return match info or null |
+| `findall` | `regex.findall(pattern, str)` | `list` | Find all non-overlapping matches |
+| `split` | `regex.split(pattern, str)` | `list` | Split string by pattern |
+| `replace` | `regex.replace(pattern, str, repl)` | `string` | Replace pattern with replacement |
+
+```python
+if regex.match(r"\d+", "123") { ... }           # → true
+matches := regex.findall(r"\w+", "hello world") # → ["hello", "world"]
+parts := regex.split(r"\s+", "a b  c")         # → ["a", "b", "c"]
+result := regex.replace(r"o", "foo", "0")       # → "f00"
+```
+
+### `csv` — CSV Processing
+
+| Method | Signature | Returns | Description |
+|--------|-----------|---------|-------------|
+| `read` | `csv.read(path)` | `list` | Read CSV file as list of rows (lists) |
+| `write` | `csv.write(path, data)` | `bool` | Write list of rows to CSV file |
+| `parse` | `csv.parse(str)` | `list` | Parse CSV string to list of rows |
+| `stringify` | `csv.stringify(data)` | `string` | Convert list of rows to CSV string |
+
+```python
+data := csv.read("data.csv")        # → [["a", "b"], ["1", "2"]]
+csv.write("out.csv", [["x", "y"], ["3", "4"]])
+rows := csv.parse("a,b\n1,2")       # → [["a", "b"], ["1", "2"]]
+```
+
+### `base64` — Base64 Encoding
+
+| Method | Signature | Returns | Description |
+|--------|-----------|---------|-------------|
+| `encode` | `base64.encode(str)` | `string` | Encode string to base64 |
+| `decode` | `base64.decode(str)` | `string` | Decode base64 string |
+
+```python
+encoded := base64.encode("hello")   # → "aGVsbG8="
+decoded := base64.decode("aGVsbG8=") # → "hello"
+```
+
+### `hash` — Cryptographic Hashes
+
+| Method | Signature | Returns | Description |
+|--------|-----------|---------|-------------|
+| `md5` | `hash.md5(str)` | `string` | MD5 hash (hex string) |
+| `sha256` | `hash.sha256(str)` | `string` | SHA-256 hash (hex string) |
+| `sha512` | `hash.sha512(str)` | `string` | SHA-512 hash (hex string) |
+
+```python
+digest := hash.sha256("hello")  # → "2cf24dba5fb0a30e..."
 ```
 
 ---
@@ -336,8 +474,10 @@ if x != null { print("x has a value") }
 ## Keywords (Reserved)
 
 ```
-if  else  for  in  parallel  workers  fn  return
-try  catch  use  or  stop  null  true  false
+if  else  elif  for  in  while  break  continue
+parallel  workers  fn  return  try  catch  finally
+use  const  yield  class  export  import
+or  stop  null  true  false
 ```
 
 ---
@@ -348,12 +488,17 @@ try  catch  use  or  stop  null  true  false
 # comments start with # or //
 // this is also a comment
 
-# if / else
+# if / else / elif
 if condition {
+    ...
+} elif other_condition {
     ...
 } else {
     ...
 }
+
+# Ternary operator
+result := condition ? true_value : false_value
 
 # for loop
 for item in list {
@@ -365,16 +510,30 @@ for i in 0..10 {
     print(i)
 }
 
+# while loop
+while condition {
+    ...
+}
+
+# break / continue
+for item in list {
+    if item == "skip" { continue }
+    if item == "stop" { break }
+    print(item)
+}
+
 # parallel for
 parallel item in list workers=4 {
     ...
 }
 
-# try / catch
+# try / catch / finally
 try {
     ...
 } catch e {
     print(e)
+} finally {
+    # always runs
 }
 
 # stop (exit with code)
@@ -390,6 +549,10 @@ stop 1    # failure
 # declare with :=
 name := "latch"
 port: int := 8080
+
+# constants (immutable)
+const PI = 3.14
+const DEBUG = false
 
 # reassign with =
 name = "new name"
@@ -407,6 +570,10 @@ nums := [10, 20, 30]
 nums[0] = 99
 cfg := {"port": "3000"}
 cfg["port"] = "8080"
+
+# list comprehension
+squares := [x*x for x in [1, 2, 3, 4]]           # [1, 4, 9, 16]
+evens := [x for x in [1, 2, 3, 4] if x % 2 == 0]  # [2, 4]
 ```
 
 ---
@@ -420,8 +587,22 @@ fn greet(name: string) -> string {
 }
 msg := greet("World")
 
+# function with default arguments
+fn power(base, exp = 2) {
+    return base ** exp
+}
+power(3)      # 9 (3^2)
+power(2, 3)   # 8 (2^3)
+
 # anonymous function (lambda)
 doubled := map([1, 2, 3], fn(x) { return x * 2 })
+
+# generator function with yield
+fn count_to(n) {
+    for i in 1..n {
+        yield i
+    }
+}
 
 # higher-order functions
 big := filter([1, 2, 5, 8], fn(x) { return x > 3 })
@@ -451,6 +632,57 @@ result := 42 |> fn(x) { return x * 2 }
 
 # chain multiple pipes
 result := [5, 2, 8, 1] |> sort() |> filter(fn(x) { return x > 2 })
+```
+
+---
+
+## Classes (OOP)
+
+```python
+# class definition
+class Point {
+    x: int
+    y: int
+    
+    fn move(dx, dy) {
+        x += dx
+        y += dy
+    }
+    
+    fn distance() {
+        return (x*x + y*y) ** 0.5
+    }
+}
+
+# create instance and use
+p := Point
+p.x = 3
+p.y = 4
+p.move(1, 1)
+d := p.distance()
+```
+
+---
+
+## Module System
+
+```python
+# Export from a module (math.lt)
+export { add, subtract, PI }
+
+fn add(a, b) { return a + b }
+fn subtract(a, b) { return a - b }
+const PI = 3.14159
+
+# Import in another file
+import { add, PI } from "math"
+result := add(2, 3) + PI
+
+# Import multiple items
+import { add, subtract, PI } from "math"
+
+# Wildcard import (if supported)
+import { * } from "math"
 ```
 
 ---
@@ -507,7 +739,7 @@ name := user?.name ?? "anonymous"
 latch run <file.lt>     # Execute a script
 latch check <file.lt>   # Static analysis only
 latch repl              # Interactive REPL
-latch version           # Print version (v0.2.2)
+latch version           # Print version (v0.2.3)
 ```
 
 ---

@@ -19,8 +19,8 @@ pub fn call(method: &str, args: Vec<Value>) -> Result<Value> {
                 std::collections::HashMap::new()
             };
 
-            let cwd = opts.get("cwd").and_then(|v| v.as_str().ok());
-            let timeout_secs = opts.get("timeout").and_then(|v| v.as_int().ok());
+            let _cwd = opts.get("cwd").and_then(|v| v.as_str().ok());
+            let _timeout_secs = opts.get("timeout").and_then(|v| v.as_int().ok());
 
             let mut cmd = match arg {
                 // Array form: proc.exec(["git", "status"]) — no shell, direct exec
@@ -61,7 +61,7 @@ pub fn call(method: &str, args: Vec<Value>) -> Result<Value> {
             };
 
             // Apply cwd if specified
-            if let Some(cwd) = cwd {
+            if let Some(ref cwd) = _cwd {
                 cmd.current_dir(cwd);
             }
 

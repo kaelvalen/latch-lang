@@ -277,15 +277,15 @@ impl SemanticAnalyzer {
 
             Stmt::Class { name, fields, methods } => {
                 self.declare(name, SymbolInfo::variable());
-                for (field_name, type_ann, default) in fields {
-                    if let Some(ann) = type_ann {
+                for (_field_name, type_ann, default) in fields {
+                    if let Some(_ann) = type_ann {
                         // Type checking would go here
                     }
                     if let Some(val) = default {
                         self.check_expr(val);
                     }
                 }
-                for (method_name, params, body) in methods {
+                for (_method_name, params, body) in methods {
                     self.push_scope();
                     for param in params {
                         self.declare(&param.name, SymbolInfo::variable());
@@ -303,7 +303,7 @@ impl SemanticAnalyzer {
                 }
             }
 
-            Stmt::Import { items, module } => {
+            Stmt::Import { items, module: _ } => {
                 // For now, declare all imported items as variables
                 for item in items {
                     self.declare(item, SymbolInfo::variable());

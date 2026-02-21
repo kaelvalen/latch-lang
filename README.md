@@ -58,7 +58,7 @@ After install, verify:
 
 ```sh
 latch version
-# → latch v0.2.2
+# → latch v0.2.3
 ```
 
 ## Quick Start
@@ -95,9 +95,17 @@ latch run hello.lt
 | **For loops** | `for item in list { ... }` |
 | **Range loops** | `for i in 0..10 { ... }` |
 | **Parallel** | `parallel f in files workers=4 { ... }` |
-| **Error handling** | `try { ... } catch e { ... }` |
+| **Error handling** | `try { ... } catch e { ... } finally { ... }` |
 | **Fallback values** | `data := fs.read("x") or "default"` |
 | **Null coalesce** | `name := config?.name ?? "anonymous"` |
+| **While loops** | `while condition { ... }` |
+| **Break/Continue** | `break`, `continue` |
+| **Constants** | `const PI = 3.14` |
+| **Generators/Yield** | `yield value` |
+| **List comprehension** | `[x*2 for x in list if x > 0]` |
+| **Default args** | `fn greet(name = "World")` |
+| **Class/OOP** | `class Point { x: int }` |
+| **Export/Import** | `export { foo }`, `import { foo } from "module"` |
 | **Safe access** | `resp?.headers`, `val?.field` |
 | **Pipe operator** | `list \|> sort() \|> filter(fn(x) { return x > 2 })` |
 | **Membership test** | `"x" in list`, `"key" in dict` |
@@ -269,7 +277,7 @@ See the [examples/](examples/) directory:
 
 - [`hello.lt`](examples/hello.lt) — Feature showcase
 - [`ci-check.lt`](examples/ci-check.lt) — CI gate example
-- [`v02_test.lt`](examples/v02_test.lt) — v0.2.2 feature tests
+- [`v02_test.lt`](examples/v02_test.lt) — v0.2.3 feature tests
 
 ## Full Reference
 

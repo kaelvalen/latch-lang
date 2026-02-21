@@ -406,7 +406,7 @@ impl Lexer {
     fn lex_number(&mut self) -> Spanned<Token> {
         let line = self.line;
         let col = self.col;
-        let mut s = String::new();
+        let start = self.pos;
         let mut is_float = false;
 
         while !self.at_end() && (self.peek().is_ascii_digit() || self.peek() == '.') {
@@ -414,30 +414,36 @@ impl Lexer {
                 // Look-ahead: only treat as decimal if next char is a digit
                 if self.pos + 1 < self.chars.len() && self.chars[self.pos + 1].is_ascii_digit() {
                     is_float = true;
-                    s.push(self.advance());
+                    self.advance();
                 } else {
                     break;
                 }
             } else {
-                s.push(self.advance());
+                self.advance();
             }
         }
 
+        // OPTIMIZED: Parse directly from char slice without allocating String
+        let num_str: String = self.chars[start..self.pos].iter().collect();
+        
         if is_float {
-            Spanned { node: Token::Float(s.parse().unwrap()), line, col }
+            Spanned { node: Token::Float(num_str.parse().unwrap()), line, col }
         } else {
-            Spanned { node: Token::Int(s.parse().unwrap()), line, col }
+            Spanned { node: Token::Int(num_str.parse().unwrap()), line, col }
         }
     }
 
     fn lex_ident_or_keyword(&mut self) -> Spanned<Token> {
         let line = self.line;
         let col = self.col;
-        let mut s = String::new();
+        let start = self.pos;
 
         while !self.at_end() && (self.peek().is_alphanumeric() || self.peek() == '_') {
-            s.push(self.advance());
+            self.advance();
         }
+
+        // OPTIMIZED: Build string only once from slice
+        let s: String = self.chars[start..self.pos].iter().collect();
 
         let tok = match s.as_str() {
             "if"       => Token::KwIf,

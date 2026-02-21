@@ -290,7 +290,7 @@ impl Interpreter {
                 self.eval_expr(expr)?;
             }
 
-            Stmt::Class { name, fields, methods } => {
+            Stmt::Class { name, fields: _, methods: _ } => {
                 // Store class info in environment as a special value
                 let class_info = Value::Str(format!("<class {}>", name));
                 self.env.set(&name, class_info);
@@ -300,6 +300,7 @@ impl Interpreter {
                 // Mark names as exported (store in special exports map)
                 for name in names {
                     if let Some(val) = self.env.get(&name) {
+                        let _export_key = format!("__export_{}", name);
                         self.env.set(&format!("__export_{}", name), val.clone());
                     }
                 }
@@ -309,7 +310,7 @@ impl Interpreter {
                 // Import from module (load and extract exported values)
                 // This is a simplified version - full module system would need more work
                 for item in items {
-                    let export_key = format!("__export_{}", item);
+                    let _export_key = format!("__export_{}", item);
                     // For now, create a placeholder
                     self.env.set(&item, Value::Str(format!("<imported {} from {}>", item, module)));
                 }
