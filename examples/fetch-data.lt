@@ -1,0 +1,85 @@
+# fetch-data.lt — HTTP API Integration Example
+#
+# Demonstrates:
+#   • Making HTTP requests to APIs
+#   • Parsing JSON responses
+#   • Error handling and retries
+#   • Processing data with map/filter
+#
+# Usage:
+#   latch run examples/fetch-data.lt
+
+print("Fetching data from public APIs...\n")
+
+# Example 1: Fetch GitHub user info
+print("→ Fetching GitHub user 'kaelvalen'...")
+response := http.get("https://api.github.com/users/kaelvalen")
+
+if response.status == 200 {
+    user_data := json.parse(response.body)
+    print("  Name: ${user_data?.name ?? 'N/A'}")
+    print("  Bio: ${user_data?.bio ?? 'N/A'}")
+    print("  Followers: ${user_data?.followers ?? 0}")
+} else {
+    print("  Error: HTTP ${response.status}")
+}
+
+print()
+
+# Example 2: Parse and display structured data
+print("→ Creating sample data structure...")
+sample_data := {
+    "title": "Automation Guide",
+    "version": "1.0",
+    "chapters": [
+        {"name": "Getting Started", "pages": 10},
+        {"name": "Advanced Techniques", "pages": 25},
+        {"name": "Case Studies", "pages": 15}
+    ]
+}
+
+print("Title: ${sample_data.title}")
+total_pages := sum(map(sample_data.chapters, fn(ch) { return ch.pages }))
+print("Total Pages: ${total_pages}\n")
+
+for chapter in sample_data.chapters {
+    print("  • ${chapter.name} — ${chapter.pages} pages")
+}
+
+print()
+
+# Example 3: Convert data to JSON and save
+print("→ Exporting data to JSON...")
+json_output := json.stringify(sample_data, true)
+fs.write("exported_data.json", json_output)
+print("✓ Saved to exported_data.json")
+file_size := len(json_output)
+print("  Size: ${file_size} bytes\n")
+
+# Example 4: Retry logic with error handling
+print("→ Fetching with retry logic...")
+fetch_with_retry := fn(url, max_retries: int) {
+    for attempt in 0..max_retries {
+        response := http.get(url)
+        if response.status == 200 {
+            print("  ✓ Success on attempt ${attempt + 1}")
+            return response.body
+        }
+        if attempt < max_retries - 1 {
+            print("  • Attempt ${attempt + 1} failed, retrying...")
+        }
+    }
+    return null
+}
+
+content := fetch_with_retry("https://api.github.com/repos/kaelvalen/latch-lang", 3)
+if content != null {
+    repo_data := json.parse(content)
+    print("  Repository: ${repo_data?.full_name}")
+    print("  Stars: ${repo_data?.stargazers_count}")
+    print("  Language: ${repo_data?.language}")
+} else {
+    print("  ✗ Failed to fetch after retries")
+}
+
+print("\n✓ Example complete!")

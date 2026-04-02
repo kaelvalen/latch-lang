@@ -81,6 +81,7 @@ pub enum Token {
     KwCase,
     KwDefault,
     KwAs,
+    KwStop,
 
     // Other
     Newline,
@@ -156,6 +157,12 @@ impl Lexer {
 
                 '"' => {
                     let tok = self.lex_string()?;
+                    tokens.push(tok);
+                }
+
+                // Single-quoted strings (straight ' and curly '' variants)
+                '\'' | '\u{2018}' | '\u{2019}' => {
+                    let tok = self.lex_single_quoted_string()?;
                     tokens.push(tok);
                 }
 
@@ -486,6 +493,7 @@ impl Lexer {
             "case"     => Token::KwCase,
             "default"  => Token::KwDefault,
             "as"       => Token::KwAs,
+            "stop"     => Token::KwStop,
             "true"     => Token::Bool(true),
             "false"    => Token::Bool(false),
             "null"     => Token::KwNull,
@@ -573,5 +581,37 @@ impl Lexer {
             }
             Ok(Spanned { node: Token::InterpolatedStr(parts), line, col })
         }
+    }
+
+    /// Single-quoted string: no interpolation, no escape sequences (raw content).
+    /// Accepts `'`, `\u{2018}` (left curly), `\u{2019}` (right curly) as delimiters.
+    fn lex_single_quoted_string(&mut self) -> Result<Spanned<Token>> {
+        let line = self.line;
+        let col = self.col;
+        let open = self.advance(); // consume opening quote
+        // Determine closing quote: straight ' closes straight, curly ' closes curly '
+        let close = match open {
+            '\u{2018}' => '\u{2019}', // left curly → right curly
+            _ => '\'',                // straight or right curly → straight '
+        };
+
+        let mut s = String::new();
+        loop {
+            if self.at_end() {
+                return Err(LatchError::UnterminatedString { line, col });
+            }
+            let ch = self.peek();
+            if ch == close || ch == '\'' || ch == '\u{2019}' {
+                self.advance();
+                break;
+            }
+            if ch == '\n' {
+                self.advance_newline();
+                s.push('\n');
+            } else {
+                s.push(self.advance());
+            }
+        }
+        Ok(Spanned { node: Token::Str(s), line, col })
     }
 }

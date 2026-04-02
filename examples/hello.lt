@@ -1,58 +1,86 @@
-# Latch Hello World — v0.1 feature showcase
+# Latch Hello World — Feature Showcase
 
-# 1. Değişken tanımlama
+# 1. Variables and type annotations
 name := "Latch"
 version: int := 1
+enabled: bool := true
 
 # 2. String interpolation
-print("Hello from ${name} v${version}!")
+print("Welcome to ${name} v${version}!")
 
-# 3. Matematik
+# 3. Arithmetic operations
 x := 10 + 5 * 2
 print("10 + 5 * 2 = ${x}")
 
-# 4. if / else
+# 4. Control flow: if / else
 if x > 15 {
-    print("x is greater than 15")
+    print("✓ x is greater than 15")
 } else {
-    print("x is 15 or less")
+    print("• x is 15 or less")
 }
 
-# 5. Fonksiyon tanımlama ve çağırma
+# 5. Function definition
 fn greet(who: string) -> string {
-    return "Merhaba, ${who}!"
+    return "Hello, ${who}!"
 }
 
-msg := greet("Dünya")
-print(msg)
+greeting := greet("Latch!")
+print(greeting)
 
-# 6. Liste ve for döngüsü
-items := ["elma", "armut", "kiraz"]
-for item in items {
-    print("  - ${item}")
+# 6. Lists and loops
+languages := ["Rust", "Python", "Go"]
+print("\nSupported languages:")
+for lang in languages {
+    print("  • ${lang}")
 }
 
-# 7. Dosya yazma ve okuma
-fs.write("test_output.txt", "Latch buraya yazdı!")
-content := fs.read("test_output.txt")
-print("Dosyadan okunan: ${content}")
+# 7. Dictionaries
+config := {"port": 8080, "host": "localhost", "debug": true}
+print("\nConfiguration:")
+for key in keys(config) {
+    print("  ${key}: ${config[key]}")
+}
 
-# 8. Process çalıştırma
-result := proc.exec("echo 'Merhaba from shell'")
-print("Shell çıktısı: ${result.stdout}")
+# 8. String operations
+text := "  hello world  "
+print("\nString operations:")
+print("  Original: '${text}'")
+print("  Trimmed: '${trim(text)}'")
+print("  Uppercase: '${upper(trim(text))}'")
 
-# 9. or default — hata yakalama
-data := fs.read("olmayan_dosya.txt") or "varsayılan değer"
-print("or default: ${data}")
+# 9. List operations
+numbers := [3, 1, 4, 1, 5, 9]
+print("\nList operations:")
+print("  Original: ${numbers}")
+sorted := sort(list_copy(numbers))
+print("  Sorted: ${sorted}")
+print("  Sum: ${sum(numbers)}")
+print("  Max: ${max(numbers)}")
 
-# 10. try / catch
+# 10. Filter and map (higher-order functions)
+evens := filter(numbers, fn(n) { return n % 2 == 0 })
+print("  Evens: ${evens}")
+doubled := map([1, 2, 3], fn(n) { return n * 2 })
+print("  Doubled: ${doubled}")
+
+# 11. Error handling with try/catch
+content := "file not found"
 try {
-    fs.read("bu_da_yok.txt")
+    content = fs.read("example.txt")
 } catch e {
-    print("Hata yakalandı: ${e}")
+    content = "file not found"
+}
+print("\nFile read result: ${content}")
+
+# 12. Try / catch for more control
+try {
+    result := http.get("https://api.github.com")
+    print("HTTP Status: ${result.status}")
+} catch e {
+    print("Error: ${e}")
 }
 
-# 11. Parallel
+# 13. Parallel
 files := ["a.txt", "b.txt", "c.txt"]
 parallel f in files workers=2 {
     fs.write(f, "parallel yazıldı: ${f}")
@@ -61,4 +89,4 @@ print("Parallel yazma tamamlandı!")
 
 # Temizlik
 proc.exec("rm -f test_output.txt a.txt b.txt c.txt")
-print("Bitti!")
+print("\n✓ Feature showcase complete!")

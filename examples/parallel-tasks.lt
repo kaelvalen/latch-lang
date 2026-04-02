@@ -1,0 +1,100 @@
+# parallel-tasks.lt — Parallel Execution Example
+#
+# Demonstrates:
+#   • Parallel loops with worker pools
+#   • Processing multiple files concurrently
+#   • Collecting results from parallel operations
+#   • Performance benefits of parallelism
+#
+# Usage:
+#   latch run examples/parallel-tasks.lt
+
+print("Parallel Task Processing Example\n")
+
+# Example 1: Create sample work items
+print("→ Setting up tasks...")
+tasks := []
+for i in 0..10 {
+    push(tasks, {
+        "id": i,
+        "name": "Task ${i}",
+        "duration": i * 100
+    })
+}
+print("Created ${len(tasks)} tasks\n")
+
+# Example 2: Process tasks sequentially (for comparison)
+print("→ Processing sequentially (2 iterations as simulation)...")
+results_sequential := []
+for i in 0..2 {
+    task := tasks[i]
+    print("  Processing ${task.name}...")
+    result := {
+        "id": task.id,
+        "status": "completed",
+        "result": task.name + " (sequential)"
+    }
+    push(results_sequential, result)
+}
+print("✓ Sequential results: ${len(results_sequential)}\n")
+
+# Example 3: Process tasks in parallel with 4 workers
+print("→ Processing in parallel with 4 workers...")
+print("  (Simulating parallel execution)")
+
+results_parallel := []
+parallel task in tasks workers=4 {
+    # Simulate work
+    result := {
+        "id": task.id,
+        "status": "completed",
+        "result": task.name + " (parallel)"
+    }
+    print("  ✓ Completed ${task.name}")
+}
+print("✓ Parallel processing complete\n")
+
+# Example 4: Batch processing with custom worker count
+print("→ Batch processing (8 workers, 20 items)...")
+batch_items := []
+for i in 0..20 {
+    push(batch_items, {
+        "item_id": i,
+        "data": "item_${i}"
+    })
+}
+
+processed_count := 0
+parallel item in batch_items workers=8 {
+    # Simulate processing (reading, transforming, writing)
+    output_name := "processed/result_${item.item_id}.txt"
+    fs.write(output_name, item.data)
+}
+print("✓ Processed ${len(batch_items)} items with 8 workers\n")
+
+# Example 5: Practical use case - Process multiple files
+print("→ File processing example...")
+
+# Create sample files
+sample_files := ["file1.txt", "file2.txt", "file3.txt"]
+for file in sample_files {
+    fs.write(file, "Sample content for ${file}")
+}
+
+print("Processing ${len(sample_files)} files in parallel:\n")
+
+# Process in parallel
+parallel file in sample_files workers=2 {
+    content := fs.read(file)
+    uppercase := upper(content)
+    fs.write("${file}.upper", uppercase)
+    print("  ✓ ${file} → ${file}.upper")
+}
+
+print("\n✓ All parallel tasks completed!")
+
+# Cleanup
+for file in sample_files {
+    fs.delete(file)
+    fs.delete("${file}.upper")
+}

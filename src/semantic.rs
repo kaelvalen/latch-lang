@@ -82,8 +82,8 @@ impl SemanticAnalyzer {
     }
 
     fn register_builtins(&mut self) {
-        // Built-in functions
-        self.declare("print", SymbolInfo::function(1));
+        // Built-in functions (usize::MAX = variadic, skip arity check)
+        self.declare("print", SymbolInfo::function(usize::MAX));
         self.declare("len", SymbolInfo::function(1));
         self.declare("str", SymbolInfo::function(1));
         self.declare("int", SymbolInfo::function(1));
@@ -390,7 +390,8 @@ impl SemanticAnalyzer {
                     }
                     Some(SymbolInfo { kind: SymbolKind::Function { param_count }, .. }) => {
                         let pc = *param_count;
-                        if args.len() != pc {
+                        // usize::MAX = variadic, skip arity check
+                        if pc != usize::MAX && args.len() != pc {
                             self.errors.push(LatchError::ArgCountMismatch {
                                 name: name.clone(),
                                 expected: pc,

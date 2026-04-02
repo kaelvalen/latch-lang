@@ -1,32 +1,100 @@
-# ci-check.lt — Example: use Latch as a CI gate
+# ci-check.lt — CI/CD Pipeline Validation
+#
+# This script performs common CI checks:
+#   • Verifies required files exist
+#   • Checks for code quality (TODO markers, debug statements)
+#   • Runs basic shell commands
+#   • Exits with code 0 on success, 1 on failure
 #
 # Usage:
 #   latch run ci-check.lt
-#
-# Returns exit code 0 on success, 1 on failure.
 
-print("Running CI checks...")
+print("═══════════════════════════════════════")
+print("CI CHECKS — Validation Pipeline")
+print("═══════════════════════════════════════\n")
 
-# 1. Run tests
-result := proc.exec("echo 'All 42 tests passed'")
-print(result.stdout)
+# Track if any check fails
+all_passed := true
 
-# 2. Check for TODO markers in source
-todos := proc.exec("grep -r 'TODO' examples/ || true")
-if contains(todos.stdout, "TODO") {
-    print("Warning: found TODO markers")
-}
-
-# 3. Verify required files exist
-required := ["Cargo.toml", "README.md", "LICENSE"]
-for f in required {
-    if fs.exists(f) {
-        print("  ✓ ${f}")
+# Check 1: Verify required files exist
+print("→ Checking required files...")
+required_files := ["Cargo.toml", "README.md", "LICENSE"]
+for file in required_files {
+    if fs.exists(file) {
+        print("  ✓ ${file}")
     } else {
-        print("  ✗ ${f} MISSING")
-        stop 1
+        print("  ✗ ${file} — MISSING")
+        all_passed = false
+    }
+}
+print()
+
+# Check 2: Look for debug code (TODO, FIXME, XXX)
+print("→ Checking for TODO markers...")
+search_patterns := ["TODO", "FIXME", "XXX"]
+found_markers := false
+
+for pattern in search_patterns {
+    result := proc.exec("grep -r '${pattern}' src/ examples/ || true")
+    lines := split(trim(result.stdout), "\n")
+    issues := filter(lines, fn(l) { return len(trim(l)) > 0 })
+    
+    if len(issues) > 0 {
+        found_markers = true
+        for issue in issues {
+            print("  ⚠ ${issue}")
+        }
     }
 }
 
-print("All checks passed!")
-stop 0
+if !found_markers {
+    print("  ✓ No TODO/FIXME markers found")
+}
+print()
+
+# Check 3: Verify source code in src/ directory
+print("→ Checking source files...")
+src_files := fs.glob("src/**/*.rs")
+if len(src_files) > 0 {
+    print("  ✓ Found ${len(src_files)} Rust source files")
+} else {
+    print("  ✗ No source files found")
+    all_passed = false
+}
+print()
+
+# Check 4: Verify README has content
+print("→ Checking documentation...")
+readme := fs.read("README.md") ?? ""
+readme_lines := split(readme, "\n")
+if len(readme_lines) > 5 {
+    print("  ✓ README.md has content")
+} else {
+    print("  ✗ README.md is too short or missing")
+    all_passed = false
+}
+print()
+
+# Check 5: Sample test execution (echo instead of actual tests)
+print("→ Running example tests...")
+test_result := proc.exec("echo 'Test suite: 12 passed'")
+if test_result.code == 0 {
+    print("  ✓ Tests passed")
+    print("    ${test_result.stdout}")
+} else {
+    print("  ✗ Tests failed")
+    all_passed = false
+}
+print()
+
+# Final result
+print("═══════════════════════════════════════")
+if all_passed {
+    print("✓ All CI checks passed!")
+    print("═══════════════════════════════════════")
+    stop 0
+} else {
+    print("✗ Some checks failed")
+    print("═══════════════════════════════════════")
+    stop 1
+}

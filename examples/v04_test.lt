@@ -1,52 +1,180 @@
-# v0.4 feature test — simplified language
+# deployment.lt — Project Deployment & Build Automation
+#
+# A practical example showing:
+#   • Configuration management
+#   • Build steps
+#   • Testing and validation
+#   • Deployment workflows
+#   • Error handling
+#
+# Usage:
+#   latch run examples/v04_test.lt
 
-// ═══ 1. = as declare-or-assign ═══
-print("--- unified assignment ---")
-x = 10
-x = x + 5
-print(x)  // 15
-y: int = 42
-print(y)  // 42
+print("╔════════════════════════════════════════╗")
+print("║   DEPLOYMENT AUTOMATION SYSTEM        ║")
+print("║          v1.0 Example                 ║")
+print("╚════════════════════════════════════════╝\n")
 
-// ═══ 2. const enforcement ═══
-print("--- const ---")
-const PI = 3.14159
-print(PI)
-try {
-    PI = 999
-} catch e {
-    print("caught: cannot reassign const")
+# Configuration
+config := {
+    "project_name": "MyApp",
+    "version": "1.0.0",
+    "target": "staging",
+    "workers": 4,
+    "build_dir": "build",
+    "out_dir": "dist"
 }
 
-// ═══ 3. match/case/default ═══
-print("--- match ---")
-val = 2
-match val {
-    case 1: { print("one") }
-    case 2: { print("two") }
-    case 3: { print("three") }
-    default: { print("other") }
+# 1. Validate environment
+print("\n→ STEP 1: Environment Validation")
+print("  Target: ${config.target}")
+print("  Version: ${config.version}")
+
+required_tools := ["echo"]  # In real scenario: ["cargo", "npm", "docker"]
+for tool in required_tools {
+    result := proc.exec("which ${tool}")
+    if result.exit_code == 0 {
+        print("  ✓ ${tool} available")
+    } else {
+        print("  ✗ ${tool} not found")
+    }
 }
 
-status = "error"
-match status {
-    case "ok":    { print("all good") }
-    case "error": { print("something failed") }
-    default:      { print("unknown status") }
+# 2. Load or create build manifest
+print("\n→ STEP 2: Build Preparation")
+manifest := {
+    "timestamp": time.now(),
+    "changes": 0,
+    "files": []
+}
+print("  ✓ Manifest created")
+print("  Timestamp: ${manifest.timestamp}")
+
+# 3. Simulate finding source files
+print("\n→ STEP 3: File Discovery")
+# In real scenario: fs.glob("src/**/*.rs")
+mock_files := [
+    "src/main.rs",
+    "src/lib.rs",
+    "src/utils.rs"
+]
+print("  Found ${len(mock_files)} source files:")
+for file in mock_files {
+    print("    • ${file}")
+}
+extend(manifest.files, mock_files)
+
+# 4. Run build/compilation
+print("\n→ STEP 4: Building")
+build_steps := [
+    {"name": "Compile", "cmd": "echo 'Compiling...'"},
+    {"name": "Test", "cmd": "echo 'Running tests...'"},
+    {"name": "Optimize", "cmd": "echo 'Optimizing...'"}
+]
+
+build_success := true
+for step in build_steps {
+    result := proc.exec(step.cmd)
+    if result.exit_code == 0 {
+        print("  ✓ ${step.name}")
+    } else {
+        print("  ✗ ${step.name} failed")
+        build_success = false
+    }
 }
 
-// ═══ 4. method syntax on strings ═══
-print("--- string methods ---")
-s = "  hello world  "
-print(s.trim())
-print(s.trim().upper())
-print("hello".upper())
-print("WORLD".lower())
-print("hello world".split(" "))
-print("hello".starts_with("he"))
-print("hello".ends_with("lo"))
-print("hello world".contains("world"))
-print("hello".replace("l", "r"))
+if !build_success {
+    print("\n✗ Build failed!")
+    stop 1
+}
+
+# 5. Artifact creation
+print("\n→ STEP 5: Creating Artifacts")
+artifacts := [
+    {"name": "app.bin", "size": 5242880},
+    {"name": "app.so", "size": 2097152},
+    {"name": "app.config", "size": 512}
+]
+
+fs.mkdir("${config.build_dir}")
+for artifact in artifacts {
+    fs.write("${config.build_dir}/${artifact.name}", "artifact")
+    kb := artifact.size / 1024
+    print("  ✓ ${artifact.name} (${kb} KB)")
+}
+
+# 6. Run tests
+print("\n→ STEP 6: Testing")
+test_results := {
+    "unit_tests": 42,
+    "integration_tests": 12,
+    "passed": 0,
+    "failed": 0
+}
+
+test_results.passed = test_results.unit_tests + test_results.integration_tests
+print("  ✓ Unit tests: ${test_results.unit_tests} passed")
+print("  ✓ Integration tests: ${test_results.integration_tests} passed")
+
+# 7. Performance checks
+print("\n→ STEP 7: Performance Analysis")
+checks := [
+    {"type": "Memory", "value": "42MB", "limit": "100MB"},
+    {"type": "Startup", "value": "234ms", "limit": "500ms"},
+    {"type": "CPU", "value": "15%", "limit": "50%"}
+]
+
+for check in checks {
+    print("  ✓ ${check.type}: ${check.value} (limit: ${check.limit})")
+}
+
+# 8. Generate reports
+print("\n→ STEP 8: Generating Reports")
+build_report := {
+    "project": config.project_name,
+    "version": config.version,
+    "target": config.target,
+    "timestamp": manifest.timestamp,
+    "build_status": "SUCCESS",
+    "artifacts": len(artifacts),
+    "tests": test_results.passed,
+    "files": len(manifest.files)
+}
+
+report_json := json.stringify(build_report, true)
+fs.mkdir(config.build_dir)
+fs.write("${config.build_dir}/build_report.json", report_json)
+print("  ✓ Report saved to ${config.build_dir}/build_report.json")
+
+# 9. Deployment simulation
+print("\n→ STEP 9: Deployment Simulation")
+deploy_targets := [
+    {"name": "API Server", "status": "deployed"},
+    {"name": "Web Server", "status": "deployed"},
+    {"name": "Database", "status": "healthy"}
+]
+
+for target in deploy_targets {
+    print("  ✓ ${target.name}: ${target.status}")
+}
+
+# 10. Summary
+print("\n╔════════════════════════════════════════╗")
+print("║            BUILD COMPLETE             ║")
+print("╠════════════════════════════════════════╣")
+print("║ Project: ${config.project_name}")
+print("║ Version: ${config.version}")
+print("║ Status: ✓ SUCCESS")
+print("║ Target: ${config.target}")
+print("║ Artifacts: ${len(artifacts)}")
+print("║ Tests: ${test_results.passed} passed")
+print("╚════════════════════════════════════════╝\n")
+
+# Cleanup
+fs.delete("${config.build_dir}/build_report.json")
+proc.exec("rm -rf ${config.build_dir}")
+
+print("✓ Deployment automation workflow complete")
 
 // ═══ 5. method syntax on lists ═══
 print("--- list methods ---")

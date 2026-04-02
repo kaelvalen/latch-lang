@@ -89,6 +89,7 @@ impl Parser {
             Token::KwExport   => self.parse_export(),
             Token::KwImport   => self.parse_import(),
             Token::KwMatch    => self.parse_match(),
+            Token::KwStop     => self.parse_stop(),
             Token::Ident(_)   => self.parse_ident_stmt(),
             _                 => {
                 let expr = self.parse_expr()?;
@@ -600,6 +601,21 @@ impl Parser {
         self.expect(&Token::RBrace)?;
 
         Ok(Stmt::Match { expr, cases, default })
+    }
+
+    /// `stop N` — syntax sugar for `exit(N)`.
+    fn parse_stop(&mut self) -> Result<Stmt> {
+        self.advance(); // skip 'stop'
+        let code = if matches!(self.peek(), Token::Newline | Token::EOF | Token::Semicolon) {
+            Expr::Int(0)
+        } else {
+            self.parse_expr()?
+        };
+        Ok(Stmt::Expr(Expr::Call {
+            name: "exit".into(),
+            args: vec![code],
+            kwargs: vec![],
+        }))
     }
 
     fn parse_block(&mut self) -> Result<Block> {

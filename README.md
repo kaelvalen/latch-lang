@@ -5,44 +5,61 @@
 <h1 align="center">Latch</h1>
 
 <p align="center">
-  <strong>Minimal scripting language for local automation and tool orchestration.</strong>
+  <strong>A fast, lightweight scripting language for local automation, file operations, and task orchestration.</strong>
 </p>
 
 <p align="center">
   <a href="https://crates.io/crates/latch-lang"><img src="https://img.shields.io/crates/v/latch-lang.svg" alt="crates.io" /></a>
   <a href="https://github.com/kaelvalen/latch-lang/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT" /></a>
+  <a href="#features"><img src="https://img.shields.io/badge/batteries-included-brightgreen.svg" alt="Batteries Included" /></a>
 </p>
 
 ---
 
-Write `.lt` scripts to automate file operations, run shell commands, make HTTP calls, and orchestrate parallel tasks — all in a clean, readable syntax with zero boilerplate.
+## Why Latch?
 
-```python
-# deploy.lt
-config := json.parse(fs.read("deploy.json")) or {}
-target := config?.target ?? "staging"
+Latch is built to **replace shell scripts and Makefiles** for your automation tasks. It provides:
 
-branch := proc.exec("git branch --show-current").stdout |> trim()
-print("Deploying ${branch} to ${target}")
+- **Zero dependencies** — Single binary, instant startup
+- **Clear syntax** — Readable even for non-programmers
+- **Built-in power** — File I/O, processes, HTTP, JSON, regex, parallel tasks
+- **Error handling** — Try-catch, fallback values, defensive coalescing
+- **Type safety** — Optional type annotations, caught at parse-time
 
-files := fs.glob("dist/**/*.js")
-parallel f in files workers=4 {
-    proc.exec("aws s3 cp ${f} s3://my-bucket/${f}")
+### Write automation scripts faster
+
+```latch
+# Deploy app to production
+deploy := fn(target) {
+    config := json.parse(fs.read("config.json")) or {}
+    
+    files := fs.glob("dist/**/*")
+    parallel f in files workers=8 {
+        proc.exec("cp ${f} /opt/app/${f}")
+    }
+    
+    print("✓ Deployed ${len(files)} files to ${target}")
 }
 
-print("Deployed ${len(files)} files!")
-stop 0
+deploy("production")
 ```
 
 ## Install
 
-### From crates.io (recommended)
+### With Cargo (recommended)
 
 ```sh
 cargo install latch-lang
 ```
 
-### From source
+Then use the `latch` command:
+
+```sh
+latch version   # Show version
+latch run script.lt  # Execute script
+```
+
+### From Source
 
 ```sh
 git clone https://github.com/kaelvalen/latch-lang.git
@@ -50,54 +67,164 @@ cd latch-lang
 cargo install --path .
 ```
 
-### Pre-built binaries
-
-Download from [Releases](https://github.com/kaelvalen/latch-lang/releases) and add to your `PATH`.
-
-After install, verify:
+### Verify Installation
 
 ```sh
-latch version
-# → latch v0.4.2
+$ latch version
+latch v0.4.3
 ```
 
-## Quick Start
+## Quick Start — Your First Script
 
-Create `hello.lt`:
+Create `greet.lt`:
 
-```python
-name := "World"
-print("Hello, ${name}!")
+```latch
+name := "Latch"
+version := 0.4
 
-items := ["files", "processes", "http", "parallel"]
-for item in items {
-    print("  ✓ ${item}")
+# String interpolation
+print("Welcome to ${name} v${version}!")
+
+# List iteration
+features := ["automation", "scripting", "orchestration"]
+for feature in features {
+    print("  • ${feature}")
 }
+
+# File operations
+fs.write("log.txt", "Script ran at ${time.now()}")
+
+# Process execution
+result := proc.exec("echo Done!")
+print(result.stdout)
 ```
 
 Run it:
 
 ```sh
-latch run hello.lt
+$ latch run greet.lt
+Welcome to Latch v0.4!
+  • automation
+  • scripting
+  • orchestration
+Script ran at 2026-04-02 12:10:30
+Done!
 ```
 
-## Features
+## Language Features at a Glance
 
-| Feature | Example |
-|---------|---------|
-| **Variables** | `name := "latch"` |
-| **Type annotations** | `port: int := 8080` |
-| **String interpolation** | `"Hello ${name}!"` |
-| **Lists & Dicts** | `[1, 2, 3]`, `{"key": "val"}` |
-| **Functions** | `fn greet(name) { return "hi ${name}" }` |
-| **Anonymous functions** | `fn(x) { return x * 2 }` |
-| **If / Else** | `if x > 0 { ... } else { ... }` |
-| **For loops** | `for item in list { ... }` |
-| **Range loops** | `for i in 0..10 { ... }` |
-| **Parallel** | `parallel f in files workers=4 { ... }` |
-| **Error handling** | `try { ... } catch e { ... } finally { ... }` |
-| **Fallback values** | `data := fs.read("x") or "default"` |
-| **Null coalesce** | `name := config?.name ?? "anonymous"` |
+| Category | Features |
+|----------|----------|
+| **Basics** | Variables, type annotations, string interpolation, comments |
+| **Types** | `null`, `bool`, `int`, `float`, `string`, `list`, `dict`, `fn` |
+| **Collections** | Lists `[1, 2, 3]`, Dicts `{"key": "val"}`, Ranges `1..10` |
+| **Operators** | Arithmetic `+ - * / %`, Comparison `== != < > <= >=`, Logical `&& \|\| !` |
+| **Smart Operators** | Null coalesce `??`, Error fallback `or`, Optional access `?.` |
+| **Control Flow** | `if`/`else`, `for`/`in`, range loops `for i in 0..10` |
+| **Functions** | Named functions, anonymous functions, parameters, return types |
+| **Parallel** | `parallel` blocks with configurable worker pools |
+| **Error Handling** | Try-catch-finally, error propagation, graceful defaults |
+| **Built-ins** | 50+ functions for strings, lists, dicts, math, I/O |
+| **Modules** | `fs`, `proc`, `http`, `json`, `csv`, `regex`, `time`, `hash`, `base64` and more |
+
+## Common Tasks
+
+### Read and Process a File
+
+```latch
+# Read JSON config
+config := json.parse(fs.read("config.json")) or {"port": 8080}
+
+# Search for patterns
+lines := fs.read("data.txt") |> split("\n")
+errors := filter(lines, fn(l) { return contains(l, "ERROR") })
+
+print("Found ${len(errors)} errors")
+for error in errors {
+    print("  → ${error}")
+}
+```
+
+### Run Shell Commands and Process Output
+
+```latch
+# Execute git command
+result := proc.exec("git log --oneline -5")
+commits := split(trim(result.stdout), "\n")
+
+print("Latest 5 commits:")
+for commit in commits {
+    print("  ${commit}")
+}
+```
+
+### Make HTTP Requests
+
+```latch
+# Fetch JSON from API
+response := http.get("https://api.example.com/data")
+if response.status == 200 {
+    data := json.parse(response.body) or {}
+    print("API Response: ${data}")
+} else {
+    print("Error: HTTP ${response.status}")
+}
+```
+
+### Parallel File Processing
+
+```latch
+# Process many files in parallel with 4 workers
+files := fs.glob("logs/*.txt")
+results := []
+
+parallel file in files workers=4 {
+    content := fs.read(file)
+    fs.write("${file}.processed", upper(content))
+}
+
+print("✓ Processed ${len(files)} files")
+```
+
+### Run Checks with Error Handling
+
+```latch
+# CI-style checks with try-catch
+failed := false
+
+try {
+    # Check 1: Required files exist
+    assert(fs.exists("Cargo.toml"), "Missing Cargo.toml")
+    
+    # Check 2: Tests pass
+    result := proc.exec("cargo test")
+    assert(result.exit_code == 0, "Tests failed")
+    
+    print("✓ All checks passed!")
+} catch e {
+    print("✗ Check failed: ${e}")
+    failed = true
+} finally {
+    print("Cleanup...")
+}
+
+if failed {
+    stop 1
+}
+```
+
+## Documentation
+
+- **[Complete Stdlib Reference](docs/stdlib.md)** — All built-in functions and modules
+- **[Examples](examples/)** — Real-world scripts showcasing features
+- **[GitHub Issues](https://github.com/kaelvalen/latch-lang/issues)** — Questions & bug reports
+
+## Examples Included
+
+- `hello.lt` — Feature overview with print, math, loops, file I/O
+- `ci-check.lt` — Run tests and verify required files
+- `fetch-data.lt` — HTTP requests and JSON parsing
+- `parallel-tasks.lt` — Pool-based parallel execution
 | **While loops** | `while condition { ... }` |
 | **Break/Continue** | `break`, `continue` |
 | **Constants** | `const PI = 3.14` |
@@ -277,7 +404,7 @@ See the [examples/](examples/) directory:
 
 - [`hello.lt`](examples/hello.lt) — Feature showcase
 - [`ci-check.lt`](examples/ci-check.lt) — CI gate example
-- [`v02_test.lt`](examples/v02_test.lt) — v0.4.2 feature tests
+- [`v02_test.lt`](examples/v02_test.lt) — v0.4.3 feature tests
 
 ## Full Reference
 

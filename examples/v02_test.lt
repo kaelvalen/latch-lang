@@ -1,52 +1,125 @@
-# v0.4.2 comprehensive test — all new features
+# file-operations.lt — File System Manipulation Example
+#
+# Demonstrates:
+#   • Reading and writing files
+#   • Directory operations
+#   • Glob pattern matching
+#   • File metadata and checking
+#   • Text processing and filtering
+#
+# Usage:
+#   latch run examples/v02_test.lt
 
-// ═══ 1. MODULO ═══
-print("--- modulo ---")
-print(10 % 3)
-print(17 % 5)
-print(10 % 2)
+print("File System Operations Example\n")
 
-// ═══ 2. TYPEOF dict ═══
-print("--- typeof dict ---")
-d := {"name": "latch", "ver": 2}
-print(typeof(d))
+# 1. Create sample files and directories
+print("→ Setting up test environment...")
+fs.mkdir("test_output")
+fs.write("test_output/sample1.txt", "Hello from Latch")
+fs.write("test_output/sample2.txt", "Line 1\nLine 2\nLine 3")
+fs.write("test_output/data.json", "{\"name\": \"test\", \"value\": 42}")
+print("✓ Created test files\n")
 
-// ═══ 3. map() HOF (renamed from map_list) ═══
-print("--- map HOF ---")
-nums := [1, 2, 3, 4]
-doubled := map(nums, fn(x) { return x * 2 })
-print(doubled)
+# 2. Read and process files
+print("→ Reading and processing files...")
+content1 := fs.read("test_output/sample1.txt")
+print("File 1: ${content1}")
 
-// ═══ 4. STRING UTILS ═══
-print("--- string utils ---")
-s := "Hello World"
-print(lower(s))
-print(upper(s))
-print(starts_with(s, "Hello"))
-print(ends_with(s, "World"))
-print(starts_with(s, "Bye"))
+content2 := fs.read("test_output/sample2.txt")
+lines := split(content2, "\n")
+print("File 2 has ${len(lines)} lines")
+for line in lines {
+    print("  • ${line}")
+}
+print()
 
-// ═══ 5. fs.mkdir / stat / remove ═══
-print("--- fs extras ---")
-fs.mkdir("/tmp/latch_test_dir")
-stat := fs.stat("/tmp/latch_test_dir")
-print(stat.is_dir)
-fs.remove("/tmp/latch_test_dir")
-print(fs.exists("/tmp/latch_test_dir"))
+# 3. JSON operations
+print("→ JSON file operations...")
+json_content := fs.read("test_output/data.json")
+data := json.parse(json_content)
+print("Parsed JSON: name='${data.name}', value=${data.value}")
+print()
 
-// ═══ 6. proc.exec array form ═══
-print("--- proc array ---")
-r := proc.exec(["echo", "hello from array"])
-print(trim(r.stdout))
+# 4. Glob patterns
+print("→ Finding files with glob patterns...")
+all_files := fs.glob("test_output/*")
+print("Files in test_output:")
+for file in all_files {
+    print("  • ${file}")
+}
+print()
 
-// ═══ 7. NULL COALESCE ?? ═══
-print("--- null coalesce ---")
-maybe := null
-x := maybe ?? 42
-print(x)
-y := "real value" ?? "fallback"
-// should be "real value" since not null
-print(y)
+# 5. File existence checks
+print("→ Checking file metadata...")
+for file in ["test_output/sample1.txt", "test_output/missing.txt"] {
+    if fs.exists(file) {
+        print("✓ ${file} exists")
+    } else {
+        print("✗ ${file} not found")
+    }
+}
+print()
+
+# 6. String operations (modulo, upper/lower)
+print("→ String transformations...")
+text := "LaTcH lAnGuAgE"
+print("Original: ${text}")
+print("Lowercase: ${lower(text)}")
+print("Uppercase: ${upper(text)}")
+print()
+
+# 7. Numeric operations (modulo)
+print("→ Math operations...")
+numbers := [10, 17, 20, 13]
+for num in numbers {
+    remainder := num % 3
+    print("${num} mod 3 = ${remainder}")
+}
+print()
+
+# 8. Higher-order functions
+print("→ Using map/filter...")
+values := [1, 2, 3, 4, 5]
+doubled := map(values, fn(x) { return x * 2 })
+print("Doubled: ${doubled}")
+
+evens := filter(values, fn(x) { return x % 2 == 0 })
+print("Even numbers: ${evens}")
+print()
+
+# 9. String checks
+print("→ String predicates...")
+greeting := "Hello World"
+print("Starts with 'Hello': ${starts_with(greeting, 'Hello')}")
+print("Ends with 'World': ${ends_with(greeting, 'World')}")
+print("Contains 'World': ${contains(greeting, 'World')}")
+print()
+
+# 10. Null coalesce operator
+print("→ Null coalesce ??...")
+maybe_value := null
+result1 := maybe_value ?? "default value"
+print("null ?? 'default': ${result1}")
+
+real_value := "actual value"
+result2 := real_value ?? "default"
+print("'actual' ?? 'default': ${result2}")
+
+# 11. Type checking
+print("→ Type information...")
+test_values := [42, 3.14, "text", true, null, [1, 2], {"k": "v"}]
+for val in test_values {
+    t := typeof(val)
+    print("typeof(${val}): ${t}")
+}
+print()
+
+# Cleanup
+print("→ Cleanup...")
+result := proc.exec("rm -rf test_output")
+print("✓ Cleanup complete\n")
+
+print("✓ All file operations tested!")
 
 // ═══ 8. IN operator ═══
 print("--- in operator ---")
