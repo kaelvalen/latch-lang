@@ -1,7 +1,32 @@
 # Latch Standard Library Reference
 
 > **Version**: 0.4.3  
-> **Status**: Complete — all features documented.
+> **Last Updated**: 2026-04-02  
+> **Status**: Complete — all features documented with examples
+
+---
+
+## Table of Contents
+
+1. [Built-in Functions](#built-in-functions)
+2. [Core Functions (Detailed)](#core-functions-detailed-reference)
+3. [String Functions (Detailed)](#string-functions-detailed-reference)
+4. [List Functions (Detailed)](#list-functions-detailed-reference)
+5. [Dict Functions (Detailed)](#dict-functions-detailed-reference)
+6. [Type & Math Functions](#type-conversion--math-functions)
+7. [Operators](#operators)
+8. [Modules](#modules)
+9. [Types](#types)
+10. [Keywords](#keywords-reserved)
+11. [Control Flow](#control-flow)
+12. [Variables & Assignment](#variables--assignment)
+13. [Functions](#functions)
+14. [Pipe Operator](#pipe-operator)
+15. [Classes (OOP)](#classes-oop)
+16. [Module System](#module-system)
+17. [Error Handling](#error-handling)
+18. [CLI Commands](#cli-commands)
+19. [Complete Example](#complete-example)
 
 ---
 
@@ -54,6 +79,8 @@
 | `filter` | `filter(list, fn)` | `list` | Keep items where `fn(item)` is truthy |
 | `map` | `map(list, fn)` | `list` | Transform each item |
 | `each` | `each(list, fn)` | `null` | Run `fn(item)` for each item (side-effects) |
+| `join` | `join(list, delim)` | `string` | Join list elements with delimiter into a string |
+| `stop` | `stop(code?)` | `null` | Exit the script with optional exit code (default: 0) |
 
 ```python
 # Examples
@@ -98,18 +125,401 @@ replace("foo", "o", "0")    # → "f00"
 repeat("ab", 3)           # → "ababab"
 
 # Higher-order functions
-sort([3, 1, 2])           # → [1, 2, 3]
-filter([1, 2, 5, 8], fn(x) { return x > 3 })         # → [5, 8]
-map([1, 2, 3], fn(x) { return x * 2 })                # → [2, 4, 6]
-each(items, fn(item) { print(item) })
+### `join(list, delimiter)`
+Join a list of strings with a delimiter.
 
-# Assert
-assert(x > 0, "x must be positive")
+```latch
+join(["a", "b", "c"], ",")       # → "a,b,c"
+join(["hello", "world"], " ")    # → "hello world"
+join([], "-")                    # → ""
+```
+
+### `split(string, delimiter)`
+Split a string by a delimiter into a list.
+
+```latch
+split("a,b,c", ",")          # → ["a", "b", "c"]
+split("hello world", " ")    # → ["hello", "world"]
+split("x", "x")              # → ["", ""]
+```
+
+### `trim(string)`
+Remove leading and trailing whitespace.
+
+```latch
+trim("  hello  ")   # → "hello"
+trim("\n\ttest\n")  # → "test"
+```
+
+### `lower(string)`
+Convert string to lowercase.
+
+```latch
+lower("HELLO")      # → "hello"
+lower("HeLLo WoRLD") # → "hello world"
+```
+
+### `upper(string)`
+Convert string to uppercase.
+
+```latch
+upper("hello")      # → "HELLO"
+upper("Hello World") # → "HELLO WORLD"
+```
+
+### `starts_with(string, prefix)`
+Check if a string starts with a prefix.
+
+```latch
+starts_with("hello", "he")   # → true
+starts_with("hello", "ll")   # → false
+```
+
+### `ends_with(string, suffix)`
+Check if a string ends with a suffix.
+
+```latch
+ends_with("hello", "lo")   # → true
+ends_with("hello", "el")   # → false
+```
+
+### `contains(haystack, needle)`
+Check if a string/list contains a value, or if a dict contains a key.
+
+```latch
+contains("hello", "ell")      # → true
+contains([1, 2, 3], 2)        # → true
+contains({"a": 1}, "a")       # → true  (checks keys)
+```
+
+### `replace(string, from, to)`
+Replace all occurrences of `from` with `to` in a string.
+
+```latch
+replace("hello", "l", "L")   # → "heLLo"
+replace("aaa", "a", "b")     # → "bbb"
+```
+
+### `repeat(string, count)`
+Repeat a string a given number of times.
+
+```latch
+repeat("ab", 3)   # → "ababab"
+repeat("x", 0)    # → ""
+```
+
+### `index(list_or_string, value)`
+Find the first index of a value. Returns -1 if not found.
+
+```latch
+index([1, 2, 3, 2], 2)    # → 1
+index("hello", "l")       # → 2
+index([1, 2, 3], 5)       # → -1
+```
+
+### `count(list_or_string, value)`
+Count occurrences of a value.
+
+```latch
+count([1, 2, 2, 3, 2], 2)    # → 3
+count("hello", "l")          # → 2
 ```
 
 ---
 
-## Operators
+## List Functions (Detailed Reference)
+
+### `push(list, value)`
+Return a new list with a value appended (non-mutating).
+
+```latch
+result := push([1, 2], 3)   # result = [1, 2, 3]
+```
+
+### `extend(list, items)`
+Append all items from another list (mutates the original list).
+
+```latch
+a := [1, 2]
+extend(a, [3, 4])     # a is now [1, 2, 3, 4]
+```
+
+### `insert(list, index, value)`
+Insert a value at a specific index (mutates).
+
+```latch
+a := [1, 2, 3]
+insert(a, 1, 99)      # a is now [1, 99, 2, 3]
+```
+
+### `remove(list, value)`
+Remove the first occurrence of a value (mutates).
+
+```latch
+a := [1, 2, 3, 2]
+remove(a, 2)          # a is now [1, 3, 2]
+```
+
+### `pop(list, index?)`
+Remove and return the item at index. If no index given, removes and returns the last item.
+
+```latch
+a := [1, 2, 3]
+x := pop(a)           # x = 3, a is now [1, 2]
+y := pop(a, 0)        # y = 1, a is now [2]
+```
+
+### `reverse(list)`
+Reverse a list in place (mutates).
+
+```latch
+a := [1, 2, 3]
+reverse(a)            # a is now [3, 2, 1]
+```
+
+### `sort(list)`
+Sort a list (mutates). Works for integers, floats, and strings.
+
+```latch
+a := [3, 1, 2]
+sort(a)               # a is now [1, 2, 3]
+
+b := ["c", "a", "b"]
+sort(b)               # b is now ["a", "b", "c"]
+```
+
+### `list_clear(list)`
+Remove all items from a list (mutates).
+
+```latch
+a := [1, 2, 3]
+list_clear(a)         # a is now []
+```
+
+### `list_copy(list)`
+Return a shallow copy of a list.
+
+```latch
+a := [1, 2, 3]
+b := list_copy(a)     # b = [1, 2, 3], independent copy
+```
+
+### `filter(list, function)`
+Keep only items where the function returns truthy.
+
+```latch
+result := filter([1, 2, 3, 4, 5], fn(x) { return x > 2 })
+# result = [3, 4, 5]
+
+evens := filter([1, 2, 3, 4], fn(x) { return x % 2 == 0 })
+# evens = [2, 4]
+```
+
+### `map(list, function)`
+Transform each item by applying a function.
+
+```latch
+result := map([1, 2, 3], fn(x) { return x * 2 })
+# result = [2, 4, 6]
+
+lengths := map(["a", "bb", "ccc"], fn(s) { return len(s) })
+# lengths = [1, 2, 3]
+```
+
+### `each(list, function)`
+Run a function for each item (for side-effects like printing).
+
+```latch
+each([1, 2, 3], fn(x) { print("Item: ${x}") })
+```
+
+### `sum(list)`
+Sum all numbers in a list.
+
+```latch
+sum([1, 2, 3, 4, 5])    # → 15
+sum([1.5, 2.5])         # → 4.0
+```
+
+### `max(list)`
+Return the maximum value in a list.
+
+```latch
+max([3, 1, 4, 1, 5])    # → 5
+max(["c", "a", "b"])    # → "c"
+```
+
+### `min(list)`
+Return the minimum value in a list.
+
+```latch
+min([3, 1, 4, 1, 5])    # → 1
+min(["c", "a", "b"])    # → "a"
+```
+
+### `range(start, end)`
+Generate a list of integers from `start` to `end` (exclusive).
+
+```latch
+range(0, 5)      # → [0, 1, 2, 3, 4]
+range(2, 5)      # → [2, 3, 4]
+range(0, 0)      # → []
+```
+
+---
+
+## Dict Functions (Detailed Reference)
+
+### `keys(dict)`
+Return a sorted list of keys from a dict.
+
+```latch
+keys({"b": 2, "a": 1})   # → ["a", "b"]
+```
+
+### `values(dict)`
+Return a list of values (in sorted key order).
+
+```latch
+values({"b": 2, "a": 1})  # → [1, 2]
+```
+
+### `items(dict)`
+Return a list of [key, value] pairs.
+
+```latch
+items({"a": 1, "b": 2})   # → [["a", 1], ["b", 2]]
+```
+
+### `get(dict, key, default?)`
+Safe dict access. Returns default value if key not found (default: null).
+
+```latch
+config := {"port": 8080}
+port := get(config, "port", 3000)     # → 8080
+host := get(config, "host", "localhost")  # → "localhost"
+```
+
+### `pop(dict, key, default?)`
+Remove and return a value from dict. Returns default if key not found.
+
+```latch
+d := {"a": 1, "b": 2}
+x := pop(d, "a")           # x = 1, d is now {"b": 2}
+y := pop(d, "z", "default")  # y = "default"
+```
+
+### `popitem(dict)`
+Remove and return an arbitrary [key, value] pair as a list.
+
+```latch
+d := {"a": 1}
+pair := popitem(d)   # pair = ["a", 1], d is now {}
+```
+
+### `update(dict1, dict2)`
+Merge dict2 into dict1 (mutates dict1).
+
+```latch
+a := {"x": 1}
+b := {"y": 2, "x": 10}
+update(a, b)         # a is now {"x": 10, "y": 2}
+```
+
+### `setdefault(dict, key, default)`
+Get the value for key, or set and return default if not found.
+
+```latch
+d := {"a": 1}
+x := setdefault(d, "a", 99)    # x = 1
+y := setdefault(d, "b", 99)    # y = 99, d is now {"a": 1, "b": 99}
+```
+
+### `dict_clear(dict)`
+Remove all items from a dict (mutates).
+
+```latch
+d := {"a": 1, "b": 2}
+dict_clear(d)        # d is now {}
+```
+
+### `dict_copy(dict)`
+Return a shallow copy of a dict.
+
+```latch
+a := {"x": 1}
+b := dict_copy(a)    # b = {"x": 1}, independent copy
+```
+
+### `fromkeys(keys, value)`
+Create a dict from a list of keys with the same value.
+
+```latch
+result := fromkeys(["a", "b", "c"], 0)   # → {"a": 0, "b": 0, "c": 0}
+```
+
+---
+
+## Core Functions (Detailed Reference)
+
+### `print(value)`
+Print a value to stdout with a newline.
+
+```latch
+print("Hello, World!")  # → Hello, World!
+print(42)               # → 42
+print([1, 2, 3])        # → [1, 2, 3]
+print(null)             # → null
+```
+
+### `len(value)`
+Get the length of a string, list, or dict.
+
+```latch
+len("hello")        # → 5
+len([1, 2, 3])      # → 3
+len({"a": 1})       # → 1
+len("")             # → 0
+```
+
+### `typeof(value)`
+Return the type name of a value as a string.
+
+```latch
+typeof(42)           # → "int"
+typeof("hello")      # → "string"
+typeof([1, 2])       # → "list"
+typeof({"a": 1})     # → "dict"
+typeof(null)         # → "null"
+typeof(true)         # → "bool"
+typeof(fn() {})      # → "fn"
+```
+
+### `assert(condition, message?)`
+Assert that a condition is truthy. Throws an error with optional message if false.
+
+```latch
+assert(x > 0, "x must be positive")
+assert(fs.exists("config.json"), "config file required")
+```
+
+### `stop(code?)`
+Exit the script with an optional exit code (default: 0).
+
+```latch
+if success {
+    stop 0  # Exit with success code
+} else {
+    stop 1  # Exit with error code
+}
+```
+
+---
+
+## String Functions (Detailed Reference)
+
+### `str(value)`
+Convert any value to its string representation.
 
 ### Arithmetic
 
@@ -178,6 +588,28 @@ assert(x > 0, "x must be positive")
 | 10 | `*` `/` `%` (multiplicative) |
 | 11 | `!` `-` (unary) |
 | 12 | `.` `?.` `[]` `()` (postfix) |
+
+---
+
+## Type Conversion & Math Functions
+
+### `int(value)`
+Parse a string or float to an integer.
+
+```latch
+int("42")    # → 42
+int(3.9)     # → 3  (truncates)
+int("3.14")  # → error
+```
+
+### `float(value)`
+Parse a string or int to a float.
+
+```latch
+float("3.14")  # → 3.14
+float(42)      # → 42.0
+float("42x")   # → error
+```
 
 ---
 
