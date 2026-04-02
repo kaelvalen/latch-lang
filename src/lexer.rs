@@ -79,9 +79,14 @@ pub enum Token {
     KwImport,
     KwStop,
     KwNull,
+    KwMatch,
+    KwCase,
+    KwDefault,
+    KwAs,
 
     // Other
     Newline,
+    Semicolon, // ; (alias for newline as statement separator)
     EOF,
 }
 
@@ -353,6 +358,17 @@ impl Lexer {
                 '(' => { let s = self.simple(Token::LParen); tokens.push(s); }
                 ')' => { let s = self.simple(Token::RParen); tokens.push(s); }
 
+                ';' => {
+                    // Semicolon acts as a statement separator (same as newline)
+                    let line = self.line;
+                    let col = self.col;
+                    self.advance();
+                    // Collapse consecutive semicolons/newlines into one
+                    if tokens.last().map_or(true, |t: &Spanned<Token>| t.node != Token::Newline) {
+                        tokens.push(Spanned { node: Token::Newline, line, col });
+                    }
+                }
+
                 _ => {
                     let line = self.line;
                     let col = self.col;
@@ -470,6 +486,10 @@ impl Lexer {
             "export"   => Token::KwExport,
             "import"   => Token::KwImport,
             "stop"     => Token::KwStop,
+            "match"    => Token::KwMatch,
+            "case"     => Token::KwCase,
+            "default"  => Token::KwDefault,
+            "as"       => Token::KwAs,
             "true"     => Token::Bool(true),
             "false"    => Token::Bool(false),
             "null"     => Token::KwNull,

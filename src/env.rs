@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::fmt;
 use std::sync::{Arc, Mutex};
 
-use crate::ast::{Block, Param};
+use crate::ast::{Block, Param, Type};
 use crate::error::{LatchError, Result};
 
 /// Runtime value – the result of evaluating any expression.
@@ -30,11 +30,23 @@ pub enum Value {
         body: String,
         headers: HashMap<String, String>,
     },
+    /// A class definition (not an instance).
+    Class {
+        name: String,
+        fields: Vec<(String, Option<Type>, Option<Block>)>, // name, type, default_stmts
+        methods: Vec<(String, Vec<Param>, Block)>,
+    },
+    /// A class instance.
+    Instance {
+        class_name: String,
+        fields: Arc<Mutex<HashMap<String, Value>>>,
+        methods: Arc<Vec<(String, Vec<Param>, Block)>>,
+    },
     Null,
 }
 
 impl Value {
-    pub fn type_name(&self) -> &'static str {
+    pub fn type_name(&self) -> &str {
         match self {
             Value::Int(_)            => "int",
             Value::Float(_)          => "float",
@@ -45,6 +57,8 @@ impl Value {
             Value::Fn { .. }         => "fn",
             Value::ProcessResult { .. } => "process",
             Value::HttpResponse { .. }  => "response",
+            Value::Class { .. }      => "class",
+            Value::Instance { class_name, .. } => class_name.as_str(),
             Value::Null              => "null",
         }
     }
@@ -122,6 +136,7 @@ impl Value {
         }
     }
 
+
     /// Truthiness: false and null are falsy, everything else is truthy.
     pub fn is_truthy(&self) -> bool {
         match self {
@@ -129,6 +144,39 @@ impl Value {
             Value::Int(0) => false,
             Value::Str(s) if s.is_empty() => false,
             _ => true,
+        }
+    }
+
+    /// Get a field from an instance (for `instance.field`).
+    pub fn get_field(&self, field: &str) -> Option<Value> {
+        match self {
+            Value::Instance { fields, .. } => {
+                fields.lock().unwrap().get(field).cloned()
+            }
+            Value::ProcessResult { stdout, stderr, code } => match field {
+                "stdout" => Some(Value::Str(stdout.clone())),
+                "stderr" => Some(Value::Str(stderr.clone())),
+                "code"   => Some(Value::Int(*code as i64)),
+                _ => None,
+            },
+            Value::Map(map) => {
+                map.lock().unwrap().get(field).cloned()
+            }
+            _ => None,
+        }
+    }
+
+    /// Set a field on an instance in-place (for `self.field = val`).
+    pub fn set_field(&self, field: &str, val: Value) -> Result<()> {
+        match self {
+            Value::Instance { fields, .. } => {
+                fields.lock().unwrap().insert(field.to_string(), val);
+                Ok(())
+            }
+            _ => Err(LatchError::TypeMismatch {
+                expected: "instance".into(),
+                found: self.type_name().into(),
+            }),
         }
     }
 }
@@ -162,6 +210,18 @@ impl fmt::Display for Value {
                 write!(f, "}}")
             }
             Value::Fn { .. } => write!(f, "<fn>"),
+            Value::Class { name, .. } => write!(f, "<class {name}>"),
+            Value::Instance { class_name, fields, .. } => {
+                let guard = fields.lock().unwrap();
+                let mut sorted: Vec<_> = guard.iter().collect();
+                sorted.sort_by_key(|(k, _)| (*k).clone());
+                write!(f, "{class_name} {{")?;
+                for (i, (k, v)) in sorted.iter().enumerate() {
+                    if i > 0 { write!(f, ", ")?; }
+                    write!(f, "{k}: {v}")?;
+                }
+                write!(f, "}}")
+            }
             Value::ProcessResult { stdout, stderr, code } => {
                 write!(f, "ProcessResult(code={code}, stdout={stdout:?}, stderr={stderr:?})")
             }

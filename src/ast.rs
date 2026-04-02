@@ -46,6 +46,13 @@ pub enum Expr {
         args: Vec<Expr>,
     },
 
+    /// Method call on an arbitrary expression: `expr.method(args)`
+    MethodCall {
+        receiver: Box<Expr>,
+        method: String,
+        args: Vec<Expr>,
+    },
+
     Index {
         expr: Box<Expr>,
         index: Box<Expr>,
@@ -237,6 +244,20 @@ pub enum Stmt {
     Import {
         items: Vec<String>,
         module: String,
+    },
+
+    /// Field assignment: `obj.field = value` (used for `self.x = val` in methods)
+    FieldAssign {
+        object: Expr,
+        field: String,
+        value: Expr,
+    },
+
+    /// Match statement: `match expr { case val: { stmts } default: { stmts } }`
+    Match {
+        expr: Expr,
+        cases: Vec<(Expr, Block)>,      // (pattern expr, body)
+        default: Option<Block>,
     },
 }
 

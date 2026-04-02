@@ -169,6 +169,24 @@ impl SemanticAnalyzer {
         self.declare("csv", SymbolInfo::variable());
         self.declare("base64", SymbolInfo::variable());
         self.declare("hash", SymbolInfo::variable());
+        self.declare("math", SymbolInfo::variable());
+        self.declare("set", SymbolInfo::variable());
+
+        // New builtins
+        self.declare("reduce", SymbolInfo::function(2));
+        self.declare("zip", SymbolInfo::function(2));
+        self.declare("enumerate", SymbolInfo::function(1));
+        self.declare("any", SymbolInfo::function(2));
+        self.declare("all", SymbolInfo::function(2));
+        self.declare("input", SymbolInfo::function(1));
+        self.declare("abs", SymbolInfo::function(1));
+        self.declare("round", SymbolInfo::function(1));
+        self.declare("floor", SymbolInfo::function(1));
+        self.declare("ceil", SymbolInfo::function(1));
+        self.declare("sorted", SymbolInfo::function(1));
+        self.declare("reversed", SymbolInfo::function(1));
+        self.declare("flat", SymbolInfo::function(1));
+        self.declare("unique", SymbolInfo::function(1));
     }
 
     // ── Statement checking ───────────────────────────────────
@@ -333,12 +351,17 @@ impl SemanticAnalyzer {
                         self.check_expr(val);
                     }
                 }
-                for (_method_name, params, body) in methods {
+                for (method_name, params, body) in methods {
                     self.push_scope();
+                    let prev_fn = self.current_fn.take();
+                    self.current_fn = Some(format!("{}::{}", name, method_name));
+                    // 'self' is the first implicit parameter
+                    self.declare("self", SymbolInfo::variable());
                     for param in params {
                         self.declare(&param.name, SymbolInfo::variable());
                     }
                     for s in body { self.check_stmt(s); }
+                    self.current_fn = prev_fn;
                     self.pop_scope();
                 }
             }
@@ -355,6 +378,26 @@ impl SemanticAnalyzer {
                 // For now, declare all imported items as variables
                 for item in items {
                     self.declare(item, SymbolInfo::variable());
+                }
+            }
+
+            Stmt::FieldAssign { object, value, .. } => {
+                self.check_expr(object);
+                self.check_expr(value);
+            }
+
+            Stmt::Match { expr, cases, default } => {
+                self.check_expr(expr);
+                for (pattern, body) in cases {
+                    self.check_expr(pattern);
+                    self.push_scope();
+                    for s in body { self.check_stmt(s); }
+                    self.pop_scope();
+                }
+                if let Some(body) = default {
+                    self.push_scope();
+                    for s in body { self.check_stmt(s); }
+                    self.pop_scope();
                 }
             }
         }
@@ -391,6 +434,11 @@ impl SemanticAnalyzer {
             }
 
             Expr::ModuleCall { args, .. } => {
+                for arg in args { self.check_expr(arg); }
+            }
+
+            Expr::MethodCall { receiver, args, .. } => {
+                self.check_expr(receiver);
                 for arg in args { self.check_expr(arg); }
             }
 

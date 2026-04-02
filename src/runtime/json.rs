@@ -95,5 +95,16 @@ fn latch_to_json(val: &Value) -> serde_json::Value {
                 "headers": headers,
             })
         }
+        Value::Class { name, .. } => serde_json::Value::String(format!("<class {}>", name)),
+        Value::Instance { class_name, fields, .. } => {
+            let guard = fields.lock().unwrap();
+            let obj: serde_json::Map<String, serde_json::Value> = guard.iter()
+                .map(|(k, v)| (k.clone(), latch_to_json(v)))
+                .collect();
+            let mut result = serde_json::Map::new();
+            result.insert("__class__".to_string(), serde_json::Value::String(class_name.clone()));
+            result.extend(obj);
+            serde_json::Value::Object(result)
+        }
     }
 }

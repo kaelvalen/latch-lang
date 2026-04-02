@@ -91,6 +91,7 @@ impl Parser {
             Token::KwClass    => self.parse_class(),
             Token::KwExport   => self.parse_export(),
             Token::KwImport   => self.parse_import(),
+            Token::KwMatch    => self.parse_match(),
             Token::Ident(_)   => self.parse_ident_stmt(),
             _                 => {
                 let expr = self.parse_expr()?;
@@ -106,6 +107,7 @@ impl Parser {
     /// - `name[idx] = value`   (index assign)
     /// - `name(...)` or `mod.method(...)` (expression statement)
     fn parse_ident_stmt(&mut self) -> Result<Stmt> {
+        let ident_pos = self.pos; // position of the identifier token (before advancing)
         let name = match self.advance().node.clone() {
             Token::Ident(n) => n,
             _ => unreachable!(),
@@ -182,10 +184,31 @@ impl Parser {
                 }
             }
 
+            // Field assignment: name.field = value  (e.g., self.x = 5)
+            Token::Dot => {
+                self.advance(); // skip '.'
+                if let Token::Ident(field) = self.peek().clone() {
+                    self.advance(); // skip field name
+                    if matches!(self.peek(), Token::Eq) {
+                        self.advance(); // skip '='
+                        let value = self.parse_expr()?;
+                        return Ok(Stmt::FieldAssign {
+                            object: Expr::Ident(name),
+                            field,
+                            value,
+                        });
+                    }
+                }
+                // Not a field assignment — backtrack to the ident and re-parse as expr
+                self.pos = ident_pos;
+                let expr = self.parse_expr()?;
+                Ok(Stmt::Expr(expr))
+            }
+
             // Anything else: treat as expression starting with this ident
             _ => {
                 // Rewind so we can re-parse as expression
-                self.pos -= 1;
+                self.pos = ident_pos;
                 let expr = self.parse_expr()?;
                 Ok(Stmt::Expr(expr))
             }
@@ -553,6 +576,42 @@ impl Parser {
         Ok(Stmt::Import { items, module })
     }
 
+    fn parse_match(&mut self) -> Result<Stmt> {
+        self.advance(); // skip 'match'
+        let expr = self.parse_expr()?;
+        self.skip_newlines();
+        self.expect(&Token::LBrace)?;
+        self.skip_newlines();
+
+        let mut cases: Vec<(Expr, Block)> = Vec::new();
+        let mut default: Option<Block> = None;
+
+        while !matches!(self.peek(), Token::RBrace | Token::EOF) {
+            if matches!(self.peek(), Token::KwCase) {
+                self.advance(); // skip 'case'
+                let pattern = self.parse_expr()?;
+                self.expect(&Token::Colon)?;
+                let body = self.parse_block()?;
+                cases.push((pattern, body));
+            } else if matches!(self.peek(), Token::KwDefault) {
+                self.advance(); // skip 'default'
+                self.expect(&Token::Colon)?;
+                default = Some(self.parse_block()?);
+            } else {
+                let sp = self.peek_spanned();
+                return Err(LatchError::UnexpectedToken {
+                    expected: "case or default".into(),
+                    found: format!("{:?}", sp.node),
+                    line: sp.line,
+                });
+            }
+            self.skip_newlines();
+        }
+        self.expect(&Token::RBrace)?;
+
+        Ok(Stmt::Match { expr, cases, default })
+    }
+
     fn parse_use(&mut self) -> Result<Stmt> {
         self.advance(); // skip 'use'
         match self.advance().node.clone() {
@@ -781,25 +840,41 @@ impl Parser {
                     self.advance();
                     let field = match self.advance().node.clone() {
                         Token::Ident(n) => n,
+                        // Allow keywords as method/field names (e.g., regex.match, set.new)
+                        Token::KwMatch   => "match".to_string(),
+                        Token::KwCase    => "case".to_string(),
+                        Token::KwDefault => "default".to_string(),
+                        Token::KwAs      => "as".to_string(),
+                        Token::KwIn      => "in".to_string(),
+                        Token::KwFor     => "for".to_string(),
+                        Token::KwIf      => "if".to_string(),
+                        Token::KwReturn  => "return".to_string(),
                         other => return Err(LatchError::UnexpectedToken {
                             expected: "field name".into(), found: format!("{other:?}"), line: self.line(),
                         }),
                     };
 
                     if matches!(self.peek(), Token::LParen) {
-                        // This is a method/module call: expr.method(args)
-                        // We only support: ident.method(args) for module calls
+                        // Method/module call: expr.method(args)
                         self.advance(); // skip (
                         let args = self.parse_args()?;
                         self.expect(&Token::RParen)?;
 
-                        if let Expr::Ident(module) = expr {
-                            expr = Expr::ModuleCall { module, method: field, args };
-                        } else {
-                            return Err(LatchError::GenericError(
-                                "Method calls are only supported on module names".into(),
-                            ));
-                        }
+                        expr = match expr {
+                            // Known module name → ModuleCall (built-in module dispatch)
+                            Expr::Ident(ref module) if matches!(module.as_str(),
+                                "fs"|"proc"|"http"|"time"|"ai"|"json"|"env"|"path"|
+                                "math"|"regex"|"hash"|"set"|"csv"|"base64") => {
+                                let module = module.clone();
+                                Expr::ModuleCall { module, method: field, args }
+                            }
+                            // Everything else → MethodCall (instance method dispatch)
+                            other => Expr::MethodCall {
+                                receiver: Box::new(other),
+                                method: field,
+                                args,
+                            },
+                        };
                     } else {
                         expr = Expr::FieldAccess { expr: Box::new(expr), field };
                     }
@@ -862,6 +937,9 @@ impl Parser {
                     self.advance();
                     let field = match self.advance().node.clone() {
                         Token::Ident(n) => n,
+                        Token::KwMatch   => "match".to_string(),
+                        Token::KwCase    => "case".to_string(),
+                        Token::KwDefault => "default".to_string(),
                         other => return Err(LatchError::UnexpectedToken {
                             expected: "field name".into(), found: format!("{other:?}"), line: self.line(),
                         }),
