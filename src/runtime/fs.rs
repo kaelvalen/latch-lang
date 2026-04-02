@@ -79,14 +79,9 @@ pub fn call(method: &str, args: Vec<Value>) -> Result<Value> {
             let path = args.first()
                 .ok_or_else(|| LatchError::ArgCountMismatch { name: "fs.mkdir".into(), expected: 1, found: 0 })?
                 .as_str()?;
-            let recursive = args.get(1).map(|v| v.is_truthy()).unwrap_or(false);
-            if recursive {
-                std::fs::create_dir_all(path)
-                    .map_err(|e| LatchError::IoError(format!("fs.mkdir(\"{}\"): {}", path, e)))?;
-            } else {
-                std::fs::create_dir(path)
-                    .map_err(|e| LatchError::IoError(format!("fs.mkdir(\"{}\"): {}", path, e)))?;
-            }
+            // Always use create_dir_all: idempotent (no error if already exists)
+            std::fs::create_dir_all(path)
+                .map_err(|e| LatchError::IoError(format!("fs.mkdir(\"{}\"): {}", path, e)))?;
             Ok(Value::Bool(true))
         }
 

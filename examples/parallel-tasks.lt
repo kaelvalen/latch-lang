@@ -64,6 +64,7 @@ for i in 0..20 {
     })
 }
 
+fs.mkdir("processed")
 processed_count := 0
 parallel item in batch_items workers=8 {
     # Simulate processing (reading, transforming, writing)
@@ -95,6 +96,7 @@ print("\n✓ All parallel tasks completed!")
 
 # Cleanup
 for file in sample_files {
-    fs.delete(file)
-    fs.delete("${file}.upper")
+    fs.remove(file)
+    fs.remove("${file}.upper")
 }
+proc.exec("rm -rf processed")
