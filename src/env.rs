@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fmt;
 use std::sync::{Arc, Mutex};
 
@@ -238,12 +238,13 @@ impl fmt::Display for Value {
 #[derive(Debug, Clone)]
 pub struct Env {
     vars: HashMap<String, Value>,
+    consts: HashSet<String>,
     parent: Option<Box<Env>>,
 }
 
 impl Env {
     pub fn new() -> Self {
-        Env { vars: HashMap::new(), parent: None }
+        Env { vars: HashMap::new(), consts: HashSet::new(), parent: None }
     }
 
     pub fn get(&self, name: &str) -> Option<&Value> {
@@ -251,19 +252,50 @@ impl Env {
             .or_else(|| self.parent.as_ref()?.get(name))
     }
 
+    /// Declare or overwrite a mutable variable in the current scope.
     pub fn set(&mut self, name: &str, val: Value) {
         self.vars.insert(name.to_string(), val);
     }
 
-    /// Reassign an already-declared variable (walks up the chain).
+    /// Declare an immutable constant in the current scope.
+    pub fn set_const(&mut self, name: &str, val: Value) {
+        self.vars.insert(name.to_string(), val);
+        self.consts.insert(name.to_string());
+    }
+
+    fn is_const(&self, name: &str) -> bool {
+        if self.consts.contains(name) { return true; }
+        self.parent.as_ref().map(|p| p.is_const(name)).unwrap_or(false)
+    }
+
+    fn has(&self, name: &str) -> bool {
+        self.vars.contains_key(name)
+            || self.parent.as_ref().map(|p| p.has(name)).unwrap_or(false)
+    }
+
+    /// Assign to a variable — walks up the chain if it already exists there,
+    /// otherwise declares in the current scope (Python-style).
     pub fn assign(&mut self, name: &str, val: Value) -> Result<()> {
+        if self.is_const(name) {
+            return Err(LatchError::GenericError(
+                format!("Cannot reassign constant '{name}'")
+            ));
+        }
         if self.vars.contains_key(name) {
             self.vars.insert(name.to_string(), val);
             Ok(())
-        } else if let Some(parent) = &mut self.parent {
-            parent.assign(name, val)
+        } else if let Some(ref mut parent) = self.parent {
+            if parent.has(name) {
+                parent.assign(name, val)
+            } else {
+                // Not found anywhere — declare in current scope
+                self.vars.insert(name.to_string(), val);
+                Ok(())
+            }
         } else {
-            Err(LatchError::UndefinedVariable(name.to_string()))
+            // Top-level scope — just declare
+            self.vars.insert(name.to_string(), val);
+            Ok(())
         }
     }
 
@@ -303,6 +335,7 @@ impl Env {
     pub fn child(self) -> Env {
         Env {
             vars: HashMap::new(),
+            consts: HashSet::new(),
             parent: Some(Box::new(self)),
         }
     }

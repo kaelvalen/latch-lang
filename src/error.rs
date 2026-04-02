@@ -74,10 +74,8 @@ pub enum LatchError {
 
     // ── Internal signals (not user-facing) ───────────────────
     ReturnSignal(crate::env::Value),
-    StopSignal(i32),
     BreakSignal,
     ContinueSignal,
-    YieldSignal(crate::env::Value),
 
     GenericError(String),
 }
@@ -199,10 +197,8 @@ impl LatchError {
             Self::IndexOutOfBounds { index, len } => format!("Index {index} out of bounds (length {len})"),
             Self::KeyNotFound(k) => format!("Key '{k}' not found in dict"),
             Self::ReturnSignal(_) => "internal return signal".into(),
-            Self::StopSignal(code) => format!("Script stopped with exit code {code}"),
             Self::BreakSignal => "internal break signal".into(),
             Self::ContinueSignal => "internal continue signal".into(),
-            Self::YieldSignal(_) => "internal yield signal".into(),
             Self::GenericError(msg) => msg.clone(),
         }
     }

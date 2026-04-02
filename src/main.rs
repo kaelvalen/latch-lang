@@ -100,11 +100,10 @@ fn main() {
 
             // Interpret
             let mut interp = Interpreter::new();
+            if let Some(parent) = std::path::Path::new(&file).parent() {
+                interp.set_script_dir(&parent.to_string_lossy());
+            }
             if let Err(e) = interp.run(ast) {
-                // stop N → clean exit with that code
-                if let LatchError::StopSignal(code) = e {
-                    std::process::exit(code);
-                }
                 print_error(&e, &file, &source);
                 std::process::exit(1);
             }
@@ -154,7 +153,7 @@ fn main() {
         }
 
         Command::Version => {
-            println!("latch v0.3.1");
+            println!("latch v0.4.2");
         }
     }
 }
@@ -162,7 +161,7 @@ fn main() {
 // ── REPL ─────────────────────────────────────────────────────
 
 fn run_repl() {
-    println!("latch v0.3.1 — interactive REPL");
+    println!("latch v0.4.2 — interactive REPL");
     println!("Type expressions or statements. Use Ctrl+D to exit.\n");
 
     let stdin = io::stdin();
@@ -221,19 +220,11 @@ fn run_repl() {
                     match interp.eval_stmt_for_repl(stmt) {
                         Ok(Some(val)) => println!("{val}"),
                         Ok(None) => {}
-                        Err(LatchError::StopSignal(code)) => {
-                            println!("[latch] stop {code}");
-                            return;
-                        }
                         Err(e) => eprintln!("{e}"),
                     }
                 }
                 _ => {
                     if let Err(e) = interp.exec_stmt_public(stmt) {
-                        if let LatchError::StopSignal(code) = e {
-                            println!("[latch] stop {code}");
-                            return;
-                        }
                         eprintln!("{e}");
                     }
                 }

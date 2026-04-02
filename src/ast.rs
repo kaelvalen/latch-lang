@@ -58,12 +58,6 @@ pub enum Expr {
         index: Box<Expr>,
     },
 
-    /// `expr or default`
-    OrDefault {
-        expr: Box<Expr>,
-        default: Box<Expr>,
-    },
-
     /// Field access like `result.stdout`
     FieldAccess {
         expr: Box<Expr>,
@@ -193,11 +187,6 @@ pub enum Stmt {
         finally_body: Option<Block>,
     },
 
-    Use(String),
-
-    /// `yield value` — for generators
-    Yield(Expr),
-
     /// Constant declaration: `const PI = 3.14`
     Const {
         name: String,
@@ -216,9 +205,6 @@ pub enum Stmt {
 
     /// `continue` — skip to the next iteration of the innermost loop
     Continue,
-
-    /// `stop 1` — exit the script with a code
-    Stop(Expr),
 
     /// Compound assignment: `x += 1`, `x -= 2`, etc.
     CompoundAssign {

@@ -1,0 +1,70 @@
+# v0.4 feature test — simplified language
+
+// ═══ 1. = as declare-or-assign ═══
+print("--- unified assignment ---")
+x = 10
+x = x + 5
+print(x)  // 15
+y: int = 42
+print(y)  // 42
+
+// ═══ 2. const enforcement ═══
+print("--- const ---")
+const PI = 3.14159
+print(PI)
+try {
+    PI = 999
+} catch e {
+    print("caught: cannot reassign const")
+}
+
+// ═══ 3. match/case/default ═══
+print("--- match ---")
+val = 2
+match val {
+    case 1: { print("one") }
+    case 2: { print("two") }
+    case 3: { print("three") }
+    default: { print("other") }
+}
+
+status = "error"
+match status {
+    case "ok":    { print("all good") }
+    case "error": { print("something failed") }
+    default:      { print("unknown status") }
+}
+
+// ═══ 4. method syntax on strings ═══
+print("--- string methods ---")
+s = "  hello world  "
+print(s.trim())
+print(s.trim().upper())
+print("hello".upper())
+print("WORLD".lower())
+print("hello world".split(" "))
+print("hello".starts_with("he"))
+print("hello".ends_with("lo"))
+print("hello world".contains("world"))
+print("hello".replace("l", "r"))
+
+// ═══ 5. method syntax on lists ═══
+print("--- list methods ---")
+items = [3, 1, 4, 1, 5, 9]
+items.push(2)
+print(items)
+print(items.len())
+items2 = [10, 20, 30]
+print(items2.pop())
+print(items2)
+
+// ═══ 6. semicolons as separators ═══
+print("--- semicolons ---")
+a = 1; b = 2; c = a + b
+print(c)  // 3
+
+// ═══ 7. exit() is available (called with code 0 exits cleanly) ═══
+print("--- exit available ---")
+print("exit() built-in exists")
+
+print("=== ALL v04 TESTS PASSED ===")

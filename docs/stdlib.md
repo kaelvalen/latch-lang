@@ -1,6 +1,6 @@
 # Latch Standard Library Reference
 
-> **Version**: 0.3.1  
+> **Version**: 0.4.2  
 > **Status**: Complete — all features documented.
 
 ---
@@ -739,7 +739,7 @@ name := user?.name ?? "anonymous"
 latch run <file.lt>     # Execute a script
 latch check <file.lt>   # Static analysis only
 latch repl              # Interactive REPL
-latch version           # Print version (v0.3.1)
+latch version           # Print version (v0.4.2)
 ```
 
 ---

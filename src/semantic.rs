@@ -132,23 +132,6 @@ impl SemanticAnalyzer {
         self.declare("replace", SymbolInfo::function(3));
         self.declare("repeat", SymbolInfo::function(2));
         
-        // String methods (str_*)
-        self.declare("str_strip", SymbolInfo::function(2));
-        self.declare("str_lstrip", SymbolInfo::function(2));
-        self.declare("str_rstrip", SymbolInfo::function(2));
-        self.declare("str_replace", SymbolInfo::function(4));
-        self.declare("str_split", SymbolInfo::function(3));
-        self.declare("str_upper", SymbolInfo::function(1));
-        self.declare("str_lower", SymbolInfo::function(1));
-        self.declare("str_find", SymbolInfo::function(2));
-        self.declare("str_rfind", SymbolInfo::function(2));
-        self.declare("str_count", SymbolInfo::function(2));
-        self.declare("str_join", SymbolInfo::function(2));
-        self.declare("str_splitlines", SymbolInfo::function(1));
-        self.declare("str_isdigit", SymbolInfo::function(1));
-        self.declare("str_isalpha", SymbolInfo::function(1));
-        self.declare("str_capitalize", SymbolInfo::function(1));
-        
         // Higher-order functions
         self.declare("sort", SymbolInfo::function(1));
         self.declare("filter", SymbolInfo::function(2));
@@ -187,6 +170,7 @@ impl SemanticAnalyzer {
         self.declare("reversed", SymbolInfo::function(1));
         self.declare("flat", SymbolInfo::function(1));
         self.declare("unique", SymbolInfo::function(1));
+        self.declare("exit", SymbolInfo::function(1));
     }
 
     // ── Statement checking ───────────────────────────────────
@@ -202,10 +186,11 @@ impl SemanticAnalyzer {
             }
 
             Stmt::Assign { name, value } => {
-                if self.resolve(name).is_none() {
-                    self.errors.push(LatchError::UndeclaredAssign(name.clone()));
-                }
                 self.check_expr(value);
+                // Declare-or-assign: if not yet declared, declare it now
+                if self.resolve(name).is_none() {
+                    self.declare(name, SymbolInfo::variable());
+                }
             }
 
             Stmt::IndexAssign { target, index, value } => {
@@ -296,27 +281,12 @@ impl SemanticAnalyzer {
                 }
             }
 
-            Stmt::Use(path) => {
-                // Check if file exists
-                if !std::path::Path::new(path).exists() {
-                    self.errors.push(LatchError::ImportNotFound(path.clone()));
-                }
-            }
-
-            Stmt::Stop(expr) => {
-                self.check_expr(expr);
-            }
-
             Stmt::Const { name, type_ann, value } => {
                 self.check_expr(value);
                 if let Some(ann) = type_ann {
                     self.check_literal_type(name, ann, value);
                 }
                 self.declare(name, SymbolInfo::constant());
-            }
-
-            Stmt::Yield(expr) => {
-                self.check_expr(expr);
             }
 
             Stmt::While { cond, body } => {
@@ -331,10 +301,10 @@ impl SemanticAnalyzer {
             Stmt::Continue => {}
 
             Stmt::CompoundAssign { name, value, .. } => {
-                if self.resolve(name).is_none() {
-                    self.errors.push(LatchError::UndeclaredAssign(name.clone()));
-                }
                 self.check_expr(value);
+                if self.resolve(name).is_none() {
+                    self.declare(name, SymbolInfo::variable());
+                }
             }
 
             Stmt::Expr(expr) => {
@@ -449,11 +419,6 @@ impl SemanticAnalyzer {
 
             Expr::UnaryOp { expr, .. } => {
                 self.check_expr(expr);
-            }
-
-            Expr::OrDefault { expr, default } => {
-                self.check_expr(expr);
-                self.check_expr(default);
             }
 
             Expr::Index { expr, index } => {
@@ -585,11 +550,6 @@ impl SemanticAnalyzer {
             }
             Expr::ModuleCall { args, .. } => {
                 for arg in args { self.check_expr(arg); }
-            }
-            // `expr |> func() or default` — the OrDefault wraps the call
-            Expr::OrDefault { expr: inner, default } => {
-                self.check_pipe_func(inner);
-                self.check_expr(default);
             }
             _ => self.check_expr(func),
         }

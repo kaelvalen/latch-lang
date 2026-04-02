@@ -80,14 +80,11 @@ impl Parser {
             Token::KwParallel => self.parse_parallel(),
             Token::KwFn       => self.parse_fn(),
             Token::KwReturn   => self.parse_return(),
-            Token::KwStop     => self.parse_stop(),
             Token::KwTry      => self.parse_try(),
-            Token::KwUse      => self.parse_use(),
             Token::KwWhile    => self.parse_while(),
             Token::KwBreak    => { self.advance(); Ok(Stmt::Break) },
             Token::KwContinue => { self.advance(); Ok(Stmt::Continue) },
             Token::KwConst    => self.parse_const(),
-            Token::KwYield    => self.parse_yield(),
             Token::KwClass    => self.parse_class(),
             Token::KwExport   => self.parse_export(),
             Token::KwImport   => self.parse_import(),
@@ -114,25 +111,30 @@ impl Parser {
         };
 
         match self.peek().clone() {
-            Token::ColonEq => {
-                self.advance(); // skip :=
+            // Both := and = mean declare-or-assign (no distinction)
+            Token::ColonEq | Token::Eq => {
+                self.advance();
                 let value = self.parse_expr()?;
-                Ok(Stmt::Let { name, type_ann: None, value })
+                Ok(Stmt::Assign { name, value })
             }
 
             Token::Colon => {
-                // name: type := value
+                // name: type := value  (type-annotated declaration)
                 self.advance(); // skip :
                 let type_ann = self.parse_type()?;
-                self.expect(&Token::ColonEq)?;
+                // Accept both := and = after type annotation
+                if self.peek() == &Token::ColonEq || self.peek() == &Token::Eq {
+                    self.advance();
+                } else {
+                    let sp = self.peek_spanned().clone();
+                    return Err(LatchError::UnexpectedToken {
+                        expected: "':=' or '='".into(),
+                        found: format!("{:?}", sp.node),
+                        line: sp.line,
+                    });
+                }
                 let value = self.parse_expr()?;
                 Ok(Stmt::Let { name, type_ann: Some(type_ann), value })
-            }
-
-            Token::Eq => {
-                self.advance(); // skip =
-                let value = self.parse_expr()?;
-                Ok(Stmt::Assign { name, value })
             }
 
             // Compound assignments: +=, -=, *=, /=, %=
@@ -381,12 +383,6 @@ impl Parser {
         Ok(Stmt::Return(expr))
     }
 
-    fn parse_stop(&mut self) -> Result<Stmt> {
-        self.advance(); // skip 'stop'
-        let expr = self.parse_expr()?;
-        Ok(Stmt::Stop(expr))
-    }
-
     fn parse_try(&mut self) -> Result<Stmt> {
         self.advance(); // skip 'try'
         let body = self.parse_block()?;
@@ -440,12 +436,6 @@ impl Parser {
         self.expect(&Token::Eq)?;
         let value = self.parse_expr()?;
         Ok(Stmt::Const { name, type_ann, value })
-    }
-
-    fn parse_yield(&mut self) -> Result<Stmt> {
-        self.advance(); // skip 'yield'
-        let expr = self.parse_expr()?;
-        Ok(Stmt::Yield(expr))
     }
 
     fn parse_class(&mut self) -> Result<Stmt> {
@@ -612,16 +602,6 @@ impl Parser {
         Ok(Stmt::Match { expr, cases, default })
     }
 
-    fn parse_use(&mut self) -> Result<Stmt> {
-        self.advance(); // skip 'use'
-        match self.advance().node.clone() {
-            Token::Str(path) => Ok(Stmt::Use(path)),
-            other => Err(LatchError::UnexpectedToken {
-                expected: "string path".into(), found: format!("{other:?}"), line: self.line(),
-            }),
-        }
-    }
-
     fn parse_block(&mut self) -> Result<Block> {
         self.skip_newlines();
         self.expect(&Token::LBrace)?;
@@ -644,7 +624,7 @@ impl Parser {
     fn parse_or_default(&mut self) -> Result<Expr> {
         let expr = self.parse_pipe()?;
 
-        // Handle ternary operator: `cond ? true_expr : false_expr`
+        // Ternary operator: `cond ? true_expr : false_expr`
         if matches!(self.peek(), Token::Question) {
             self.advance(); // skip '?'
             let true_branch = self.parse_or_default()?;
@@ -654,16 +634,6 @@ impl Parser {
                 cond: Box::new(expr),
                 true_branch: Box::new(true_branch),
                 false_branch: Box::new(false_branch),
-            });
-        }
-
-        // Handle `or` default: `expr or default`
-        if matches!(self.peek(), Token::KwOr) {
-            self.advance();
-            let default = self.parse_pipe()?;
-            return Ok(Expr::OrDefault {
-                expr: Box::new(expr),
-                default: Box::new(default),
             });
         }
 

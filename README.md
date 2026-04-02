@@ -58,7 +58,7 @@ After install, verify:
 
 ```sh
 latch version
-# → latch v0.3.1
+# → latch v0.4.2
 ```
 
 ## Quick Start
@@ -277,7 +277,7 @@ See the [examples/](examples/) directory:
 
 - [`hello.lt`](examples/hello.lt) — Feature showcase
 - [`ci-check.lt`](examples/ci-check.lt) — CI gate example
-- [`v02_test.lt`](examples/v02_test.lt) — v0.3.1 feature tests
+- [`v02_test.lt`](examples/v02_test.lt) — v0.4.2 feature tests
 
 ## Full Reference
 

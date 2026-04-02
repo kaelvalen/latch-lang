@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 
 use rayon::prelude::*;
@@ -15,15 +15,23 @@ use crate::ast::Type;
 /// Tree-walk interpreter — executes a checked AST.
 pub struct Interpreter {
     pub env: Env,
+    /// Tracks modules currently being loaded (for circular import detection).
+    loading: HashSet<String>,
+    /// Script file directory (for relative imports).
+    script_dir: Option<String>,
 }
 
 impl Interpreter {
     pub fn new() -> Self {
-        Interpreter { env: Env::new() }
+        Interpreter { env: Env::new(), loading: HashSet::new(), script_dir: None }
     }
 
     pub fn with_env(env: Env) -> Self {
-        Interpreter { env }
+        Interpreter { env, loading: HashSet::new(), script_dir: None }
+    }
+
+    pub fn set_script_dir(&mut self, dir: &str) {
+        self.script_dir = Some(dir.to_string());
     }
 
     pub fn run(&mut self, stmts: Vec<Stmt>) -> Result<()> {
@@ -245,31 +253,9 @@ impl Interpreter {
                 catch_result?;
             }
 
-            Stmt::Use(path) => {
-                let source = std::fs::read_to_string(&path)
-                    .map_err(|e| LatchError::IoError(format!("{path}: {e}")))?;
-                let mut lexer = Lexer::new(&source);
-                let tokens = lexer.tokenize()?;
-                let mut parser = Parser::new(tokens);
-                let ast = parser.parse_program()?;
-                // Run imported file in the current environment
-                self.run(ast)?;
-            }
-
             Stmt::Const { name, type_ann: _, value } => {
                 let val = self.eval_expr(value)?;
-                self.env.set(&name, val);
-            }
-
-            Stmt::Yield(expr) => {
-                let val = self.eval_expr(expr)?;
-                return Err(LatchError::YieldSignal(val));
-            }
-
-            Stmt::Stop(expr) => {
-                let val = self.eval_expr(expr)?;
-                let code = val.as_int().unwrap_or(1) as i32;
-                return Err(LatchError::StopSignal(code));
+                self.env.set_const(&name, val);
             }
 
             Stmt::While { cond, body } => {
@@ -339,16 +325,37 @@ impl Interpreter {
             }
 
             Stmt::Import { items, module } => {
-                // Load the module file and run it in a fresh interpreter
-                let path = if module.ends_with(".lt") { module.clone() } else { format!("{}.lt", module) };
+                // Resolve path relative to script directory
+                let base = self.script_dir.clone().unwrap_or_else(|| ".".to_string());
+                let filename = if module.ends_with(".lt") { module.clone() } else { format!("{}.lt", module) };
+                let path = format!("{base}/{filename}");
+                let canon = std::fs::canonicalize(&path)
+                    .map(|p| p.to_string_lossy().to_string())
+                    .unwrap_or(path.clone());
+
+                // Circular import detection
+                if self.loading.contains(&canon) {
+                    return Err(LatchError::GenericError(
+                        format!("Circular import detected: '{module}'")
+                    ));
+                }
+
                 let source = std::fs::read_to_string(&path)
                     .map_err(|e| LatchError::IoError(format!("{path}: {e}")))?;
                 let mut lexer = Lexer::new(&source);
                 let tokens = lexer.tokenize()?;
                 let mut parser = Parser::new(tokens);
                 let ast = parser.parse_program()?;
+
                 let mut mod_interp = Interpreter::new();
+                mod_interp.loading = self.loading.clone();
+                mod_interp.loading.insert(canon);
+                // Module scripts resolve relative to their own location
+                if let Some(parent) = std::path::Path::new(&path).parent() {
+                    mod_interp.script_dir = Some(parent.to_string_lossy().to_string());
+                }
                 mod_interp.run(ast)?;
+
                 // Extract exported names
                 for item in items {
                     let export_key = format!("__export_{}", item);
@@ -609,13 +616,6 @@ impl Interpreter {
                         expected: "dict, instance, response, or process result".into(),
                         found: val.type_name().into(),
                     }),
-                }
-            }
-
-            Expr::OrDefault { expr, default } => {
-                match self.eval_expr(*expr) {
-                    Ok(val) => Ok(val),
-                    Err(_) => self.eval_expr(*default),
                 }
             }
 
@@ -936,9 +936,15 @@ impl Interpreter {
 
     fn int_binop(&self, op: BinOp, a: i64, b: i64) -> Result<Value> {
         match op {
-            BinOp::Add   => Ok(Value::Int(a + b)),
-            BinOp::Sub   => Ok(Value::Int(a - b)),
-            BinOp::Mul   => Ok(Value::Int(a * b)),
+            BinOp::Add   => a.checked_add(b)
+                .map(Value::Int)
+                .ok_or(LatchError::GenericError("integer overflow".into())),
+            BinOp::Sub   => a.checked_sub(b)
+                .map(Value::Int)
+                .ok_or(LatchError::GenericError("integer overflow".into())),
+            BinOp::Mul   => a.checked_mul(b)
+                .map(Value::Int)
+                .ok_or(LatchError::GenericError("integer overflow".into())),
             BinOp::Div   => {
                 if b == 0 { return Err(LatchError::DivisionByZero); }
                 Ok(Value::Int(a / b))
@@ -991,9 +997,26 @@ impl Interpreter {
         match name {
             "print" => {
                 if let Some(val) = args.first() {
-                    println!("{val}");
+                    // If instance has a to_str() method, call it
+                    if let Value::Instance { .. } = val {
+                        match self.call_method(val.clone(), "to_str", vec![]) {
+                            Ok(Value::Str(s)) => { println!("{s}"); }
+                            _ => { println!("{val}"); }
+                        }
+                    } else {
+                        println!("{val}");
+                    }
+                } else {
+                    println!();
                 }
                 return Ok(Value::Null);
+            }
+
+            "exit" => {
+                let code = args.first()
+                    .and_then(|v| v.as_int().ok())
+                    .unwrap_or(0) as i32;
+                std::process::exit(code);
             }
             "len" => {
                 return match args.first() {
@@ -1523,238 +1546,6 @@ impl Interpreter {
                 }
                 return Err(LatchError::ArgCountMismatch {
                     name: "replace".into(), expected: 3, found: args.len(),
-                });
-            }
-
-            // repeat(string, count) — repeats string count times
-            // str_find(string, substring) - find index of substring, -1 if not found
-            "str_find" => {
-                if args.len() == 2 {
-                    let s = args[0].as_str()?;
-                    let sub = args[1].as_str()?;
-                    return Ok(Value::Int(s.find(sub).map(|i| i as i64).unwrap_or(-1)));
-                }
-                return Err(LatchError::ArgCountMismatch {
-                    name: "str_find".into(), expected: 2, found: args.len(),
-                });
-            }
-
-            // str_rfind(string, substring) - find last index of substring
-            "str_rfind" => {
-                if args.len() == 2 {
-                    let s = args[0].as_str()?;
-                    let sub = args[1].as_str()?;
-                    return Ok(Value::Int(s.rfind(sub).map(|i| i as i64).unwrap_or(-1)));
-                }
-                return Err(LatchError::ArgCountMismatch {
-                    name: "str_rfind".into(), expected: 2, found: args.len(),
-                });
-            }
-
-            // str_count(string, substring) - count occurrences
-            "str_count" => {
-                if args.len() == 2 {
-                    let s = args[0].as_str()?;
-                    let sub = args[1].as_str()?;
-                    let count = s.matches(sub).count();
-                    return Ok(Value::Int(count as i64));
-                }
-                return Err(LatchError::ArgCountMismatch {
-                    name: "str_count".into(), expected: 2, found: args.len(),
-                });
-            }
-
-            // str_join(list, separator) - join list elements with separator
-            "str_join" => {
-                if args.len() == 2 {
-                    if let Value::List(list) = &args[0] {
-                        let guard = list.lock().unwrap();
-                        let sep = args[1].as_str()?;
-                        let parts: Vec<String> = guard.iter()
-                            .map(|v| format!("{}", v))
-                            .collect();
-                        return Ok(Value::Str(parts.join(sep)));
-                    }
-                }
-                return Err(LatchError::TypeMismatch {
-                    expected: "list, string".into(),
-                    found: "invalid args".into(),
-                });
-            }
-
-            // str_splitlines(string) - split on newlines
-            "str_splitlines" => {
-                if args.len() == 1 {
-                    let s = args[0].as_str()?;
-                    let lines: Vec<Value> = s.lines()
-                        .map(|line| Value::Str(line.to_string()))
-                        .collect();
-                    return Ok(Value::new_list(lines));
-                }
-                return Err(LatchError::ArgCountMismatch {
-                    name: "str_splitlines".into(), expected: 1, found: args.len(),
-                });
-            }
-
-            // str_isdigit(string) - check if all characters are digits
-            "str_isdigit" => {
-                if args.len() == 1 {
-                    let s = args[0].as_str()?;
-                    return Ok(Value::Bool(s.chars().all(|c| c.is_ascii_digit())));
-                }
-                return Err(LatchError::ArgCountMismatch {
-                    name: "str_isdigit".into(), expected: 1, found: args.len(),
-                });
-            }
-
-            // str_isalpha(string) - check if all characters are alphabetic
-            "str_isalpha" => {
-                if args.len() == 1 {
-                    let s = args[0].as_str()?;
-                    return Ok(Value::Bool(s.chars().all(|c| c.is_alphabetic())));
-                }
-                return Err(LatchError::ArgCountMismatch {
-                    name: "str_isalpha".into(), expected: 1, found: args.len(),
-                });
-            }
-
-            // str_capitalize(string) - capitalize first character
-            "str_capitalize" => {
-                if args.len() == 1 {
-                    let s = args[0].as_str()?;
-                    let mut result = String::new();
-                    let mut chars = s.chars();
-                    if let Some(first) = chars.next() {
-                        result.push(first.to_ascii_uppercase());
-                        result.extend(chars.map(|c| c.to_ascii_lowercase()));
-                    }
-                    return Ok(Value::Str(result));
-                }
-                return Err(LatchError::ArgCountMismatch {
-                    name: "str_capitalize".into(), expected: 1, found: args.len(),
-                });
-            }
-            "repeat" => {
-                if args.len() == 2 {
-                    let s = args[0].as_str()?.to_string();
-                    let count = args[1].as_int()?;
-                    if count < 0 {
-                        return Err(LatchError::GenericError("repeat count cannot be negative".into()));
-                    }
-                    return Ok(Value::Str(s.repeat(count as usize)));
-                }
-                return Err(LatchError::ArgCountMismatch {
-                    name: "repeat".into(), expected: 2, found: args.len(),
-                });
-            }
-
-            // str_strip(string, chars?) - strip whitespace or specified chars
-            "str_strip" => {
-                if args.len() >= 1 {
-                    let s = args[0].as_str()?;
-                    let result = if args.len() >= 2 {
-                        let chars = args[1].as_str()?;
-                        s.trim_matches(|c: char| chars.contains(c)).to_string()
-                    } else {
-                        s.trim().to_string()
-                    };
-                    return Ok(Value::Str(result));
-                }
-                return Err(LatchError::ArgCountMismatch {
-                    name: "str_strip".into(), expected: 1, found: args.len(),
-                });
-            }
-
-            // str_lstrip(string, chars?) - strip from left
-            "str_lstrip" => {
-                if args.len() >= 1 {
-                    let s = args[0].as_str()?;
-                    let result = if args.len() >= 2 {
-                        let chars = args[1].as_str()?;
-                        s.trim_start_matches(|c: char| chars.contains(c)).to_string()
-                    } else {
-                        s.trim_start().to_string()
-                    };
-                    return Ok(Value::Str(result));
-                }
-                return Err(LatchError::ArgCountMismatch {
-                    name: "str_lstrip".into(), expected: 1, found: args.len(),
-                });
-            }
-
-            // str_rstrip(string, chars?) - strip from right
-            "str_rstrip" => {
-                if args.len() >= 1 {
-                    let s = args[0].as_str()?;
-                    let result = if args.len() >= 2 {
-                        let chars = args[1].as_str()?;
-                        s.trim_end_matches(|c: char| chars.contains(c)).to_string()
-                    } else {
-                        s.trim_end().to_string()
-                    };
-                    return Ok(Value::Str(result));
-                }
-                return Err(LatchError::ArgCountMismatch {
-                    name: "str_rstrip".into(), expected: 1, found: args.len(),
-                });
-            }
-
-            // str_replace(string, old, new, count?) - replace with optional count
-            "str_replace" => {
-                if args.len() >= 3 {
-                    let s = args[0].as_str()?;
-                    let old = args[1].as_str()?;
-                    let new = args[2].as_str()?;
-                    let result = if args.len() >= 4 {
-                        let count = args[3].as_int()? as usize;
-                        s.replacen(old, new, count)
-                    } else {
-                        s.replace(old, new)
-                    };
-                    return Ok(Value::Str(result));
-                }
-                return Err(LatchError::ArgCountMismatch {
-                    name: "str_replace".into(), expected: 3, found: args.len(),
-                });
-            }
-
-            // str_split(string, delimiter, maxsplit?) - split with optional max
-            "str_split" => {
-                if args.len() >= 2 {
-                    let s = args[0].as_str()?;
-                    let delim = args[1].as_str()?;
-                    let parts: Vec<Value> = if args.len() >= 3 {
-                        let maxsplit = args[2].as_int()? as usize;
-                        s.splitn(maxsplit + 1, delim).map(|p| Value::Str(p.to_string())).collect()
-                    } else {
-                        s.split(delim).map(|p| Value::Str(p.to_string())).collect()
-                    };
-                    return Ok(Value::new_list(parts));
-                }
-                return Err(LatchError::ArgCountMismatch {
-                    name: "str_split".into(), expected: 2, found: args.len(),
-                });
-            }
-
-            // str_upper(string) - uppercase
-            "str_upper" => {
-                if args.len() == 1 {
-                    let s = args[0].as_str()?;
-                    return Ok(Value::Str(s.to_uppercase()));
-                }
-                return Err(LatchError::ArgCountMismatch {
-                    name: "str_upper".into(), expected: 1, found: args.len(),
-                });
-            }
-
-            // str_lower(string) - lowercase
-            "str_lower" => {
-                if args.len() == 1 {
-                    let s = args[0].as_str()?;
-                    return Ok(Value::Str(s.to_lowercase()));
-                }
-                return Err(LatchError::ArgCountMismatch {
-                    name: "str_lower".into(), expected: 1, found: args.len(),
                 });
             }
 
