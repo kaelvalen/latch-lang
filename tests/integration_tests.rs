@@ -39,3 +39,15 @@ fn test_typechecker_and_check() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("OK — no errors found."));
 }
+
+#[test]
+fn test_vm_disassembler() {
+    use latch_lang::ast::Stmt;
+    use latch_lang::vm::Compiler;
+
+    let stmts = vec![Stmt::Break];
+    let compiler = Compiler::new();
+    if let Ok(chunk) = compiler.compile(&stmts) {
+        chunk.disassemble("test_chunk");
+    }
+}

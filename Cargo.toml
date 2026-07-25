@@ -16,6 +16,10 @@ exclude     = ["target/", "examples/error_test.lt", "examples/stop_test.lt", "ex
 name = "latch"
 path = "src/main.rs"
 
+[lib]
+name = "latch_lang"
+path = "src/lib.rs"
+
 [dependencies]
 rayon      = "1.8"
 reqwest    = { version = "0.11", default-features = false, features = ["blocking", "json", "rustls-tls"] }

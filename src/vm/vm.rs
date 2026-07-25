@@ -28,12 +28,16 @@ impl VM {
                 break;
             }
 
-            let op = self.chunk.code[self.ip].clone();
-            self.ip += 1;
+            let byte = self.read_byte();
+            let op = match OpCode::from_u8(byte) {
+                Some(o) => o,
+                None => return Err(LatchError::GenericError(format!("Invalid opcode 0x{byte:02x} at ip={}", self.ip - 1))),
+            };
 
             match op {
-                OpCode::OpConstant(idx) => {
-                    let val = self.chunk.constants[idx].clone();
+                OpCode::OpConstant => {
+                    let idx = self.read_u16();
+                    let val = self.chunk.constants[idx as usize].clone();
                     self.push(val);
                 }
 
@@ -182,14 +186,16 @@ impl VM {
                     }
                 }
 
-                OpCode::OpDefineGlobal(idx) => {
-                    let name = self.chunk.constants[idx].as_str()?.to_string();
+                OpCode::OpDefineGlobal => {
+                    let idx = self.read_u16();
+                    let name = self.chunk.constants[idx as usize].as_str()?.to_string();
                     let val = self.pop()?;
                     self.globals.insert(name, val);
                 }
 
-                OpCode::OpGetGlobal(idx) => {
-                    let name = self.chunk.constants[idx].as_str()?;
+                OpCode::OpGetGlobal => {
+                    let idx = self.read_u16();
+                    let name = self.chunk.constants[idx as usize].as_str()?;
                     if let Some(val) = self.globals.get(name) {
                         self.push(val.clone());
                     } else {
@@ -197,8 +203,9 @@ impl VM {
                     }
                 }
 
-                OpCode::OpSetGlobal(idx) => {
-                    let name = self.chunk.constants[idx].as_str()?.to_string();
+                OpCode::OpSetGlobal => {
+                    let idx = self.read_u16();
+                    let name = self.chunk.constants[idx as usize].as_str()?.to_string();
                     let val = self.peek(0)?.clone();
                     if self.globals.contains_key(&name) {
                         self.globals.insert(name, val);
@@ -207,28 +214,33 @@ impl VM {
                     }
                 }
 
-                OpCode::OpGetLocal(slot) => {
+                OpCode::OpGetLocal => {
+                    let slot = self.read_u16() as usize;
                     let val = self.stack[slot].clone();
                     self.push(val);
                 }
 
-                OpCode::OpSetLocal(slot) => {
+                OpCode::OpSetLocal => {
+                    let slot = self.read_u16() as usize;
                     let val = self.peek(0)?.clone();
                     self.stack[slot] = val;
                 }
 
-                OpCode::OpJump(target) => {
+                OpCode::OpJump => {
+                    let target = self.read_u16() as usize;
                     self.ip = target;
                 }
 
-                OpCode::OpJumpIfFalse(target) => {
+                OpCode::OpJumpIfFalse => {
+                    let target = self.read_u16() as usize;
                     let condition = self.peek(0)?;
                     if !condition.is_truthy() {
                         self.ip = target;
                     }
                 }
 
-                OpCode::OpLoop(target) => {
+                OpCode::OpLoop => {
+                    let target = self.read_u16() as usize;
                     self.ip = target;
                 }
 
@@ -236,7 +248,8 @@ impl VM {
                     self.pop()?;
                 }
 
-                OpCode::OpList(count) => {
+                OpCode::OpList => {
+                    let count = self.read_u16() as usize;
                     let mut items = Vec::with_capacity(count);
                     for _ in 0..count {
                         items.push(self.pop()?);
@@ -245,7 +258,8 @@ impl VM {
                     self.push(Value::List(Arc::new(Mutex::new(items))));
                 }
 
-                OpCode::OpMap(count) => {
+                OpCode::OpMap => {
+                    let count = self.read_u16() as usize;
                     let mut map = HashMap::new();
                     for _ in 0..count {
                         let val = self.pop()?;
@@ -294,6 +308,18 @@ impl VM {
         }
 
         Ok(Value::Null)
+    }
+
+    fn read_byte(&mut self) -> u8 {
+        let b = self.chunk.code[self.ip];
+        self.ip += 1;
+        b
+    }
+
+    fn read_u16(&mut self) -> u16 {
+        let b1 = self.read_byte();
+        let b2 = self.read_byte();
+        u16::from_be_bytes([b1, b2])
     }
 
     fn push(&mut self, val: Value) {
