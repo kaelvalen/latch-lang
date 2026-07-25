@@ -128,17 +128,17 @@ impl Resolver {
                 Ok(HirStmt::LetGlobal { id, value: val })
             }
 
-            _ => Ok(HirStmt::Expr(HirExpr::Constant(Value::Null))),
+            _ => Ok(HirStmt::Expr(HirExpr::Constant(HirLiteral::Null))),
         }
     }
 
     fn resolve_expr(&mut self, expr: &Expr) -> Result<HirExpr> {
         match expr {
-            Expr::Int(n)   => Ok(HirExpr::Constant(Value::Int(*n))),
-            Expr::Float(f) => Ok(HirExpr::Constant(Value::Float(*f))),
-            Expr::Bool(b)  => Ok(HirExpr::Constant(Value::Bool(*b))),
-            Expr::Str(s)   => Ok(HirExpr::Constant(Value::Str(s.clone()))),
-            Expr::Null     => Ok(HirExpr::Constant(Value::Null)),
+            Expr::Int(n)   => Ok(HirExpr::Constant(HirLiteral::Int(*n))),
+            Expr::Float(f) => Ok(HirExpr::Constant(HirLiteral::Float(*f))),
+            Expr::Bool(b)  => Ok(HirExpr::Constant(HirLiteral::Bool(*b))),
+            Expr::Str(s)   => Ok(HirExpr::Constant(HirLiteral::Str(s.clone()))),
+            Expr::Null     => Ok(HirExpr::Constant(HirLiteral::Null)),
 
             Expr::Ident(name) => {
                 if let Some(id) = self.resolve_local(name) {
@@ -185,7 +185,7 @@ impl Resolver {
                 })
             }
 
-            _ => Ok(HirExpr::Constant(Value::Null)),
+            _ => Ok(HirExpr::Constant(HirLiteral::Null)),
         }
     }
 

@@ -34,6 +34,27 @@ impl VM {
         }
     }
 
+    pub fn alloc_function(&self, arity: usize, chunk: Chunk, name: String) -> crate::env::ObjRef<ObjFunction> {
+        self.gc.track_alloc(std::mem::size_of::<ObjFunction>());
+        Arc::new(ObjFunction {
+            header: crate::env::ObjHeader::new(crate::env::ObjKind::Function),
+            arity,
+            chunk,
+            name,
+            upvalue_count: 0,
+        })
+    }
+
+    pub fn alloc_closure(&self, function: crate::env::ObjRef<ObjFunction>, upvalues: Vec<Arc<Mutex<Value>>>) -> crate::env::ObjRef<ObjClosure> {
+        self.gc.track_alloc(std::mem::size_of::<ObjClosure>());
+        Arc::new(ObjClosure::new(function, upvalues))
+    }
+
+    pub fn alloc_class(&self, name: impl Into<String>) -> crate::env::ObjRef<crate::env::ObjClass> {
+        self.gc.track_alloc(std::mem::size_of::<crate::env::ObjClass>());
+        Arc::new(crate::env::ObjClass::new(name))
+    }
+
     pub fn new_with_chunk(chunk: Chunk) -> Self {
         let script_fn = Arc::new(ObjFunction {
             header: crate::env::ObjHeader::new(crate::env::ObjKind::Function),

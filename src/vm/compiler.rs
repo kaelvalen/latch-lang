@@ -158,8 +158,15 @@ impl Compiler {
 
     fn compile_expr(&mut self, expr: &HirExpr) -> Result<()> {
         match expr {
-            HirExpr::Constant(val) => {
-                self.emit_constant(val.clone(), 0);
+            HirExpr::Constant(lit) => {
+                let val = match lit {
+                    HirLiteral::Int(n) => Value::Int(*n),
+                    HirLiteral::Float(f) => Value::Float(*f),
+                    HirLiteral::Bool(b) => Value::Bool(*b),
+                    HirLiteral::Str(s) => Value::Str(s.clone()),
+                    HirLiteral::Null => Value::Null,
+                };
+                self.emit_constant(val, 0);
             }
 
             HirExpr::Local(id) => {

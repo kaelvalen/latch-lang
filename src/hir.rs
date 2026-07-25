@@ -1,5 +1,3 @@
-use crate::env::Value;
-
 /// Strongly-Typed Index Identifiers for Compile-Time Type Safety
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct LocalId(pub u32);
@@ -19,6 +17,16 @@ pub struct UpvalueId(pub u32);
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ModuleId(pub u32);
 
+/// Independent HIR Literals (Zero Runtime `Value` Dependencies)
+#[derive(Debug, Clone, PartialEq)]
+pub enum HirLiteral {
+    Int(i64),
+    Float(f64),
+    Bool(bool),
+    Str(String),
+    Null,
+}
+
 /// Independent HIR Binary Operators (Zero AST Dependencies)
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HirOp {
@@ -36,10 +44,10 @@ pub enum HirOp {
 }
 
 /// Standalone High-Level Intermediate Representation (HIR)
-/// Pure resolved instructions operating on ID slots — zero strings or AST nodes.
+/// Pure resolved instructions operating on ID slots — zero strings, AST nodes, or runtime Values.
 #[derive(Debug, Clone, PartialEq)]
 pub enum HirExpr {
-    Constant(Value),
+    Constant(HirLiteral),
     Local(LocalId),
     Global(GlobalId),
     Upvalue(UpvalueId),
