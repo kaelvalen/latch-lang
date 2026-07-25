@@ -80,3 +80,39 @@ fn test_optimizer_constant_folding() {
         panic!("Constant folding failed!");
     }
 }
+
+#[test]
+fn test_execution_abi_contract() {
+    use latch_lang::ast::{Expr, Stmt, BinOp};
+    use latch_lang::vm::{Compiler, VM};
+
+    // Test ABI execution: let a = 15; let b = 25; let c = a + b;
+    let stmts = vec![
+        Stmt::Let {
+            name: "a".into(),
+            value: Expr::Int(15),
+            type_ann: None,
+        },
+        Stmt::Let {
+            name: "b".into(),
+            value: Expr::Int(25),
+            type_ann: None,
+        },
+        Stmt::Let {
+            name: "c".into(),
+            value: Expr::BinOp {
+                op: BinOp::Add,
+                left: Box::new(Expr::Ident("a".into())),
+                right: Box::new(Expr::Ident("b".into())),
+            },
+            type_ann: None,
+        },
+        Stmt::Return(Expr::Ident("c".into())),
+    ];
+
+    let compiler = Compiler::new();
+    let chunk = compiler.compile(&stmts).expect("Compilation failed");
+    let mut vm = VM::new(chunk);
+    let result = vm.run().expect("VM execution failed");
+    assert_eq!(result.as_int().unwrap(), 40);
+}
