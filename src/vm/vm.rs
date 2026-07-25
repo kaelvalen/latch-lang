@@ -35,10 +35,13 @@ pub struct CallFrame {
     pub slots: usize,
 }
 
+use super::gc::GcState;
+
 pub struct VM {
     frames: Vec<CallFrame>,
     stack: Vec<Value>,
     globals: Vec<Global>,
+    pub gc: GcState,
 }
 
 impl VM {
@@ -53,6 +56,7 @@ impl VM {
             frames: vec![frame],
             stack: Vec::with_capacity(256),
             globals: Vec::new(),
+            gc: GcState::new(),
         }
     }
 
