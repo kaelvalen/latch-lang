@@ -130,6 +130,26 @@ impl ObjModule {
     }
 }
 
+/// First-class Native C/Rust Function Object in the VM.
+#[derive(Clone)]
+pub struct ObjNative {
+    pub header: ObjHeader,
+    pub name: String,
+    pub function: fn(&[Value]) -> Result<Value>,
+}
+
+impl PartialEq for ObjNative {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name
+    }
+}
+
+impl fmt::Debug for ObjNative {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "<native fn {}>", self.name)
+    }
+}
+
 /// Runtime value – the result of evaluating any expression.
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
@@ -142,6 +162,7 @@ pub enum Value {
     Map(Arc<Mutex<HashMap<String, Value>>>),
     Function(Arc<ObjFunction>),
     Closure(Arc<ObjClosure>),
+    Native(Arc<ObjNative>),
     Fn {
         params: Vec<Param>,
         body: Block,
@@ -279,6 +300,7 @@ impl Value {
             Value::Fn { .. }         => "fn",
             Value::Function(_)       => "fn",
             Value::Closure(_)        => "fn",
+            Value::Native(_)         => "native_fn",
             Value::ProcessResult { .. } => "process",
             Value::HttpResponse { .. }  => "response",
             Value::Class { .. }      => "class",
@@ -427,6 +449,7 @@ impl PartialEq for Value {
             }
             (Value::Function(a), Value::Function(b)) => Arc::ptr_eq(a, b) || a == b,
             (Value::Closure(a), Value::Closure(b)) => Arc::ptr_eq(a, b) || a == b,
+            (Value::Native(a), Value::Native(b)) => Arc::ptr_eq(a, b) || a == b,
             (Value::Class { name: na, .. }, Value::Class { name: nb, .. }) => na == nb,
             (Value::Instance { class_name: ca, fields: fa, .. }, Value::Instance { class_name: cb, fields: fb, .. }) => {
                 if ca != cb { return false; }
@@ -470,6 +493,7 @@ impl fmt::Display for Value {
             Value::Fn { .. } => write!(f, "<fn>"),
             Value::Function(func) => write!(f, "<fn {}>", func.name),
             Value::Closure(c) => write!(f, "<fn {}>", c.function.name),
+            Value::Native(n) => write!(f, "<native fn {}>", n.name),
             Value::Class { name, .. } => write!(f, "<class {name}>"),
             Value::Instance { class_name, fields, .. } => {
                 let guard = fields.lock().unwrap();

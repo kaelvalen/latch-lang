@@ -304,6 +304,16 @@ impl VM {
                             };
                             self.frames.push(frame);
                         }
+                        Value::Native(native) => {
+                            let mut args = Vec::with_capacity(arg_count);
+                            for _ in 0..arg_count {
+                                args.push(self.pop()?);
+                            }
+                            args.reverse();
+                            self.pop()?; // Pop native callable
+                            let res = (native.function)(&args)?;
+                            self.push(res);
+                        }
                         _ => return Err(LatchError::GenericError("Can only call functions".into())),
                     }
                 }
