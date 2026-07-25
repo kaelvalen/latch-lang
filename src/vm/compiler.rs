@@ -219,6 +219,30 @@ impl Compiler {
                 self.emit_opcode(OpCode::OpCall, 0);
                 self.emit_u16(argc as u16, 0);
             }
+
+            HirExpr::List(items) => {
+                let count = items.len();
+                for item in items {
+                    self.compile_expr(item)?;
+                }
+                self.emit_opcode(OpCode::OpList, 0);
+                self.emit_u16(count as u16, 0);
+            }
+
+            HirExpr::Map(pairs) => {
+                let count = pairs.len();
+                for (k, v) in pairs {
+                    self.compile_expr(k)?;
+                    self.compile_expr(v)?;
+                }
+                self.emit_opcode(OpCode::OpMap, 0);
+                self.emit_u16(count as u16, 0);
+            }
+
+            HirExpr::Print(expr) => {
+                self.compile_expr(expr)?;
+                self.emit_opcode(OpCode::OpPrint, 0);
+            }
         }
         Ok(())
     }

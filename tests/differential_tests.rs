@@ -9,23 +9,21 @@ fn run_tree_walk(source: &str) -> String {
     let mut lexer = Lexer::new(source);
     let tokens = lexer.tokenize().expect("Lexer error");
     let mut parser = Parser::new(tokens);
-    let stmts = parser.parse().expect("Parser error");
+    let stmts = parser.parse_program().expect("Parser error");
     let mut interpreter = Interpreter::new();
 
-    let mut result_str = String::new();
-    for stmt in stmts {
-        if let Ok(val) = interpreter.eval_stmt(&stmt) {
-            result_str.push_str(&format!("{val}\n"));
-        }
+    match interpreter.run(stmts) {
+        Err(latch_lang::error::LatchError::ReturnSignal(val)) => format!("{val}\n"),
+        Ok(()) => "null\n".into(),
+        Err(e) => format!("Error: {e}\n"),
     }
-    result_str
 }
 
 fn run_bytecode_vm(source: &str) -> String {
     let mut lexer = Lexer::new(source);
     let tokens = lexer.tokenize().expect("Lexer error");
     let mut parser = Parser::new(tokens);
-    let stmts = parser.parse().expect("Parser error");
+    let stmts = parser.parse_program().expect("Parser error");
 
     let mut resolver = Resolver::new();
     let _hir = resolver.resolve_program(&stmts).expect("Resolver error");
@@ -42,7 +40,7 @@ fn run_bytecode_vm(source: &str) -> String {
 
 #[test]
 fn test_differential_arithmetic_expressions() {
-    let code = "let a = 10; let b = 20; let c = a + b * 2; return c;";
+    let code = "a := 10; b := 20; c := a + b * 2; return c;";
     let tw = run_tree_walk(code);
     let vm = run_bytecode_vm(code);
     assert_eq!(tw.trim(), vm.trim(), "Differential test failed for arithmetic expressions!");
@@ -50,7 +48,7 @@ fn test_differential_arithmetic_expressions() {
 
 #[test]
 fn test_differential_conditionals() {
-    let code = "let x = 15; if x > 10 { return 100; } else { return 200; }";
+    let code = "x := 15; if x > 10 { return 100; } else { return 200; }";
     let tw = run_tree_walk(code);
     let vm = run_bytecode_vm(code);
     assert_eq!(tw.trim(), vm.trim(), "Differential test failed for conditionals!");

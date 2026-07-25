@@ -7,7 +7,7 @@ fn test_roundtrip_program(source: &str) {
     let mut lexer = Lexer::new(source);
     let tokens = lexer.tokenize().expect("Lexer error");
     let mut parser = Parser::new(tokens);
-    let stmts = parser.parse().expect("Parser error");
+    let stmts = parser.parse_program().expect("Parser error");
 
     let mut resolver = Resolver::new();
     let hir = resolver.resolve_program(&stmts).expect("Resolver error");
@@ -31,6 +31,6 @@ fn test_roundtrip_program(source: &str) {
 
 #[test]
 fn test_lbc_roundtrip_property() {
-    test_roundtrip_program("let x = 40; let y = 20; return x + y;");
-    test_roundtrip_program("let count = 0; let i = 0; while i < 5 { count = count + i; i = i + 1; } return count;");
+    test_roundtrip_program("x := 40; y := 20; return x + y;");
+    test_roundtrip_program("count := 0; i := 0; while i < 5 { count = count + i; i = i + 1; } return count;");
 }

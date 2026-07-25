@@ -68,7 +68,7 @@ impl Resolver {
                     Ok(HirStmt::AssignLocal { id, value: val })
                 } else {
                     let id = self.get_or_create_global(name);
-                    Ok(HirStmt::AssignGlobal { id, value: val })
+                    Ok(HirStmt::LetGlobal { id, value: val })
                 }
             }
 
@@ -173,16 +173,38 @@ impl Resolver {
                 })
             }
 
-            Expr::Call { name: _, args, .. } => {
+            Expr::List(items) => {
+                let mut resolved = Vec::with_capacity(items.len());
+                for item in items {
+                    resolved.push(self.resolve_expr(item)?);
+                }
+                Ok(HirExpr::List(resolved))
+            }
+
+            Expr::Map(pairs) => {
+                let mut resolved = Vec::with_capacity(pairs.len());
+                for (k, v) in pairs {
+                    let key = HirExpr::Constant(HirLiteral::Str(k.clone()));
+                    let val = self.resolve_expr(v)?;
+                    resolved.push((key, val));
+                }
+                Ok(HirExpr::Map(resolved))
+            }
+
+            Expr::Call { name, args, .. } => {
                 let mut resolved_args = Vec::with_capacity(args.len());
                 for arg in args {
                     resolved_args.push(self.resolve_expr(arg)?);
                 }
-                let func_id = FunctionId(0);
-                Ok(HirExpr::Call {
-                    func_id,
-                    args: resolved_args,
-                })
+                if name == "print" && !resolved_args.is_empty() {
+                    Ok(HirExpr::Print(Box::new(resolved_args.remove(0))))
+                } else {
+                    let func_id = FunctionId(0);
+                    Ok(HirExpr::Call {
+                        func_id,
+                        args: resolved_args,
+                    })
+                }
             }
 
             _ => Ok(HirExpr::Constant(HirLiteral::Null)),

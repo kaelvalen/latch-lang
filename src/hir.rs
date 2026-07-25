@@ -60,6 +60,9 @@ pub enum HirExpr {
         func_id: FunctionId,
         args: Vec<HirExpr>,
     },
+    List(Vec<HirExpr>),
+    Map(Vec<(HirExpr, HirExpr)>),
+    Print(Box<HirExpr>),
 }
 
 #[derive(Debug, Clone, PartialEq)]
