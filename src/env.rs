@@ -78,6 +78,38 @@ impl ObjClosure {
     }
 }
 
+/// Compiled Class Object in the VM.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ObjClass {
+    pub header: ObjHeader,
+    pub name: String,
+    pub methods: HashMap<String, Value>,
+}
+
+impl ObjClass {
+    pub fn new(name: impl Into<String>) -> Self {
+        ObjClass {
+            header: ObjHeader::new(ObjKind::Class),
+            name: name.into(),
+            methods: HashMap::new(),
+        }
+    }
+}
+
+/// Compiled Instance Object in the VM.
+#[derive(Debug, Clone)]
+pub struct ObjInstance {
+    pub header: ObjHeader,
+    pub class: Arc<ObjClass>,
+    pub fields: Arc<Mutex<HashMap<String, Value>>>,
+}
+
+impl PartialEq for ObjInstance {
+    fn eq(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.class, &other.class)
+    }
+}
+
 /// Runtime value – the result of evaluating any expression.
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
