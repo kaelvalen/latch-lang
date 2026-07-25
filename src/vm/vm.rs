@@ -5,18 +5,30 @@ use crate::env::Value;
 use crate::error::{LatchError, Result};
 use super::chunk::{Chunk, OpCode};
 
+/// A CallFrame represents an active function execution frame.
+/// It tracks the bytecode chunk, instruction pointer, and base stack slot.
+#[derive(Debug, Clone)]
+pub struct CallFrame {
+    pub chunk: Arc<Chunk>,
+    pub ip: usize,
+    pub slots: usize,
+}
+
 pub struct VM {
-    chunk: Chunk,
-    ip: usize,
+    frames: Vec<CallFrame>,
     stack: Vec<Value>,
     globals: HashMap<String, Value>,
 }
 
 impl VM {
     pub fn new(chunk: Chunk) -> Self {
-        VM {
-            chunk,
+        let frame = CallFrame {
+            chunk: Arc::new(chunk),
             ip: 0,
+            slots: 0,
+        };
+        VM {
+            frames: vec![frame],
             stack: Vec::with_capacity(256),
             globals: HashMap::new(),
         }
@@ -24,20 +36,31 @@ impl VM {
 
     pub fn run(&mut self) -> Result<Value> {
         loop {
-            if self.ip >= self.chunk.code.len() {
+            if self.frames.is_empty() {
                 break;
+            }
+
+            let frame_idx = self.frames.len() - 1;
+            if self.frames[frame_idx].ip >= self.frames[frame_idx].chunk.code.len() {
+                let result = self.pop().unwrap_or(Value::Null);
+                self.frames.pop();
+                if self.frames.is_empty() {
+                    return Ok(result);
+                }
+                self.push(result);
+                continue;
             }
 
             let byte = self.read_byte();
             let op = match OpCode::from_u8(byte) {
                 Some(o) => o,
-                None => return Err(LatchError::GenericError(format!("Invalid opcode 0x{byte:02x} at ip={}", self.ip - 1))),
+                None => return Err(LatchError::GenericError(format!("Invalid opcode 0x{byte:02x}"))),
             };
 
             match op {
                 OpCode::OpConstant => {
                     let idx = self.read_u16();
-                    let val = self.chunk.constants[idx as usize].clone();
+                    let val = self.current_frame().chunk.constants[idx as usize].clone();
                     self.push(val);
                 }
 
@@ -117,7 +140,7 @@ impl VM {
                 OpCode::OpEqual => {
                     let b = self.pop()?;
                     let a = self.pop()?;
-                    self.push(Value::Bool(format!("{a}") == format!("{b}")));
+                    self.push(Value::Bool(a == b));
                 }
 
                 OpCode::OpLess => {
@@ -146,7 +169,7 @@ impl VM {
                     match container {
                         Value::List(list) => {
                             let guard = list.lock().unwrap();
-                            let found = guard.iter().any(|v| format!("{v}") == format!("{item}"));
+                            let found = guard.iter().any(|v| v == &item);
                             self.push(Value::Bool(found));
                         }
                         Value::Str(s) => {
@@ -158,14 +181,14 @@ impl VM {
 
                 OpCode::OpDefineGlobal => {
                     let idx = self.read_u16();
-                    let name = self.chunk.constants[idx as usize].as_str()?.to_string();
+                    let name = self.current_frame().chunk.constants[idx as usize].as_str()?.to_string();
                     let val = self.pop()?;
                     self.globals.insert(name, val);
                 }
 
                 OpCode::OpGetGlobal => {
                     let idx = self.read_u16();
-                    let name = self.chunk.constants[idx as usize].as_str()?;
+                    let name = self.current_frame().chunk.constants[idx as usize].as_str()?;
                     if let Some(val) = self.globals.get(name) {
                         self.push(val.clone());
                     } else {
@@ -175,7 +198,7 @@ impl VM {
 
                 OpCode::OpSetGlobal => {
                     let idx = self.read_u16();
-                    let name = self.chunk.constants[idx as usize].as_str()?.to_string();
+                    let name = self.current_frame().chunk.constants[idx as usize].as_str()?.to_string();
                     let val = self.peek(0)?.clone();
                     if self.globals.contains_key(&name) {
                         self.globals.insert(name, val);
@@ -186,32 +209,34 @@ impl VM {
 
                 OpCode::OpGetLocal => {
                     let slot = self.read_u16() as usize;
-                    let val = self.stack[slot].clone();
+                    let base = self.current_frame().slots;
+                    let val = self.stack[base + slot].clone();
                     self.push(val);
                 }
 
                 OpCode::OpSetLocal => {
                     let slot = self.read_u16() as usize;
+                    let base = self.current_frame().slots;
                     let val = self.peek(0)?.clone();
-                    self.stack[slot] = val;
+                    self.stack[base + slot] = val;
                 }
 
                 OpCode::OpJump => {
                     let target = self.read_u16() as usize;
-                    self.ip = target;
+                    self.current_frame_mut().ip = target;
                 }
 
                 OpCode::OpJumpIfFalse => {
                     let target = self.read_u16() as usize;
                     let condition = self.peek(0)?;
                     if !condition.is_truthy() {
-                        self.ip = target;
+                        self.current_frame_mut().ip = target;
                     }
                 }
 
                 OpCode::OpLoop => {
                     let target = self.read_u16() as usize;
-                    self.ip = target;
+                    self.current_frame_mut().ip = target;
                 }
 
                 OpCode::OpPop => {
@@ -269,8 +294,13 @@ impl VM {
                 }
 
                 OpCode::OpReturn => {
-                    let val = self.pop().unwrap_or(Value::Null);
-                    return Ok(val);
+                    let result = self.pop().unwrap_or(Value::Null);
+                    let frame = self.frames.pop().unwrap();
+                    self.stack.truncate(frame.slots);
+                    if self.frames.is_empty() {
+                        return Ok(result);
+                    }
+                    self.push(result);
                 }
 
                 _ => {}
@@ -280,9 +310,18 @@ impl VM {
         Ok(Value::Null)
     }
 
+    fn current_frame(&self) -> &CallFrame {
+        self.frames.last().unwrap()
+    }
+
+    fn current_frame_mut(&mut self) -> &mut CallFrame {
+        self.frames.last_mut().unwrap()
+    }
+
     fn read_byte(&mut self) -> u8 {
-        let b = self.chunk.code[self.ip];
-        self.ip += 1;
+        let frame = self.frames.last_mut().unwrap();
+        let b = frame.chunk.code[frame.ip];
+        frame.ip += 1;
         b
     }
 
