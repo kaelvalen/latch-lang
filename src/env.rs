@@ -46,6 +46,101 @@ pub enum Value {
 }
 
 impl Value {
+    // ── Constructors ─────────────────────────────────────────
+    pub fn int(n: i64) -> Value { Value::Int(n) }
+    pub fn float(n: f64) -> Value { Value::Float(n) }
+    pub fn bool(b: bool) -> Value { Value::Bool(b) }
+    pub fn str(s: impl Into<String>) -> Value { Value::Str(s.into()) }
+    pub fn null() -> Value { Value::Null }
+
+    // ── Type Predicates ──────────────────────────────────────
+    pub fn is_int(&self) -> bool { matches!(self, Value::Int(_)) }
+    pub fn is_float(&self) -> bool { matches!(self, Value::Float(_)) }
+    pub fn is_number(&self) -> bool { matches!(self, Value::Int(_) | Value::Float(_)) }
+    pub fn is_bool(&self) -> bool { matches!(self, Value::Bool(_)) }
+    pub fn is_str(&self) -> bool { matches!(self, Value::Str(_)) }
+    pub fn is_null(&self) -> bool { matches!(self, Value::Null) }
+    pub fn is_list(&self) -> bool { matches!(self, Value::List(_)) }
+    pub fn is_map(&self) -> bool { matches!(self, Value::Map(_)) }
+    pub fn is_fn(&self) -> bool { matches!(self, Value::Fn { .. }) }
+
+    // ── Encapsulated Operations ──────────────────────────────
+    pub fn add(&self, rhs: &Value) -> Result<Value> {
+        match (self, rhs) {
+            (Value::Int(a), Value::Int(b)) => Ok(Value::Int(a + b)),
+            (Value::Float(a), Value::Float(b)) => Ok(Value::Float(a + b)),
+            (Value::Int(a), Value::Float(b)) => Ok(Value::Float(*a as f64 + b)),
+            (Value::Float(a), Value::Int(b)) => Ok(Value::Float(a + *b as f64)),
+            (Value::Str(a), Value::Str(b)) => Ok(Value::Str(format!("{a}{b}"))),
+            _ => Err(LatchError::TypeMismatch {
+                expected: "numeric or string".into(),
+                found: format!("{} and {}", self.type_name(), rhs.type_name()),
+            }),
+        }
+    }
+
+    pub fn sub(&self, rhs: &Value) -> Result<Value> {
+        match (self, rhs) {
+            (Value::Int(a), Value::Int(b)) => Ok(Value::Int(a - b)),
+            (Value::Float(a), Value::Float(b)) => Ok(Value::Float(a - b)),
+            (Value::Int(a), Value::Float(b)) => Ok(Value::Float(*a as f64 - b)),
+            (Value::Float(a), Value::Int(b)) => Ok(Value::Float(a - *b as f64)),
+            _ => Err(LatchError::TypeMismatch {
+                expected: "numeric".into(),
+                found: format!("{} and {}", self.type_name(), rhs.type_name()),
+            }),
+        }
+    }
+
+    pub fn mul(&self, rhs: &Value) -> Result<Value> {
+        match (self, rhs) {
+            (Value::Int(a), Value::Int(b)) => Ok(Value::Int(a * b)),
+            (Value::Float(a), Value::Float(b)) => Ok(Value::Float(a * b)),
+            (Value::Int(a), Value::Float(b)) => Ok(Value::Float(*a as f64 * b)),
+            (Value::Float(a), Value::Int(b)) => Ok(Value::Float(a * *b as f64)),
+            _ => Err(LatchError::TypeMismatch {
+                expected: "numeric".into(),
+                found: format!("{} and {}", self.type_name(), rhs.type_name()),
+            }),
+        }
+    }
+
+    pub fn div(&self, rhs: &Value) -> Result<Value> {
+        match (self, rhs) {
+            (Value::Int(a), Value::Int(b)) => {
+                if *b == 0 { return Err(LatchError::DivisionByZero); }
+                Ok(Value::Int(a / b))
+            }
+            (Value::Float(a), Value::Float(b)) => {
+                if *b == 0.0 { return Err(LatchError::DivisionByZero); }
+                Ok(Value::Float(a / b))
+            }
+            (Value::Int(a), Value::Float(b)) => {
+                if *b == 0.0 { return Err(LatchError::DivisionByZero); }
+                Ok(Value::Float(*a as f64 / b))
+            }
+            (Value::Float(a), Value::Int(b)) => {
+                if *b == 0 { return Err(LatchError::DivisionByZero); }
+                Ok(Value::Float(a / *b as f64))
+            }
+            _ => Err(LatchError::TypeMismatch {
+                expected: "numeric".into(),
+                found: format!("{} and {}", self.type_name(), rhs.type_name()),
+            }),
+        }
+    }
+
+    pub fn negate(&self) -> Result<Value> {
+        match self {
+            Value::Int(n) => Ok(Value::Int(-n)),
+            Value::Float(n) => Ok(Value::Float(-n)),
+            _ => Err(LatchError::TypeMismatch {
+                expected: "number".into(),
+                found: self.type_name().into(),
+            }),
+        }
+    }
+
     pub fn type_name(&self) -> &str {
         match self {
             Value::Int(_)            => "int",

@@ -67,48 +67,25 @@ impl VM {
                 OpCode::OpAdd => {
                     let b = self.pop()?;
                     let a = self.pop()?;
-                    match (a, b) {
-                        (Value::Int(x), Value::Int(y)) => self.push(Value::Int(x + y)),
-                        (Value::Float(x), Value::Float(y)) => self.push(Value::Float(x + y)),
-                        (Value::Str(x), Value::Str(y)) => self.push(Value::Str(format!("{x}{y}"))),
-                        _ => return Err(LatchError::GenericError("Incompatible types for Add".into())),
-                    }
+                    self.push(a.add(&b)?);
                 }
 
                 OpCode::OpSub => {
                     let b = self.pop()?;
                     let a = self.pop()?;
-                    match (a, b) {
-                        (Value::Int(x), Value::Int(y)) => self.push(Value::Int(x - y)),
-                        (Value::Float(x), Value::Float(y)) => self.push(Value::Float(x - y)),
-                        _ => return Err(LatchError::GenericError("Incompatible types for Sub".into())),
-                    }
+                    self.push(a.sub(&b)?);
                 }
 
                 OpCode::OpMul => {
                     let b = self.pop()?;
                     let a = self.pop()?;
-                    match (a, b) {
-                        (Value::Int(x), Value::Int(y)) => self.push(Value::Int(x * y)),
-                        (Value::Float(x), Value::Float(y)) => self.push(Value::Float(x * y)),
-                        _ => return Err(LatchError::GenericError("Incompatible types for Mul".into())),
-                    }
+                    self.push(a.mul(&b)?);
                 }
 
                 OpCode::OpDiv => {
                     let b = self.pop()?;
                     let a = self.pop()?;
-                    match (a, b) {
-                        (Value::Int(x), Value::Int(y)) => {
-                            if y == 0 { return Err(LatchError::DivisionByZero); }
-                            self.push(Value::Int(x / y));
-                        }
-                        (Value::Float(x), Value::Float(y)) => {
-                            if y == 0.0 { return Err(LatchError::DivisionByZero); }
-                            self.push(Value::Float(x / y));
-                        }
-                        _ => return Err(LatchError::GenericError("Incompatible types for Div".into())),
-                    }
+                    self.push(a.div(&b)?);
                 }
 
                 OpCode::OpMod => {
@@ -125,11 +102,7 @@ impl VM {
 
                 OpCode::OpNeg => {
                     let a = self.pop()?;
-                    match a {
-                        Value::Int(x) => self.push(Value::Int(-x)),
-                        Value::Float(x) => self.push(Value::Float(-x)),
-                        _ => return Err(LatchError::GenericError("Invalid type for negation".into())),
-                    }
+                    self.push(a.negate()?);
                 }
 
                 OpCode::OpNot => {
