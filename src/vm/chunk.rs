@@ -107,7 +107,7 @@ impl Chunk {
 
     pub fn add_constant(&mut self, val: Value) -> usize {
         for (i, c) in self.constants.iter().enumerate() {
-            if format!("{c}") == format!("{val}") {
+            if c == &val {
                 return i;
             }
         }

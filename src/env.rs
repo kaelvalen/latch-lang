@@ -181,6 +181,38 @@ impl Value {
     }
 }
 
+impl PartialEq for Value {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Value::Int(a), Value::Int(b)) => a == b,
+            (Value::Float(a), Value::Float(b)) => a == b,
+            (Value::Int(a), Value::Float(b)) => (*a as f64) == *b,
+            (Value::Float(a), Value::Int(b)) => *a == (*b as f64),
+            (Value::Bool(a), Value::Bool(b)) => a == b,
+            (Value::Str(a), Value::Str(b)) => a == b,
+            (Value::Null, Value::Null) => true,
+            (Value::List(a), Value::List(b)) => {
+                let ga = a.lock().unwrap();
+                let gb = b.lock().unwrap();
+                *ga == *gb
+            }
+            (Value::Map(a), Value::Map(b)) => {
+                let ga = a.lock().unwrap();
+                let gb = b.lock().unwrap();
+                *ga == *gb
+            }
+            (Value::Class { name: na, .. }, Value::Class { name: nb, .. }) => na == nb,
+            (Value::Instance { class_name: ca, fields: fa, .. }, Value::Instance { class_name: cb, fields: fb, .. }) => {
+                if ca != cb { return false; }
+                let ga = fa.lock().unwrap();
+                let gb = fb.lock().unwrap();
+                *ga == *gb
+            }
+            _ => false,
+        }
+    }
+}
+
 impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
