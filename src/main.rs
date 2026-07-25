@@ -1,10 +1,12 @@
 mod ast;
 mod env;
 mod error;
+mod hir;
 mod interpreter;
 mod lexer;
 mod lsp;
 mod parser;
+mod resolver;
 mod runtime;
 mod semantic;
 mod typechecker;
@@ -154,6 +156,15 @@ fn main() {
                 }
                 std::process::exit(1);
             }
+
+            let mut resolver = crate::resolver::Resolver::new();
+            let _hir = match resolver.resolve_program(&ast) {
+                Ok(h) => h,
+                Err(e) => {
+                    print_error(&e, &file, &source);
+                    std::process::exit(1);
+                }
+            };
 
             let optimizer = crate::vm::Optimizer::new();
             let opt_ast = optimizer.optimize_stmts(&ast);

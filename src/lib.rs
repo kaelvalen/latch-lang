@@ -1,10 +1,12 @@
 pub mod ast;
 pub mod env;
 pub mod error;
+pub mod hir;
 pub mod interpreter;
 pub mod lexer;
 pub mod lsp;
 pub mod parser;
+pub mod resolver;
 pub mod runtime;
 pub mod semantic;
 pub mod typechecker;
