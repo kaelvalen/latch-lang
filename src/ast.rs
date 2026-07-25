@@ -268,3 +268,19 @@ pub enum Type {
     File,
     Any,
 }
+
+impl std::fmt::Display for Type {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Type::Int => write!(f, "int"),
+            Type::Float => write!(f, "float"),
+            Type::Bool => write!(f, "bool"),
+            Type::Str => write!(f, "string"),
+            Type::List => write!(f, "list"),
+            Type::Dict => write!(f, "dict"),
+            Type::Process => write!(f, "process"),
+            Type::File => write!(f, "file"),
+            Type::Any => write!(f, "any"),
+        }
+    }
+}

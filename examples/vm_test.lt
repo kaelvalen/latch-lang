@@ -1,0 +1,13 @@
+x = 10
+y = 20
+result = x + y * 2
+print(result)
+
+if result > 30 {
+    print("VM test passed!")
+} else {
+    print("VM test failed!")
+}
+
+items = [1, 2, 3, 4, 5]
+print(items)

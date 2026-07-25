@@ -55,8 +55,11 @@ cargo install latch-lang
 Then use the `latch` command:
 
 ```sh
-latch version   # Show version
-latch run script.lt  # Execute script
+latch version        # Show version
+latch run script.lt   # Execute script with Tree-walk Interpreter
+latch vm script.lt    # Execute script with Bytecode Virtual Machine (VM)
+latch check script.lt # Typecheck & lint script without running
+latch lsp             # Start Language Server Protocol (LSP) for IDEs
 ```
 
 ### From Source

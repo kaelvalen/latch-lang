@@ -3,9 +3,12 @@ mod env;
 mod error;
 mod interpreter;
 mod lexer;
+mod lsp;
 mod parser;
 mod runtime;
 mod semantic;
+mod typechecker;
+mod vm;
 
 use std::io::{self, BufRead, Write};
 
@@ -17,7 +20,7 @@ use crate::lexer::Lexer;
 use crate::semantic::SemanticAnalyzer;
 
 #[derive(Parser)]
-#[command(name = "latch", version = "0.2.0", about = "Latch — local automation scripting language")]
+#[command(name = "latch", version = "0.4.3", about = "Latch — local automation scripting language")]
 struct Cli {
     #[command(subcommand)]
     command: Command,
@@ -25,8 +28,13 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
-    /// Run a Latch script
+    /// Run a Latch script with Tree-walk Interpreter
     Run {
+        /// Path to the .lt file
+        file: String,
+    },
+    /// Run a Latch script with Bytecode Virtual Machine (VM)
+    Vm {
         /// Path to the .lt file
         file: String,
     },
@@ -35,6 +43,8 @@ enum Command {
         /// Path to the .lt file
         file: String,
     },
+    /// Start Language Server Protocol (LSP) server
+    Lsp,
     /// Interactive REPL
     Repl,
     /// Show version
@@ -109,6 +119,58 @@ fn main() {
             }
         }
 
+        Command::Vm { file } => {
+            let source = match std::fs::read_to_string(&file) {
+                Ok(s) => s,
+                Err(e) => {
+                    eprintln!("[latch] IO Error\n  file: {file}\n  reason: {e}");
+                    std::process::exit(1);
+                }
+            };
+
+            let mut lexer = Lexer::new(&source);
+            let tokens = match lexer.tokenize() {
+                Ok(t) => t,
+                Err(e) => {
+                    print_error(&e, &file, &source);
+                    std::process::exit(1);
+                }
+            };
+
+            let mut parser = crate::parser::Parser::new(tokens);
+            let ast = match parser.parse_program() {
+                Ok(a) => a,
+                Err(e) => {
+                    print_error(&e, &file, &source);
+                    std::process::exit(1);
+                }
+            };
+
+            let mut analyzer = SemanticAnalyzer::new();
+            let errors = analyzer.analyze(&ast);
+            if !errors.is_empty() {
+                for e in &errors {
+                    print_error(e, &file, &source);
+                }
+                std::process::exit(1);
+            }
+
+            let compiler = crate::vm::Compiler::new();
+            let chunk = match compiler.compile(&ast) {
+                Ok(c) => c,
+                Err(e) => {
+                    print_error(&e, &file, &source);
+                    std::process::exit(1);
+                }
+            };
+
+            let mut vm = crate::vm::VM::new(chunk);
+            if let Err(e) = vm.run() {
+                print_error(&e, &file, &source);
+                std::process::exit(1);
+            }
+        }
+
         Command::Check { file } => {
             let source = match std::fs::read_to_string(&file) {
                 Ok(s) => s,
@@ -138,14 +200,25 @@ fn main() {
 
             let mut analyzer = SemanticAnalyzer::new();
             let errors = analyzer.analyze(&ast);
-            if errors.is_empty() {
+
+            let mut typechecker = crate::typechecker::TypeChecker::new();
+            let type_errors = typechecker.check_program(&ast);
+
+            if errors.is_empty() && type_errors.is_empty() {
                 println!("[latch] OK — no errors found.");
             } else {
                 for e in &errors {
                     print_error(e, &file, &source);
                 }
+                for e in &type_errors {
+                    print_error(e, &file, &source);
+                }
                 std::process::exit(1);
             }
+        }
+
+        Command::Lsp => {
+            lsp::start_lsp_server();
         }
 
         Command::Repl => {
