@@ -7,14 +7,14 @@ use crate::hir::*;
 
 struct ResolverLocal {
     name: String,
-    slot: usize,
+    id: LocalId,
     depth: usize,
 }
 
 pub struct Resolver {
     locals: Vec<ResolverLocal>,
     scope_depth: usize,
-    globals_map: HashMap<String, usize>,
+    globals_map: HashMap<String, GlobalId>,
 }
 
 impl Resolver {
@@ -34,11 +34,11 @@ impl Resolver {
         Ok(resolved)
     }
 
-    fn get_or_create_global(&mut self, name: &str) -> usize {
+    fn get_or_create_global(&mut self, name: &str) -> GlobalId {
         if let Some(&id) = self.globals_map.get(name) {
             id
         } else {
-            let id = self.globals_map.len();
+            let id = GlobalId(self.globals_map.len() as u32);
             self.globals_map.insert(name.to_string(), id);
             id
         }
@@ -49,13 +49,13 @@ impl Resolver {
             Stmt::Let { name, value, .. } => {
                 let val = self.resolve_expr(value)?;
                 if self.scope_depth > 0 {
-                    let slot = self.locals.len();
+                    let id = LocalId(self.locals.len() as u32);
                     self.locals.push(ResolverLocal {
                         name: name.clone(),
-                        slot,
+                        id,
                         depth: self.scope_depth,
                     });
-                    Ok(HirStmt::LetLocal { slot, value: val })
+                    Ok(HirStmt::LetLocal { id, value: val })
                 } else {
                     let id = self.get_or_create_global(name);
                     Ok(HirStmt::LetGlobal { id, value: val })
@@ -64,8 +64,8 @@ impl Resolver {
 
             Stmt::Assign { name, value } => {
                 let val = self.resolve_expr(value)?;
-                if let Some(slot) = self.resolve_local(name) {
-                    Ok(HirStmt::AssignLocal { slot, value: val })
+                if let Some(id) = self.resolve_local(name) {
+                    Ok(HirStmt::AssignLocal { id, value: val })
                 } else {
                     let id = self.get_or_create_global(name);
                     Ok(HirStmt::AssignGlobal { id, value: val })
@@ -141,33 +141,46 @@ impl Resolver {
             Expr::Null     => Ok(HirExpr::Constant(Value::Null)),
 
             Expr::Ident(name) => {
-                if let Some(slot) = self.resolve_local(name) {
-                    Ok(HirExpr::Local { slot })
+                if let Some(id) = self.resolve_local(name) {
+                    Ok(HirExpr::Local(id))
                 } else {
                     let id = self.get_or_create_global(name);
-                    Ok(HirExpr::Global { id })
+                    Ok(HirExpr::Global(id))
                 }
             }
 
             Expr::BinOp { op, left, right } => {
                 let l = self.resolve_expr(left)?;
                 let r = self.resolve_expr(right)?;
+                let hir_op = match op {
+                    BinOp::Add => HirOp::Add,
+                    BinOp::Sub => HirOp::Sub,
+                    BinOp::Mul => HirOp::Mul,
+                    BinOp::Div => HirOp::Div,
+                    BinOp::Mod => HirOp::Mod,
+                    BinOp::Eq => HirOp::Equal,
+                    BinOp::NotEq => HirOp::NotEqual,
+                    BinOp::Lt => HirOp::Less,
+                    BinOp::LtEq => HirOp::LessEqual,
+                    BinOp::Gt => HirOp::Greater,
+                    BinOp::GtEq => HirOp::GreaterEqual,
+                    _ => HirOp::Equal,
+                };
                 Ok(HirExpr::BinOp {
-                    op: *op,
+                    op: hir_op,
                     left: Box::new(l),
                     right: Box::new(r),
                 })
             }
 
-            Expr::Call { name, args, .. } => {
+            Expr::Call { name: _, args, .. } => {
                 let mut resolved_args = Vec::with_capacity(args.len());
                 for arg in args {
                     resolved_args.push(self.resolve_expr(arg)?);
                 }
-                let global_id = self.get_or_create_global(name);
+                let func_id = FunctionId(0);
                 Ok(HirExpr::Call {
-                    name: name.clone(),
-                    global_id,
+                    func_id,
                     args: resolved_args,
                 })
             }
@@ -176,10 +189,10 @@ impl Resolver {
         }
     }
 
-    fn resolve_local(&self, name: &str) -> Option<usize> {
+    fn resolve_local(&self, name: &str) -> Option<LocalId> {
         for local in self.locals.iter().rev() {
             if local.name == name {
-                return Some(local.slot);
+                return Some(local.id);
             }
         }
         None

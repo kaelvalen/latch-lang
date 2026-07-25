@@ -1,33 +1,65 @@
-use crate::ast::BinOp;
 use crate::env::Value;
 
-/// High-Level Intermediate Representation (HIR)
-/// Resolved, semantically-checked AST representation where identifiers
-/// are converted to explicit Local(slot), Global(id), or Upvalue(slot).
+/// Strongly-Typed Index Identifiers for Compile-Time Type Safety
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct LocalId(pub u32);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct GlobalId(pub u32);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct FunctionId(pub u32);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct ConstantId(pub u32);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct UpvalueId(pub u32);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct ModuleId(pub u32);
+
+/// Independent HIR Binary Operators (Zero AST Dependencies)
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HirOp {
+    Add,
+    Sub,
+    Mul,
+    Div,
+    Mod,
+    Equal,
+    NotEqual,
+    Less,
+    LessEqual,
+    Greater,
+    GreaterEqual,
+}
+
+/// Standalone High-Level Intermediate Representation (HIR)
+/// Pure resolved instructions operating on ID slots — zero strings or AST nodes.
 #[derive(Debug, Clone, PartialEq)]
 pub enum HirExpr {
     Constant(Value),
-    Local { slot: usize },
-    Global { id: usize },
-    Upvalue { slot: usize },
+    Local(LocalId),
+    Global(GlobalId),
+    Upvalue(UpvalueId),
     BinOp {
-        op: BinOp,
+        op: HirOp,
         left: Box<HirExpr>,
         right: Box<HirExpr>,
     },
     Call {
-        name: String,
-        global_id: usize,
+        func_id: FunctionId,
         args: Vec<HirExpr>,
     },
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum HirStmt {
-    LetLocal { slot: usize, value: HirExpr },
-    LetGlobal { id: usize, value: HirExpr },
-    AssignLocal { slot: usize, value: HirExpr },
-    AssignGlobal { id: usize, value: HirExpr },
+    LetLocal { id: LocalId, value: HirExpr },
+    LetGlobal { id: GlobalId, value: HirExpr },
+    AssignLocal { id: LocalId, value: HirExpr },
+    AssignGlobal { id: GlobalId, value: HirExpr },
     Expr(HirExpr),
     If {
         cond: HirExpr,

@@ -1,54 +1,31 @@
-use std::collections::HashMap;
 use std::sync::Arc;
 
-use crate::ast::*;
-use crate::env::{ObjFunction, Value};
+use crate::ast::Stmt;
+use crate::env::{ObjFunction, ObjHeader, ObjKind, Value};
 use crate::error::Result;
+use crate::hir::*;
 use super::chunk::{Chunk, OpCode};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct LocalFlags {
-    pub is_captured: bool,
-    pub is_mutable: bool,
-    pub is_initialized: bool,
-}
-
-impl LocalFlags {
-    pub fn new(is_mutable: bool) -> Self {
-        LocalFlags {
-            is_captured: false,
-            is_mutable,
-            is_initialized: true,
-        }
-    }
-}
-
-pub struct Local {
-    pub name: String,
-    pub slot: usize,
-    pub depth: usize,
-    pub flags: LocalFlags,
-}
-
-/// Pure Code Generator (Emitter) — transforms a semantically validated AST into bytecode.
+/// Dumb Bytecode Emitter — transforms resolved HIR directly into a compiled Chunk.
+/// Contains zero string tables, scope maps, or semantic checking logic.
 pub struct Compiler {
     chunk: Chunk,
-    locals: Vec<Local>,
-    scope_depth: usize,
-    globals_map: HashMap<String, usize>,
 }
 
 impl Compiler {
     pub fn new() -> Self {
         Compiler {
             chunk: Chunk::new(),
-            locals: Vec::new(),
-            scope_depth: 0,
-            globals_map: HashMap::new(),
         }
     }
 
     pub fn compile(mut self, stmts: &[Stmt]) -> Result<Arc<ObjFunction>> {
+        let mut resolver = crate::resolver::Resolver::new();
+        let hir_stmts = resolver.resolve_program(stmts)?;
+        self.compile_hir(&hir_stmts)
+    }
+
+    pub fn compile_hir(mut self, stmts: &[HirStmt]) -> Result<Arc<ObjFunction>> {
         for stmt in stmts {
             self.compile_stmt(stmt)?;
         }
@@ -56,7 +33,7 @@ impl Compiler {
         self.emit_opcode(OpCode::OpReturn, 0);
 
         let script_fn = ObjFunction {
-            header: crate::env::ObjHeader::new(crate::env::ObjKind::Function),
+            header: ObjHeader::new(ObjKind::Function),
             arity: 0,
             chunk: self.chunk,
             name: "<script>".into(),
@@ -66,11 +43,6 @@ impl Compiler {
     }
 
     // ── Low-Level Emitter Methods ─────────────────────────────
-
-    #[inline]
-    fn emit_byte(&mut self, byte: u8, line: u32) -> usize {
-        self.chunk.write_u8(byte, line)
-    }
 
     #[inline]
     fn emit_opcode(&mut self, op: OpCode, line: u32) -> usize {
@@ -106,247 +78,141 @@ impl Compiler {
         self.emit_u16(loop_start as u16, line);
     }
 
-    fn get_or_create_global(&mut self, name: &str) -> usize {
-        if let Some(&id) = self.globals_map.get(name) {
-            id
-        } else {
-            let id = self.globals_map.len();
-            self.globals_map.insert(name.to_string(), id);
-            id
-        }
-    }
+    // ── HIR Emitter ──────────────────────────────────────────
 
-    // ── Statement & Expression Generation ────────────────────
-
-    fn compile_stmt(&mut self, stmt: &Stmt) -> Result<()> {
+    fn compile_stmt(&mut self, stmt: &HirStmt) -> Result<()> {
         match stmt {
-            Stmt::Let { name, value, .. } => {
+            HirStmt::LetLocal { id, value } => {
                 self.compile_expr(value)?;
-                if self.scope_depth > 0 {
-                    let slot = self.locals.len();
-                    self.locals.push(Local {
-                        name: name.clone(),
-                        slot,
-                        depth: self.scope_depth,
-                        flags: LocalFlags::new(true),
-                    });
-                } else {
-                    let global_id = self.get_or_create_global(name);
-                    self.emit_opcode(OpCode::OpDefineGlobal, 0);
-                    self.emit_u16(global_id as u16, 0);
-                }
+                self.emit_opcode(OpCode::OpSetLocal, 0);
+                self.emit_u16(id.0 as u16, 0);
+                self.emit_opcode(OpCode::OpPop, 0);
             }
 
-            Stmt::Assign { name, value } => {
+            HirStmt::LetGlobal { id, value } => {
                 self.compile_expr(value)?;
-                if let Some(slot) = self.resolve_local(name) {
-                    self.emit_opcode(OpCode::OpSetLocal, 0);
-                    self.emit_u16(slot as u16, 0);
-                } else {
-                    let global_id = self.get_or_create_global(name);
-                    self.emit_opcode(OpCode::OpDefineGlobal, 0);
-                    self.emit_u16(global_id as u16, 0);
-                }
+                self.emit_opcode(OpCode::OpDefineGlobal, 0);
+                self.emit_u16(id.0 as u16, 0);
             }
 
-            Stmt::Expr(expr) => {
+            HirStmt::AssignLocal { id, value } => {
+                self.compile_expr(value)?;
+                self.emit_opcode(OpCode::OpSetLocal, 0);
+                self.emit_u16(id.0 as u16, 0);
+            }
+
+            HirStmt::AssignGlobal { id, value } => {
+                self.compile_expr(value)?;
+                self.emit_opcode(OpCode::OpSetGlobal, 0);
+                self.emit_u16(id.0 as u16, 0);
+            }
+
+            HirStmt::Expr(expr) => {
                 self.compile_expr(expr)?;
                 self.emit_opcode(OpCode::OpPop, 0);
             }
 
-            Stmt::If { cond, then, else_ } => {
+            HirStmt::If { cond, then, else_ } => {
                 self.compile_expr(cond)?;
-                let jump_if_false_offset = self.emit_jump(OpCode::OpJumpIfFalse, 0);
+                let jump_false = self.emit_jump(OpCode::OpJumpIfFalse, 0);
                 self.emit_opcode(OpCode::OpPop, 0);
 
-                self.begin_scope();
                 for s in then {
                     self.compile_stmt(s)?;
                 }
-                self.end_scope();
 
-                let jump_offset = self.emit_jump(OpCode::OpJump, 0);
-                self.patch_jump(jump_if_false_offset);
-
+                let jump_then = self.emit_jump(OpCode::OpJump, 0);
+                self.patch_jump(jump_false);
                 self.emit_opcode(OpCode::OpPop, 0);
-                if let Some(else_stmt) = else_ {
-                    self.begin_scope();
-                    self.compile_stmt(else_stmt)?;
-                    self.end_scope();
+
+                if let Some(else_s) = else_ {
+                    self.compile_stmt(else_s)?;
                 }
 
-                self.patch_jump(jump_offset);
+                self.patch_jump(jump_then);
             }
 
-            Stmt::While { cond, body } => {
+            HirStmt::While { cond, body } => {
                 let loop_start = self.chunk.code.len();
                 self.compile_expr(cond)?;
+
                 let exit_jump = self.emit_jump(OpCode::OpJumpIfFalse, 0);
                 self.emit_opcode(OpCode::OpPop, 0);
 
-                self.begin_scope();
                 for s in body {
                     self.compile_stmt(s)?;
                 }
-                self.end_scope();
 
                 self.emit_loop(loop_start, 0);
                 self.patch_jump(exit_jump);
                 self.emit_opcode(OpCode::OpPop, 0);
             }
 
-            Stmt::Return(expr) => {
+            HirStmt::Return(expr) => {
                 self.compile_expr(expr)?;
                 self.emit_opcode(OpCode::OpReturn, 0);
             }
-
-            Stmt::Const { name, value, .. } => {
-                self.compile_expr(value)?;
-                let global_id = self.get_or_create_global(name);
-                self.emit_opcode(OpCode::OpDefineGlobal, 0);
-                self.emit_u16(global_id as u16, 0);
-            }
-
-            Stmt::IndexAssign { target, index, value } => {
-                self.compile_expr(target)?;
-                self.compile_expr(index)?;
-                self.compile_expr(value)?;
-                self.emit_opcode(OpCode::OpIndexAssign, 0);
-            }
-
-            _ => {}
         }
         Ok(())
     }
 
-    fn compile_expr(&mut self, expr: &Expr) -> Result<()> {
+    fn compile_expr(&mut self, expr: &HirExpr) -> Result<()> {
         match expr {
-            Expr::Int(n)   => self.emit_constant(Value::Int(*n), 0),
-            Expr::Float(f) => self.emit_constant(Value::Float(*f), 0),
-            Expr::Bool(b)  => self.emit_constant(Value::Bool(*b), 0),
-            Expr::Str(s)   => self.emit_constant(Value::Str(s.clone()), 0),
-            Expr::Null     => self.emit_constant(Value::Null, 0),
-
-            Expr::Ident(name) => {
-                if let Some(slot) = self.resolve_local(name) {
-                    self.emit_opcode(OpCode::OpGetLocal, 0);
-                    self.emit_u16(slot as u16, 0);
-                } else {
-                    let global_id = self.get_or_create_global(name);
-                    self.emit_opcode(OpCode::OpGetGlobal, 0);
-                    self.emit_u16(global_id as u16, 0);
-                }
+            HirExpr::Constant(val) => {
+                self.emit_constant(val.clone(), 0);
             }
 
-            Expr::BinOp { op, left, right } => {
+            HirExpr::Local(id) => {
+                self.emit_opcode(OpCode::OpGetLocal, 0);
+                self.emit_u16(id.0 as u16, 0);
+            }
+
+            HirExpr::Global(id) => {
+                self.emit_opcode(OpCode::OpGetGlobal, 0);
+                self.emit_u16(id.0 as u16, 0);
+            }
+
+            HirExpr::Upvalue(id) => {
+                self.emit_opcode(OpCode::OpGetUpvalue, 0);
+                self.emit_u16(id.0 as u16, 0);
+            }
+
+            HirExpr::BinOp { op, left, right } => {
                 self.compile_expr(left)?;
                 self.compile_expr(right)?;
                 match op {
-                    BinOp::Add => { self.emit_opcode(OpCode::OpAdd, 0); }
-                    BinOp::Sub => { self.emit_opcode(OpCode::OpSub, 0); }
-                    BinOp::Mul => { self.emit_opcode(OpCode::OpMul, 0); }
-                    BinOp::Div => { self.emit_opcode(OpCode::OpDiv, 0); }
-                    BinOp::Mod => { self.emit_opcode(OpCode::OpMod, 0); }
-                    BinOp::Eq  => { self.emit_opcode(OpCode::OpEqual, 0); }
-                    BinOp::NotEq => {
+                    HirOp::Add => { self.emit_opcode(OpCode::OpAdd, 0); }
+                    HirOp::Sub => { self.emit_opcode(OpCode::OpSub, 0); }
+                    HirOp::Mul => { self.emit_opcode(OpCode::OpMul, 0); }
+                    HirOp::Div => { self.emit_opcode(OpCode::OpDiv, 0); }
+                    HirOp::Mod => { self.emit_opcode(OpCode::OpMod, 0); }
+                    HirOp::Equal => { self.emit_opcode(OpCode::OpEqual, 0); }
+                    HirOp::NotEqual => {
                         self.emit_opcode(OpCode::OpEqual, 0);
                         self.emit_opcode(OpCode::OpNot, 0);
                     }
-                    BinOp::Lt => { self.emit_opcode(OpCode::OpLess, 0); }
-                    BinOp::Gt => { self.emit_opcode(OpCode::OpGreater, 0); }
-                    BinOp::LtEq => {
+                    HirOp::Less => { self.emit_opcode(OpCode::OpLess, 0); }
+                    HirOp::LessEqual => {
                         self.emit_opcode(OpCode::OpGreater, 0);
                         self.emit_opcode(OpCode::OpNot, 0);
                     }
-                    BinOp::GtEq => {
+                    HirOp::Greater => { self.emit_opcode(OpCode::OpGreater, 0); }
+                    HirOp::GreaterEqual => {
                         self.emit_opcode(OpCode::OpLess, 0);
                         self.emit_opcode(OpCode::OpNot, 0);
                     }
-                    BinOp::In => { self.emit_opcode(OpCode::OpIn, 0); }
-                    _ => {}
-                };
-            }
-
-            Expr::UnaryOp { op, expr } => {
-                self.compile_expr(expr)?;
-                match op {
-                    UnaryOp::Neg => { self.emit_opcode(OpCode::OpNeg, 0); }
-                    UnaryOp::Not => { self.emit_opcode(OpCode::OpNot, 0); }
-                };
-            }
-
-            Expr::List(items) => {
-                for item in items {
-                    self.compile_expr(item)?;
-                }
-                self.emit_opcode(OpCode::OpList, 0);
-                self.emit_u16(items.len() as u16, 0);
-            }
-
-            Expr::Map(entries) => {
-                for (k, v) in entries {
-                    let idx = self.chunk.add_constant(Value::Str(k.clone()));
-                    self.emit_opcode(OpCode::OpConstant, 0);
-                    self.emit_u16(idx as u16, 0);
-                    self.compile_expr(v)?;
-                }
-                self.emit_opcode(OpCode::OpMap, 0);
-                self.emit_u16(entries.len() as u16, 0);
-            }
-
-            Expr::Index { expr, index } => {
-                self.compile_expr(expr)?;
-                self.compile_expr(index)?;
-                self.emit_opcode(OpCode::OpIndex, 0);
-            }
-
-            Expr::Call { name, args, .. } => {
-                if name == "print" {
-                    for arg in args {
-                        self.compile_expr(arg)?;
-                    }
-                    self.emit_opcode(OpCode::OpPrint, 0);
-                } else {
-                    for arg in args {
-                        self.compile_expr(arg)?;
-                    }
-                    let global_id = self.get_or_create_global(name);
-                    self.emit_opcode(OpCode::OpGetGlobal, 0);
-                    self.emit_u16(global_id as u16, 0);
-                    self.emit_opcode(OpCode::OpCall, 0);
-                    self.emit_u16(args.len() as u16, 0);
                 }
             }
 
-            _ => {
-                self.emit_constant(Value::Null, 0);
+            HirExpr::Call { func_id: _, args } => {
+                let argc = args.len();
+                for arg in args {
+                    self.compile_expr(arg)?;
+                }
+                self.emit_opcode(OpCode::OpCall, 0);
+                self.emit_u16(argc as u16, 0);
             }
         }
         Ok(())
-    }
-
-    fn resolve_local(&self, name: &str) -> Option<usize> {
-        for local in self.locals.iter().rev() {
-            if local.name == name {
-                return Some(local.slot);
-            }
-        }
-        None
-    }
-
-    fn begin_scope(&mut self) {
-        self.scope_depth += 1;
-    }
-
-    fn end_scope(&mut self) {
-        self.scope_depth -= 1;
-        while let Some(local) = self.locals.last() {
-            if local.depth > self.scope_depth {
-                self.locals.pop();
-                self.emit_opcode(OpCode::OpPop, 0);
-            } else {
-                break;
-            }
-        }
     }
 }

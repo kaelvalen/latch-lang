@@ -7,6 +7,9 @@ use crate::error::{LatchError, Result};
 
 use crate::vm::Chunk;
 
+/// Generic Object Pointer Reference Alias (Ready for GC integration)
+pub type ObjRef<T> = Arc<T>;
+
 /// Unified Object Header for Wren / Lua style heap object representations.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ObjKind {
@@ -18,17 +21,29 @@ pub enum ObjKind {
     Class,
     Instance,
     Module,
+    Native,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ObjHeader {
     pub kind: ObjKind,
-    pub is_marked: bool,
+    pub flags: u8,
+    pub mark: bool,
+    pub generation: u8,
+    pub size: usize,
+    pub type_id: u32,
 }
 
 impl ObjHeader {
     pub fn new(kind: ObjKind) -> Self {
-        ObjHeader { kind, is_marked: false }
+        ObjHeader {
+            kind,
+            flags: 0,
+            mark: false,
+            generation: 0,
+            size: std::mem::size_of::<Self>(),
+            type_id: 0,
+        }
     }
 }
 

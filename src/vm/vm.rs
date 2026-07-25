@@ -4,44 +4,17 @@ use std::sync::{Arc, Mutex};
 use crate::env::{ObjClosure, ObjFunction, Value};
 use crate::error::{LatchError, Result};
 use super::chunk::{Chunk, OpCode};
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct GlobalFlags {
-    pub is_mutable: bool,
-    pub is_exported: bool,
-}
-
-impl GlobalFlags {
-    pub fn new() -> Self {
-        GlobalFlags {
-            is_mutable: true,
-            is_exported: false,
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct Global {
-    pub value: Value,
-    pub flags: GlobalFlags,
-}
-
-/// A CallFrame represents an active function execution frame.
-/// It tracks the executing ObjClosure, instruction pointer (ip), and base stack slot.
-#[derive(Debug, Clone)]
-pub struct CallFrame {
-    pub closure: Arc<ObjClosure>,
-    pub ip: usize,
-    pub slots: usize,
-}
-
+use super::frame::CallFrame;
 use super::gc::GcState;
+use super::globals::{Global, GlobalFlags};
+use super::profiler::VmProfiler;
 
 pub struct VM {
     frames: Vec<CallFrame>,
     stack: Vec<Value>,
     globals: Vec<Global>,
     pub gc: GcState,
+    pub profiler: VmProfiler,
 }
 
 impl VM {
@@ -57,6 +30,7 @@ impl VM {
             stack: Vec::with_capacity(256),
             globals: Vec::new(),
             gc: GcState::new(),
+            profiler: VmProfiler::new(),
         }
     }
 
@@ -89,6 +63,7 @@ impl VM {
             }
 
             let byte = self.read_byte();
+            self.profiler.record_instruction(byte);
             let op = match OpCode::from_u8(byte) {
                 Some(o) => o,
                 None => return Err(LatchError::GenericError(format!("Invalid opcode 0x{byte:02x}"))),
