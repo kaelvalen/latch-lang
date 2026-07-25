@@ -1,5 +1,6 @@
 pub mod chunk;
 pub mod compiler;
+pub mod decoder;
 pub mod frame;
 pub mod gc;
 pub mod globals;
@@ -15,6 +16,7 @@ pub mod vm;
 #[allow(unused_imports)]
 pub use chunk::{Chunk, InstructionDescriptor, OpCode};
 pub use compiler::Compiler;
+pub use decoder::{DecodedInstruction, InstructionCursor};
 pub use frame::CallFrame;
 pub use gc::GcState;
 pub use globals::{Global, GlobalFlags};

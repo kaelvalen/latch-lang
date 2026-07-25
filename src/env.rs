@@ -65,7 +65,6 @@ impl ObjHeader {
     }
 }
 
-/// First-class Compiled Function Object in the VM.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ObjFunction {
     pub header: ObjHeader,
@@ -73,6 +72,11 @@ pub struct ObjFunction {
     pub chunk: Chunk,
     pub name: String,
     pub upvalue_count: usize,
+    pub max_stack: usize,
+    pub local_count: usize,
+    pub module_id: u32,
+    pub debug_id: u32,
+    pub flags: u32,
 }
 
 impl ObjFunction {
@@ -83,6 +87,11 @@ impl ObjFunction {
             chunk: Chunk::new(),
             name: name.into(),
             upvalue_count: 0,
+            max_stack: 256,
+            local_count: 0,
+            module_id: 0,
+            debug_id: 0,
+            flags: 0,
         }
     }
 }
@@ -143,28 +152,8 @@ impl PartialEq for ObjInstance {
     }
 }
 
-/// Isolated Module Object in the VM.
-#[derive(Debug, Clone, PartialEq)]
-pub struct ObjModule {
-    pub header: ObjHeader,
-    pub name: String,
-    pub globals: Vec<Value>,
-    pub exports: HashMap<String, usize>,
-}
-
-impl ObjModule {
-    pub fn new(name: impl Into<String>) -> Self {
-        ObjModule {
-            header: ObjHeader::new(ObjKind::Module),
-            name: name.into(),
-            globals: Vec::new(),
-            exports: HashMap::new(),
-        }
-    }
-}
-
 /// First-class Native C/Rust Function Object in the VM.
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct ObjNative {
     pub header: ObjHeader,
     pub name: String,
@@ -177,10 +166,45 @@ impl PartialEq for ObjNative {
     }
 }
 
-impl fmt::Debug for ObjNative {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "<native fn {}>", self.name)
+/// Runtime Module Object in the VM
+#[derive(Debug, Clone, PartialEq)]
+pub struct ObjModule {
+    pub header: ObjHeader,
+    pub name: String,
+    pub constants: Vec<Value>,
+    pub globals: HashMap<String, Value>,
+    pub functions: Vec<ObjRef<ObjFunction>>,
+    pub imports: Vec<String>,
+    pub exports: Vec<String>,
+}
+
+impl ObjModule {
+    pub fn new(name: impl Into<String>) -> Self {
+        ObjModule {
+            header: ObjHeader::new(ObjKind::Module),
+            name: name.into(),
+            constants: Vec::new(),
+            globals: HashMap::new(),
+            functions: Vec::new(),
+            imports: Vec::new(),
+            exports: Vec::new(),
+        }
     }
+}
+
+/// Garbage Collector Trait Contract for Object Tracing
+pub trait GcTrace {
+    fn trace(&self, visitor: &mut dyn FnMut(&Value));
+}
+
+/// Base Heap Object Trait Contract
+pub trait HeapObject: GcTrace {
+    fn header(&self) -> &ObjHeader;
+}
+
+/// Native Dynamic Callable Trait Contract
+pub trait NativeCallable: Send + Sync {
+    fn call(&self, args: &[Value]) -> Result<Value>;
 }
 
 /// Runtime value – the result of evaluating any expression.

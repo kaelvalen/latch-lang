@@ -33,6 +33,11 @@ impl Compiler {
             chunk: self.chunk,
             name: module.name.clone(),
             upvalue_count: 0,
+            max_stack: 256,
+            local_count: 0,
+            module_id: 0,
+            debug_id: 0,
+            flags: 0,
         };
         Ok(Arc::new(script_fn))
     }

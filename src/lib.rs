@@ -9,5 +9,6 @@ pub mod parser;
 pub mod resolver;
 pub mod runtime;
 pub mod semantic;
+pub mod symbol;
 pub mod typechecker;
 pub mod vm;

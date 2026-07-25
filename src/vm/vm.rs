@@ -43,6 +43,11 @@ impl VM {
             chunk,
             name,
             upvalue_count: 0,
+            max_stack: 256,
+            local_count: 0,
+            module_id: 0,
+            debug_id: 0,
+            flags: 0,
         })
     }
 
@@ -63,6 +68,11 @@ impl VM {
             chunk,
             name: "<script>".into(),
             upvalue_count: 0,
+            max_stack: 256,
+            local_count: 0,
+            module_id: 0,
+            debug_id: 0,
+            flags: 0,
         });
         Self::new(script_fn.0)
     }

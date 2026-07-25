@@ -106,6 +106,11 @@ impl LbcSerializer {
             chunk,
             name,
             upvalue_count: 0,
+            max_stack: 256,
+            local_count: 0,
+            module_id: 0,
+            debug_id: 0,
+            flags: 0,
         };
 
         Ok(Arc::new(func))
