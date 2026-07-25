@@ -7,9 +7,35 @@ use crate::error::{LatchError, Result};
 
 use crate::vm::Chunk;
 
+/// Unified Object Header for Wren / Lua style heap object representations.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ObjKind {
+    String,
+    List,
+    Map,
+    Function,
+    Closure,
+    Class,
+    Instance,
+    Module,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ObjHeader {
+    pub kind: ObjKind,
+    pub is_marked: bool,
+}
+
+impl ObjHeader {
+    pub fn new(kind: ObjKind) -> Self {
+        ObjHeader { kind, is_marked: false }
+    }
+}
+
 /// First-class Compiled Function Object in the VM.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ObjFunction {
+    pub header: ObjHeader,
     pub arity: usize,
     pub chunk: Chunk,
     pub name: String,
@@ -19,6 +45,7 @@ pub struct ObjFunction {
 impl ObjFunction {
     pub fn new(name: impl Into<String>, arity: usize) -> Self {
         ObjFunction {
+            header: ObjHeader::new(ObjKind::Function),
             arity,
             chunk: Chunk::new(),
             name: name.into(),
@@ -30,6 +57,7 @@ impl ObjFunction {
 /// First-class Compiled Closure Object in the VM.
 #[derive(Debug, Clone)]
 pub struct ObjClosure {
+    pub header: ObjHeader,
     pub function: Arc<ObjFunction>,
     pub upvalues: Vec<Arc<Mutex<Value>>>,
 }
@@ -42,7 +70,11 @@ impl PartialEq for ObjClosure {
 
 impl ObjClosure {
     pub fn new(function: Arc<ObjFunction>, upvalues: Vec<Arc<Mutex<Value>>>) -> Self {
-        ObjClosure { function, upvalues }
+        ObjClosure {
+            header: ObjHeader::new(ObjKind::Closure),
+            function,
+            upvalues,
+        }
     }
 }
 

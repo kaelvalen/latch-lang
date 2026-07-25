@@ -56,6 +56,7 @@ impl Compiler {
         self.emit_opcode(OpCode::OpReturn, 0);
 
         let script_fn = ObjFunction {
+            header: crate::env::ObjHeader::new(crate::env::ObjKind::Function),
             arity: 0,
             chunk: self.chunk,
             name: "<script>".into(),

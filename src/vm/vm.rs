@@ -62,6 +62,7 @@ impl VM {
 
     pub fn new_with_chunk(chunk: Chunk) -> Self {
         let script_fn = Arc::new(ObjFunction {
+            header: crate::env::ObjHeader::new(crate::env::ObjKind::Function),
             arity: 0,
             chunk,
             name: "<script>".into(),
