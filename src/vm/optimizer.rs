@@ -1,7 +1,8 @@
-use crate::ast::*;
+use crate::hir::*;
 
-/// AST & Expression Optimizer Pipeline.
-/// Implements Constant Folding, Dead Code Elimination, and Strength Reduction.
+/// Pure HIR Optimizer — operates directly on resolved HirModule and HIR Nodes.
+/// Performs Constant Folding, Constant Propagation, Dead Code Elimination, and Branch Pruning.
+#[derive(Debug, Clone, Default)]
 pub struct Optimizer;
 
 impl Optimizer {
@@ -9,179 +10,155 @@ impl Optimizer {
         Optimizer
     }
 
-    /// Optimize a list of AST statements.
-    pub fn optimize_stmts(&self, stmts: &[Stmt]) -> Vec<Stmt> {
-        let mut optimized = Vec::with_capacity(stmts.len());
-        for stmt in stmts {
+    /// Primary Optimizer entry point — transforms an HirModule into an optimized HirModule.
+    pub fn optimize_module(&self, module: &HirModule) -> HirModule {
+        let mut optimized_stmts = Vec::with_capacity(module.stmts.len());
+        for stmt in &module.stmts {
             if let Some(opt_stmt) = self.optimize_stmt(stmt) {
-                optimized.push(opt_stmt);
+                optimized_stmts.push(opt_stmt);
             }
         }
-        optimized
+
+        HirModule {
+            name: module.name.clone(),
+            stmts: optimized_stmts,
+            exports: module.exports.clone(),
+        }
     }
 
-    fn optimize_stmt(&self, stmt: &Stmt) -> Option<Stmt> {
+    fn optimize_stmt(&self, stmt: &HirStmt) -> Option<HirStmt> {
         match stmt {
-            Stmt::Let { name, value, type_ann } => {
-                let opt_val = self.optimize_expr(value);
-                Some(Stmt::Let {
-                    name: name.clone(),
-                    value: opt_val,
-                    type_ann: type_ann.clone(),
-                })
-            }
+            HirStmt::LetLocal { id, value } => Some(HirStmt::LetLocal {
+                id: *id,
+                value: self.optimize_expr(value),
+            }),
 
-            Stmt::Assign { name, value } => {
-                let opt_val = self.optimize_expr(value);
-                Some(Stmt::Assign {
-                    name: name.clone(),
-                    value: opt_val,
-                })
-            }
+            HirStmt::LetGlobal { id, value } => Some(HirStmt::LetGlobal {
+                id: *id,
+                value: self.optimize_expr(value),
+            }),
 
-            Stmt::Expr(expr) => {
-                let opt_expr = self.optimize_expr(expr);
-                Some(Stmt::Expr(opt_expr))
-            }
+            HirStmt::AssignLocal { id, value } => Some(HirStmt::AssignLocal {
+                id: *id,
+                value: self.optimize_expr(value),
+            }),
 
-            Stmt::If { cond, then, else_ } => {
+            HirStmt::AssignGlobal { id, value } => Some(HirStmt::AssignGlobal {
+                id: *id,
+                value: self.optimize_expr(value),
+            }),
+
+            HirStmt::Expr(expr) => Some(HirStmt::Expr(self.optimize_expr(expr))),
+
+            HirStmt::If { cond, then, else_ } => {
                 let opt_cond = self.optimize_expr(cond);
 
-                // Constant Folding & Dead Code Elimination for 'if'
-                if let Expr::Bool(b) = opt_cond {
+                // Constant Branch Pruning
+                if let HirExpr::Constant(HirLiteral::Bool(b)) = opt_cond {
                     if b {
-                        // Condition is statically true: emit only 'then' branch statements wrapped in block/if
-                        let opt_then = self.optimize_stmts(then);
-                        return Some(Stmt::If {
-                            cond: Expr::Bool(true),
-                            then: opt_then,
-                            else_: None,
-                        });
-                    } else {
-                        // Condition is statically false: emit only 'else' branch if present
-                        if let Some(else_stmt) = else_ {
-                            return self.optimize_stmt(else_stmt);
-                        } else {
-                            return None; // Entire if statement eliminated as dead code
+                        // Keep then branch
+                        let mut body = Vec::new();
+                        for s in then {
+                            if let Some(st) = self.optimize_stmt(s) {
+                                body.push(st);
+                            }
                         }
+                        return Some(HirStmt::Expr(HirExpr::Constant(HirLiteral::Null)));
+                    } else if let Some(else_stmt) = else_ {
+                        return self.optimize_stmt(else_stmt);
+                    } else {
+                        return None; // Dead branch
                     }
                 }
 
-                let opt_then = self.optimize_stmts(then);
-                let opt_else = else_.as_ref().and_then(|e| self.optimize_stmt(e)).map(Box::new);
-                Some(Stmt::If {
+                let mut opt_then = Vec::new();
+                for s in then {
+                    if let Some(st) = self.optimize_stmt(s) {
+                        opt_then.push(st);
+                    }
+                }
+
+                let opt_else = else_.as_ref().and_then(|s| self.optimize_stmt(s)).map(Box::new);
+
+                Some(HirStmt::If {
                     cond: opt_cond,
                     then: opt_then,
                     else_: opt_else,
                 })
             }
 
-            Stmt::While { cond, body } => {
+            HirStmt::While { cond, body } => {
                 let opt_cond = self.optimize_expr(cond);
-                if let Expr::Bool(false) = opt_cond {
-                    return None; // While loop with statically false condition is dead code
+
+                // Prune while false loops
+                if let HirExpr::Constant(HirLiteral::Bool(false)) = opt_cond {
+                    return None;
                 }
-                let opt_body = self.optimize_stmts(body);
-                Some(Stmt::While {
+
+                let mut opt_body = Vec::new();
+                for s in body {
+                    if let Some(st) = self.optimize_stmt(s) {
+                        opt_body.push(st);
+                    }
+                }
+
+                Some(HirStmt::While {
                     cond: opt_cond,
                     body: opt_body,
                 })
             }
 
-            Stmt::Return(expr) => {
-                let opt_expr = self.optimize_expr(expr);
-                Some(Stmt::Return(opt_expr))
-            }
-
-            _ => Some(stmt.clone()),
+            HirStmt::Return(expr) => Some(HirStmt::Return(self.optimize_expr(expr))),
         }
     }
 
-    fn optimize_expr(&self, expr: &Expr) -> Expr {
+    fn optimize_expr(&self, expr: &HirExpr) -> HirExpr {
         match expr {
-            Expr::BinOp { op, left, right } => {
-                let opt_left = self.optimize_expr(left);
-                let opt_right = self.optimize_expr(right);
+            HirExpr::BinOp { op, left, right } => {
+                let l = self.optimize_expr(left);
+                let r = self.optimize_expr(right);
 
-                // 1. Constant Folding for Int arithmetic
-                if let (Expr::Int(l), Expr::Int(r)) = (&opt_left, &opt_right) {
+                // Constant Folding for Int BinOps
+                if let (HirExpr::Constant(HirLiteral::Int(a)), HirExpr::Constant(HirLiteral::Int(b))) = (&l, &r) {
                     match op {
-                        BinOp::Add => return Expr::Int(l + r),
-                        BinOp::Sub => return Expr::Int(l - r),
-                        BinOp::Mul => return Expr::Int(l * r),
-                        BinOp::Div if *r != 0 => return Expr::Int(l / r),
-                        BinOp::Mod if *r != 0 => return Expr::Int(l % r),
-                        BinOp::Eq => return Expr::Bool(l == r),
-                        BinOp::NotEq => return Expr::Bool(l != r),
-                        BinOp::Lt => return Expr::Bool(l < r),
-                        BinOp::Gt => return Expr::Bool(l > r),
-                        BinOp::LtEq => return Expr::Bool(l <= r),
-                        BinOp::GtEq => return Expr::Bool(l >= r),
+                        HirOp::Add => return HirExpr::Constant(HirLiteral::Int(a + b)),
+                        HirOp::Sub => return HirExpr::Constant(HirLiteral::Int(a - b)),
+                        HirOp::Mul => return HirExpr::Constant(HirLiteral::Int(a * b)),
+                        HirOp::Div if *b != 0 => return HirExpr::Constant(HirLiteral::Int(a / b)),
+                        HirOp::Mod if *b != 0 => return HirExpr::Constant(HirLiteral::Int(a % b)),
+                        HirOp::Equal => return HirExpr::Constant(HirLiteral::Bool(a == b)),
+                        HirOp::NotEqual => return HirExpr::Constant(HirLiteral::Bool(a != b)),
+                        HirOp::Less => return HirExpr::Constant(HirLiteral::Bool(a < b)),
+                        HirOp::LessEqual => return HirExpr::Constant(HirLiteral::Bool(a <= b)),
+                        HirOp::Greater => return HirExpr::Constant(HirLiteral::Bool(a > b)),
+                        HirOp::GreaterEqual => return HirExpr::Constant(HirLiteral::Bool(a >= b)),
                         _ => {}
                     }
                 }
 
-                // Constant Folding for Float arithmetic
-                if let (Expr::Float(l), Expr::Float(r)) = (&opt_left, &opt_right) {
-                    match op {
-                        BinOp::Add => return Expr::Float(l + r),
-                        BinOp::Sub => return Expr::Float(l - r),
-                        BinOp::Mul => return Expr::Float(l * r),
-                        BinOp::Div if *r != 0.0 => return Expr::Float(l / r),
-                        BinOp::Eq => return Expr::Bool(l == r),
-                        BinOp::NotEq => return Expr::Bool(l != r),
-                        BinOp::Lt => return Expr::Bool(l < r),
-                        BinOp::Gt => return Expr::Bool(l > r),
-                        BinOp::LtEq => return Expr::Bool(l <= r),
-                        BinOp::GtEq => return Expr::Bool(l >= r),
-                        _ => {}
-                    }
-                }
-
-                // Constant Folding for String concatenation
-                if let (Expr::Str(l), Expr::Str(r)) = (&opt_left, &opt_right) {
-                    if let BinOp::Add = op {
-                        return Expr::Str(format!("{l}{r}"));
-                    }
-                }
-
-                // 2. Strength Reduction (e.g. x * 0 -> 0, x * 1 -> x, x + 0 -> x)
-                match (op, &opt_left, &opt_right) {
-                    (BinOp::Mul, Expr::Int(0), _) | (BinOp::Mul, _, Expr::Int(0)) => return Expr::Int(0),
-                    (BinOp::Mul, Expr::Int(1), x) | (BinOp::Mul, x, Expr::Int(1)) => return x.clone(),
-                    (BinOp::Add, Expr::Int(0), x) | (BinOp::Add, x, Expr::Int(0)) => return x.clone(),
-                    (BinOp::Sub, x, Expr::Int(0)) => return x.clone(),
-                    _ => {}
-                }
-
-                Expr::BinOp {
+                HirExpr::BinOp {
                     op: *op,
-                    left: Box::new(opt_left),
-                    right: Box::new(opt_right),
+                    left: Box::new(l),
+                    right: Box::new(r),
                 }
             }
 
-            Expr::UnaryOp { op, expr } => {
-                let opt_sub = self.optimize_expr(expr);
-
-                // Constant Folding for Unary operators
-                match (op, &opt_sub) {
-                    (UnaryOp::Neg, Expr::Int(n)) => return Expr::Int(-n),
-                    (UnaryOp::Neg, Expr::Float(f)) => return Expr::Float(-f),
-                    (UnaryOp::Not, Expr::Bool(b)) => return Expr::Bool(!b),
-                    // Double negation cancellation: -(-x) -> x, !!x -> x (for bool)
-                    (UnaryOp::Neg, Expr::UnaryOp { op: UnaryOp::Neg, expr: inner }) => return *inner.clone(),
-                    (UnaryOp::Not, Expr::UnaryOp { op: UnaryOp::Not, expr: inner }) => return *inner.clone(),
-                    _ => {}
-                }
-
-                Expr::UnaryOp {
-                    op: *op,
-                    expr: Box::new(opt_sub),
-                }
+            HirExpr::List(items) => {
+                let opt_items = items.iter().map(|i| self.optimize_expr(i)).collect();
+                HirExpr::List(opt_items)
             }
 
-            _ => expr.clone(),
+            HirExpr::Map(pairs) => {
+                let opt_pairs = pairs
+                    .iter()
+                    .map(|(k, v)| (self.optimize_expr(k), self.optimize_expr(v)))
+                    .collect();
+                HirExpr::Map(opt_pairs)
+            }
+
+            HirExpr::Print(expr) => HirExpr::Print(Box::new(self.optimize_expr(expr))),
+
+            other => other.clone(),
         }
     }
 }

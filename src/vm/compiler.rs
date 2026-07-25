@@ -1,13 +1,12 @@
 use std::sync::Arc;
 
-use crate::ast::Stmt;
 use crate::env::{ObjFunction, ObjHeader, ObjKind, Value};
 use crate::error::Result;
 use crate::hir::*;
 use super::chunk::{Chunk, OpCode};
 
 /// Dumb Bytecode Emitter — transforms resolved HirModule directly into a compiled Chunk.
-/// Contains zero Resolver instantiations, scope maps, or semantic checking logic.
+/// Contains zero AST imports, Resolver instantiations, scope maps, or semantic checking logic.
 pub struct Compiler {
     chunk: Chunk,
 }
@@ -19,7 +18,7 @@ impl Compiler {
         }
     }
 
-    /// Primary Compiler entry point — accepts a resolved HirModule.
+    /// Pure Compiler entry point — accepts a resolved HirModule.
     pub fn compile_module(mut self, module: &HirModule) -> Result<Arc<ObjFunction>> {
         for stmt in &module.stmts {
             self.compile_stmt(stmt)?;
@@ -40,13 +39,6 @@ impl Compiler {
             flags: 0,
         };
         Ok(Arc::new(script_fn))
-    }
-
-    /// Legacy convenience wrapper: resolves AST to HirModule and compiles.
-    pub fn compile(self, stmts: &[Stmt]) -> Result<Arc<ObjFunction>> {
-        let mut resolver = crate::resolver::Resolver::new();
-        let module = resolver.resolve_module("<script>", stmts)?;
-        self.compile_module(&module)
     }
 
     pub fn compile_hir(self, stmts: &[HirStmt]) -> Result<Arc<ObjFunction>> {

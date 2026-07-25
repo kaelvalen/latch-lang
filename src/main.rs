@@ -166,8 +166,11 @@ fn main() {
                 }
             };
 
+            let optimizer = crate::vm::Optimizer::new();
+            let opt_hir_module = optimizer.optimize_module(&hir_module);
+
             let compiler = crate::vm::Compiler::new();
-            let script_fn = match compiler.compile_module(&hir_module) {
+            let script_fn = match compiler.compile_module(&opt_hir_module) {
                 Ok(f) => f,
                 Err(e) => {
                     print_error(&e, &file, &source);

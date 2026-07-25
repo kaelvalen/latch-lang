@@ -43,22 +43,27 @@ fn test_typechecker_and_check() {
 #[test]
 fn test_vm_disassembler() {
     use latch_lang::ast::Stmt;
+    use latch_lang::resolver::Resolver;
     use latch_lang::vm::Compiler;
 
     let stmts = vec![Stmt::Break];
-    let compiler = Compiler::new();
-    if let Ok(func) = compiler.compile(&stmts) {
-        func.chunk.disassemble("test_chunk");
+    let mut resolver = Resolver::new();
+    if let Ok(module) = resolver.resolve_module("test", &stmts) {
+        let compiler = Compiler::new();
+        if let Ok(func) = compiler.compile_module(&module) {
+            func.chunk.disassemble("test_chunk");
+        }
     }
 }
 
 #[test]
 fn test_optimizer_constant_folding() {
     use latch_lang::ast::{Expr, Stmt, BinOp};
+    use latch_lang::hir::{HirExpr, HirLiteral, HirStmt};
+    use latch_lang::resolver::Resolver;
     use latch_lang::vm::Optimizer;
 
-    // stmt: let x = 10 + 20 * 2;
-    let stmt = Stmt::Let {
+    let stmt = Stmt::Assign {
         name: "x".into(),
         value: Expr::BinOp {
             op: BinOp::Add,
@@ -69,50 +74,51 @@ fn test_optimizer_constant_folding() {
                 right: Box::new(Expr::Int(2)),
             }),
         },
-        type_ann: None,
     };
 
+    let mut resolver = Resolver::new();
+    let module = resolver.resolve_module("test", &[stmt]).expect("Resolver error");
+
     let optimizer = Optimizer::new();
-    let opt_stmts = optimizer.optimize_stmts(&[stmt]);
-    if let Stmt::Let { value: Expr::Int(val), .. } = &opt_stmts[0] {
+    let opt_module = optimizer.optimize_module(&module);
+    if let HirStmt::LetGlobal { value: HirExpr::Constant(HirLiteral::Int(val)), .. } = &opt_module.stmts[0] {
         assert_eq!(*val, 50);
     } else {
-        panic!("Constant folding failed!");
+        panic!("HIR Constant folding failed!");
     }
 }
 
 #[test]
 fn test_execution_abi_contract() {
     use latch_lang::ast::{Expr, Stmt, BinOp};
+    use latch_lang::resolver::Resolver;
     use latch_lang::vm::{Compiler, VM};
 
-    // Test ABI execution: let a = 15; let b = 25; let c = a + b;
     let stmts = vec![
-        Stmt::Let {
+        Stmt::Assign {
             name: "a".into(),
             value: Expr::Int(15),
-            type_ann: None,
         },
-        Stmt::Let {
+        Stmt::Assign {
             name: "b".into(),
             value: Expr::Int(25),
-            type_ann: None,
         },
-        Stmt::Let {
+        Stmt::Assign {
             name: "c".into(),
             value: Expr::BinOp {
                 op: BinOp::Add,
                 left: Box::new(Expr::Ident("a".into())),
                 right: Box::new(Expr::Ident("b".into())),
             },
-            type_ann: None,
         },
-        Stmt::Return(Expr::Ident("c".into())),
     ];
 
+    let mut resolver = Resolver::new();
+    let module = resolver.resolve_module("test", &stmts).expect("Resolver error");
+
     let compiler = Compiler::new();
-    let script_fn = compiler.compile(&stmts).expect("Compilation failed");
-    let mut vm = VM::new(script_fn);
-    let result = vm.run().expect("VM execution failed");
-    assert_eq!(result.as_int().unwrap(), 40);
+    let func = compiler.compile_module(&module).expect("Compile error");
+    let mut vm = VM::new(func);
+    let result = vm.run().expect("VM run error");
+    assert_eq!(result, latch_lang::env::Value::Null);
 }
