@@ -34,6 +34,7 @@ pub enum OpCode {
 }
 
 impl OpCode {
+    #[inline(always)]
     pub fn from_u8(b: u8) -> Option<Self> {
         match b {
             1  => Some(OpCode::OpConstant),

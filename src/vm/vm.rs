@@ -284,14 +284,17 @@ impl VM {
         Ok(Value::Null)
     }
 
+    #[inline(always)]
     fn current_frame(&self) -> &CallFrame {
         self.frames.last().unwrap()
     }
 
+    #[inline(always)]
     fn current_frame_mut(&mut self) -> &mut CallFrame {
         self.frames.last_mut().unwrap()
     }
 
+    #[inline(always)]
     fn read_byte(&mut self) -> u8 {
         let frame = self.frames.last_mut().unwrap();
         let b = frame.chunk.code[frame.ip];
@@ -299,16 +302,19 @@ impl VM {
         b
     }
 
+    #[inline(always)]
     fn read_u16(&mut self) -> u16 {
         let b1 = self.read_byte();
         let b2 = self.read_byte();
         u16::from_be_bytes([b1, b2])
     }
 
+    #[inline(always)]
     fn push(&mut self, val: Value) {
         self.stack.push(val);
     }
 
+    #[inline(always)]
     fn pop(&mut self) -> Result<Value> {
         self.stack.pop().ok_or_else(|| LatchError::GenericError("Stack underflow".into()))
     }
