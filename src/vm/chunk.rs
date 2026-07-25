@@ -89,7 +89,7 @@ impl OpCode {
 pub struct Chunk {
     pub code: Vec<u8>,
     pub constants: Vec<Value>,
-    pub lines: Vec<usize>,
+    pub lines: Vec<u32>,
 }
 
 impl Chunk {
@@ -97,23 +97,23 @@ impl Chunk {
         Self::default()
     }
 
-    pub fn write_u8(&mut self, byte: u8, line: usize) -> usize {
+    pub fn write_u8(&mut self, byte: u8, line: u32) -> usize {
         self.code.push(byte);
         self.lines.push(line);
         self.code.len() - 1
     }
 
-    pub fn write_opcode(&mut self, op: OpCode, line: usize) -> usize {
+    pub fn write_opcode(&mut self, op: OpCode, line: u32) -> usize {
         self.write_u8(op as u8, line)
     }
 
-    pub fn write_u16(&mut self, val: u16, line: usize) {
+    pub fn write_u16(&mut self, val: u16, line: u32) {
         let bytes = val.to_be_bytes();
         self.write_u8(bytes[0], line);
         self.write_u8(bytes[1], line);
     }
 
-    pub fn write_u32(&mut self, val: u32, line: usize) {
+    pub fn write_u32(&mut self, val: u32, line: u32) {
         let bytes = val.to_be_bytes();
         self.write_u8(bytes[0], line);
         self.write_u8(bytes[1], line);

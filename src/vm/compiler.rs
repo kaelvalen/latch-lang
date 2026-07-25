@@ -236,7 +236,7 @@ impl Compiler {
         Ok(())
     }
 
-    fn emit_jump(&mut self, instruction: OpCode, line: usize) -> usize {
+    fn emit_jump(&mut self, instruction: OpCode, line: u32) -> usize {
         self.chunk.write_opcode(instruction, line);
         self.chunk.write_u16(0xffff, line);
         self.chunk.code.len() - 2
@@ -249,7 +249,7 @@ impl Compiler {
         self.chunk.code[offset + 1] = bytes[1];
     }
 
-    fn emit_loop(&mut self, loop_start: usize, line: usize) {
+    fn emit_loop(&mut self, loop_start: usize, line: u32) {
         self.chunk.write_opcode(OpCode::OpLoop, line);
         self.chunk.write_u16(loop_start as u16, line);
     }
