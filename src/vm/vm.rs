@@ -19,7 +19,8 @@ pub struct VM {
 
 impl VM {
     pub fn new(script_fn: Arc<ObjFunction>) -> Self {
-        let closure = Arc::new(ObjClosure::new(script_fn, Vec::new()));
+        let func_ref = crate::env::ObjRef(script_fn);
+        let closure = Arc::new(ObjClosure::new(func_ref, Vec::new()));
         let frame = CallFrame {
             closure,
             ip: 0,
@@ -36,7 +37,7 @@ impl VM {
 
     pub fn alloc_function(&self, arity: usize, chunk: Chunk, name: String) -> crate::env::ObjRef<ObjFunction> {
         self.gc.track_alloc(std::mem::size_of::<ObjFunction>());
-        Arc::new(ObjFunction {
+        crate::env::ObjRef::new(ObjFunction {
             header: crate::env::ObjHeader::new(crate::env::ObjKind::Function),
             arity,
             chunk,
@@ -47,23 +48,23 @@ impl VM {
 
     pub fn alloc_closure(&self, function: crate::env::ObjRef<ObjFunction>, upvalues: Vec<Arc<Mutex<Value>>>) -> crate::env::ObjRef<ObjClosure> {
         self.gc.track_alloc(std::mem::size_of::<ObjClosure>());
-        Arc::new(ObjClosure::new(function, upvalues))
+        crate::env::ObjRef::new(ObjClosure::new(function, upvalues))
     }
 
     pub fn alloc_class(&self, name: impl Into<String>) -> crate::env::ObjRef<crate::env::ObjClass> {
         self.gc.track_alloc(std::mem::size_of::<crate::env::ObjClass>());
-        Arc::new(crate::env::ObjClass::new(name))
+        crate::env::ObjRef::new(crate::env::ObjClass::new(name))
     }
 
     pub fn new_with_chunk(chunk: Chunk) -> Self {
-        let script_fn = Arc::new(ObjFunction {
+        let script_fn = crate::env::ObjRef::new(ObjFunction {
             header: crate::env::ObjHeader::new(crate::env::ObjKind::Function),
             arity: 0,
             chunk,
             name: "<script>".into(),
             upvalue_count: 0,
         });
-        Self::new(script_fn)
+        Self::new(script_fn.0)
     }
 
     pub fn run(&mut self) -> Result<Value> {
@@ -246,7 +247,7 @@ impl VM {
                     let func_idx = self.read_u16();
                     let func_val = self.current_frame().closure.function.chunk.constants[func_idx as usize].clone();
                     if let Value::Function(func) = func_val {
-                        let closure = Arc::new(ObjClosure::new(func, Vec::new()));
+                        let closure = Arc::new(ObjClosure::new(crate::env::ObjRef(func), Vec::new()));
                         self.push(Value::Closure(closure));
                     }
                 }
@@ -292,7 +293,7 @@ impl VM {
                                     "Expected {} arguments but got {}.", func.arity, arg_count
                                 )));
                             }
-                            let closure = Arc::new(ObjClosure::new(func, Vec::new()));
+                            let closure = Arc::new(ObjClosure::new(crate::env::ObjRef(func), Vec::new()));
                             let frame = CallFrame {
                                 closure,
                                 ip: 0,

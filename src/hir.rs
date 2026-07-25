@@ -83,3 +83,11 @@ pub enum HirStmt {
     },
     Return(HirExpr),
 }
+
+/// Top-Level Compilation Unit Module in HIR
+#[derive(Debug, Clone, PartialEq)]
+pub struct HirModule {
+    pub name: String,
+    pub stmts: Vec<HirStmt>,
+    pub exports: Vec<String>,
+}

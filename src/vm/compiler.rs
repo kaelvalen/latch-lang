@@ -6,8 +6,8 @@ use crate::error::Result;
 use crate::hir::*;
 use super::chunk::{Chunk, OpCode};
 
-/// Dumb Bytecode Emitter — transforms resolved HIR directly into a compiled Chunk.
-/// Contains zero string tables, scope maps, or semantic checking logic.
+/// Dumb Bytecode Emitter — transforms resolved HirModule directly into a compiled Chunk.
+/// Contains zero Resolver instantiations, scope maps, or semantic checking logic.
 pub struct Compiler {
     chunk: Chunk,
 }
@@ -19,14 +19,9 @@ impl Compiler {
         }
     }
 
-    pub fn compile(mut self, stmts: &[Stmt]) -> Result<Arc<ObjFunction>> {
-        let mut resolver = crate::resolver::Resolver::new();
-        let hir_stmts = resolver.resolve_program(stmts)?;
-        self.compile_hir(&hir_stmts)
-    }
-
-    pub fn compile_hir(mut self, stmts: &[HirStmt]) -> Result<Arc<ObjFunction>> {
-        for stmt in stmts {
+    /// Primary Compiler entry point — accepts a resolved HirModule.
+    pub fn compile_module(mut self, module: &HirModule) -> Result<Arc<ObjFunction>> {
+        for stmt in &module.stmts {
             self.compile_stmt(stmt)?;
         }
         self.emit_constant(Value::Null, 0);
@@ -36,10 +31,26 @@ impl Compiler {
             header: ObjHeader::new(ObjKind::Function),
             arity: 0,
             chunk: self.chunk,
-            name: "<script>".into(),
+            name: module.name.clone(),
             upvalue_count: 0,
         };
         Ok(Arc::new(script_fn))
+    }
+
+    /// Legacy convenience wrapper: resolves AST to HirModule and compiles.
+    pub fn compile(self, stmts: &[Stmt]) -> Result<Arc<ObjFunction>> {
+        let mut resolver = crate::resolver::Resolver::new();
+        let module = resolver.resolve_module("<script>", stmts)?;
+        self.compile_module(&module)
+    }
+
+    pub fn compile_hir(self, stmts: &[HirStmt]) -> Result<Arc<ObjFunction>> {
+        let module = HirModule {
+            name: "<script>".into(),
+            stmts: stmts.to_vec(),
+            exports: Vec::new(),
+        };
+        self.compile_module(&module)
     }
 
     // ── Low-Level Emitter Methods ─────────────────────────────

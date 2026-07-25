@@ -158,19 +158,16 @@ fn main() {
             }
 
             let mut resolver = crate::resolver::Resolver::new();
-            let _hir = match resolver.resolve_program(&ast) {
-                Ok(h) => h,
+            let hir_module = match resolver.resolve_module("<script>", &ast) {
+                Ok(m) => m,
                 Err(e) => {
                     print_error(&e, &file, &source);
                     std::process::exit(1);
                 }
             };
 
-            let optimizer = crate::vm::Optimizer::new();
-            let opt_ast = optimizer.optimize_stmts(&ast);
-
             let compiler = crate::vm::Compiler::new();
-            let script_fn = match compiler.compile(&opt_ast) {
+            let script_fn = match compiler.compile_module(&hir_module) {
                 Ok(f) => f,
                 Err(e) => {
                     print_error(&e, &file, &source);

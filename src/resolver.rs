@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 
 use crate::ast::*;
-use crate::env::Value;
 use crate::error::Result;
 use crate::hir::*;
 
@@ -32,6 +31,15 @@ impl Resolver {
             resolved.push(self.resolve_stmt(stmt)?);
         }
         Ok(resolved)
+    }
+
+    pub fn resolve_module(&mut self, name: impl Into<String>, stmts: &[Stmt]) -> Result<HirModule> {
+        let resolved_stmts = self.resolve_program(stmts)?;
+        Ok(HirModule {
+            name: name.into(),
+            stmts: resolved_stmts,
+            exports: Vec::new(),
+        })
     }
 
     fn get_or_create_global(&mut self, name: &str) -> GlobalId {

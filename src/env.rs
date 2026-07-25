@@ -7,8 +7,26 @@ use crate::error::{LatchError, Result};
 
 use crate::vm::Chunk;
 
-/// Generic Object Pointer Reference Alias (Ready for GC integration)
-pub type ObjRef<T> = Arc<T>;
+/// Generic Object Pointer Reference Wrapper (Fully Encapsulated for GC swapping)
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ObjRef<T>(pub Arc<T>);
+
+impl<T> ObjRef<T> {
+    pub fn new(val: T) -> Self {
+        ObjRef(Arc::new(val))
+    }
+
+    pub fn ptr_eq(a: &Self, b: &Self) -> bool {
+        Arc::ptr_eq(&a.0, &b.0)
+    }
+}
+
+impl<T> std::ops::Deref for ObjRef<T> {
+    type Target = T;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
 
 /// Unified Object Header for Wren / Lua style heap object representations.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -73,7 +91,7 @@ impl ObjFunction {
 #[derive(Debug, Clone)]
 pub struct ObjClosure {
     pub header: ObjHeader,
-    pub function: Arc<ObjFunction>,
+    pub function: ObjRef<ObjFunction>,
     pub upvalues: Vec<Arc<Mutex<Value>>>,
 }
 
@@ -84,7 +102,7 @@ impl PartialEq for ObjClosure {
 }
 
 impl ObjClosure {
-    pub fn new(function: Arc<ObjFunction>, upvalues: Vec<Arc<Mutex<Value>>>) -> Self {
+    pub fn new(function: ObjRef<ObjFunction>, upvalues: Vec<Arc<Mutex<Value>>>) -> Self {
         ObjClosure {
             header: ObjHeader::new(ObjKind::Closure),
             function,
