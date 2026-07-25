@@ -31,6 +31,9 @@ pub enum OpCode {
     OpIndexAssign  = 26,
     OpPrint        = 27,
     OpIn           = 28,
+    OpGetUpvalue   = 29,
+    OpSetUpvalue   = 30,
+    OpClosure      = 31,
 }
 
 impl OpCode {
@@ -65,6 +68,9 @@ impl OpCode {
             26 => Some(OpCode::OpIndexAssign),
             27 => Some(OpCode::OpPrint),
             28 => Some(OpCode::OpIn),
+            29 => Some(OpCode::OpGetUpvalue),
+            30 => Some(OpCode::OpSetUpvalue),
+            31 => Some(OpCode::OpClosure),
             _  => None,
         }
     }

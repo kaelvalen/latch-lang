@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-use crate::env::{ObjFunction, Value};
+use crate::env::{ObjClosure, ObjFunction, Value};
 use crate::error::{LatchError, Result};
 use super::chunk::{Chunk, OpCode};
 
@@ -27,10 +27,10 @@ pub struct Global {
 }
 
 /// A CallFrame represents an active function execution frame.
-/// It tracks the executing ObjFunction, instruction pointer (ip), and base stack slot.
+/// It tracks the executing ObjClosure, instruction pointer (ip), and base stack slot.
 #[derive(Debug, Clone)]
 pub struct CallFrame {
-    pub function: Arc<ObjFunction>,
+    pub closure: Arc<ObjClosure>,
     pub ip: usize,
     pub slots: usize,
 }
@@ -43,8 +43,9 @@ pub struct VM {
 
 impl VM {
     pub fn new(script_fn: Arc<ObjFunction>) -> Self {
+        let closure = Arc::new(ObjClosure::new(script_fn, Vec::new()));
         let frame = CallFrame {
-            function: script_fn,
+            closure,
             ip: 0,
             slots: 0,
         };
@@ -72,7 +73,7 @@ impl VM {
             }
 
             let frame_idx = self.frames.len() - 1;
-            if self.frames[frame_idx].ip >= self.frames[frame_idx].function.chunk.code.len() {
+            if self.frames[frame_idx].ip >= self.frames[frame_idx].closure.function.chunk.code.len() {
                 let result = self.pop().unwrap_or(Value::Null);
                 self.frames.pop();
                 if self.frames.is_empty() {
@@ -91,7 +92,7 @@ impl VM {
             match op {
                 OpCode::OpConstant => {
                     let idx = self.read_u16();
-                    let val = self.current_frame().function.chunk.constants[idx as usize].clone();
+                    let val = self.current_frame().closure.function.chunk.constants[idx as usize].clone();
                     self.push(val);
                 }
 
@@ -226,6 +227,29 @@ impl VM {
                     self.stack[base + slot] = val;
                 }
 
+                OpCode::OpGetUpvalue => {
+                    let slot = self.read_u16() as usize;
+                    let upval = &self.current_frame().closure.upvalues[slot];
+                    let val = upval.lock().unwrap().clone();
+                    self.push(val);
+                }
+
+                OpCode::OpSetUpvalue => {
+                    let slot = self.read_u16() as usize;
+                    let val = self.peek(0)?.clone();
+                    let upval = &self.current_frame().closure.upvalues[slot];
+                    *upval.lock().unwrap() = val;
+                }
+
+                OpCode::OpClosure => {
+                    let func_idx = self.read_u16();
+                    let func_val = self.current_frame().closure.function.chunk.constants[func_idx as usize].clone();
+                    if let Value::Function(func) = func_val {
+                        let closure = Arc::new(ObjClosure::new(func, Vec::new()));
+                        self.push(Value::Closure(closure));
+                    }
+                }
+
                 OpCode::OpJump => {
                     let target = self.read_u16() as usize;
                     self.current_frame_mut().ip = target;
@@ -248,14 +272,28 @@ impl VM {
                     let arg_count = self.read_u16() as usize;
                     let callee = self.peek(arg_count)?.clone();
                     match callee {
+                        Value::Closure(closure) => {
+                            if arg_count != closure.function.arity {
+                                return Err(LatchError::GenericError(format!(
+                                    "Expected {} arguments but got {}.", closure.function.arity, arg_count
+                                )));
+                            }
+                            let frame = CallFrame {
+                                closure,
+                                ip: 0,
+                                slots: self.stack.len() - arg_count,
+                            };
+                            self.frames.push(frame);
+                        }
                         Value::Function(func) => {
                             if arg_count != func.arity {
                                 return Err(LatchError::GenericError(format!(
                                     "Expected {} arguments but got {}.", func.arity, arg_count
                                 )));
                             }
+                            let closure = Arc::new(ObjClosure::new(func, Vec::new()));
                             let frame = CallFrame {
-                                function: func,
+                                closure,
                                 ip: 0,
                                 slots: self.stack.len() - arg_count,
                             };
@@ -349,7 +387,7 @@ impl VM {
     #[inline(always)]
     fn read_byte(&mut self) -> u8 {
         let frame = self.frames.last_mut().unwrap();
-        let b = frame.function.chunk.code[frame.ip];
+        let b = frame.closure.function.chunk.code[frame.ip];
         frame.ip += 1;
         b
     }

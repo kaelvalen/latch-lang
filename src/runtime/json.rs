@@ -82,6 +82,7 @@ fn latch_to_json(val: &Value) -> serde_json::Value {
         }
         Value::Fn { .. } => serde_json::Value::String("<fn>".into()),
         Value::Function(func) => serde_json::Value::String(format!("<fn {}>", func.name)),
+        Value::Closure(c) => serde_json::Value::String(format!("<fn {}>", c.function.name)),
         Value::ProcessResult { stdout, stderr, code } => {
             serde_json::json!({
                 "stdout": stdout,
