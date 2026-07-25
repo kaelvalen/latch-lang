@@ -142,13 +142,13 @@ impl Chunk {
 
         let op_name = format!("{op:?}");
         match op {
-            OpCode::OpConstant | OpCode::OpDefineGlobal | OpCode::OpGetGlobal | OpCode::OpSetGlobal => {
+            OpCode::OpConstant => {
                 let idx = self.read_u16_at(offset + 1);
                 let val = &self.constants[idx as usize];
                 println!("{op_name:<16} {idx:4} '{val}'");
                 offset + 3
             }
-            OpCode::OpGetLocal | OpCode::OpSetLocal | OpCode::OpCall | OpCode::OpList | OpCode::OpMap => {
+            OpCode::OpGetLocal | OpCode::OpSetLocal | OpCode::OpDefineGlobal | OpCode::OpGetGlobal | OpCode::OpSetGlobal | OpCode::OpCall | OpCode::OpList | OpCode::OpMap => {
                 let idx = self.read_u16_at(offset + 1);
                 println!("{op_name:<16} {idx:4}");
                 offset + 3

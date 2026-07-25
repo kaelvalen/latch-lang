@@ -17,7 +17,7 @@ pub struct CallFrame {
 pub struct VM {
     frames: Vec<CallFrame>,
     stack: Vec<Value>,
-    globals: HashMap<String, Value>,
+    globals: Vec<Value>,
 }
 
 impl VM {
@@ -30,7 +30,7 @@ impl VM {
         VM {
             frames: vec![frame],
             stack: Vec::with_capacity(256),
-            globals: HashMap::new(),
+            globals: Vec::new(),
         }
     }
 
@@ -180,30 +180,31 @@ impl VM {
                 }
 
                 OpCode::OpDefineGlobal => {
-                    let idx = self.read_u16();
-                    let name = self.current_frame().chunk.constants[idx as usize].as_str()?.to_string();
+                    let idx = self.read_u16() as usize;
                     let val = self.pop()?;
-                    self.globals.insert(name, val);
+                    if idx >= self.globals.len() {
+                        self.globals.resize(idx + 1, Value::Null);
+                    }
+                    self.globals[idx] = val;
                 }
 
                 OpCode::OpGetGlobal => {
-                    let idx = self.read_u16();
-                    let name = self.current_frame().chunk.constants[idx as usize].as_str()?;
-                    if let Some(val) = self.globals.get(name) {
-                        self.push(val.clone());
+                    let idx = self.read_u16() as usize;
+                    if idx < self.globals.len() {
+                        let val = self.globals[idx].clone();
+                        self.push(val);
                     } else {
-                        return Err(LatchError::UndefinedVariable(name.to_string()));
+                        return Err(LatchError::UndefinedVariable(format!("global#{idx}")));
                     }
                 }
 
                 OpCode::OpSetGlobal => {
-                    let idx = self.read_u16();
-                    let name = self.current_frame().chunk.constants[idx as usize].as_str()?.to_string();
+                    let idx = self.read_u16() as usize;
                     let val = self.peek(0)?.clone();
-                    if self.globals.contains_key(&name) {
-                        self.globals.insert(name, val);
+                    if idx < self.globals.len() {
+                        self.globals[idx] = val;
                     } else {
-                        return Err(LatchError::UndefinedVariable(name));
+                        return Err(LatchError::UndefinedVariable(format!("global#{idx}")));
                     }
                 }
 

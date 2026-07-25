@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::ast::*;
 use crate::env::Value;
 use crate::error::Result;
@@ -31,6 +33,7 @@ pub struct Compiler {
     chunk: Chunk,
     locals: Vec<Local>,
     scope_depth: usize,
+    globals_map: HashMap<String, usize>,
 }
 
 impl Compiler {
@@ -39,6 +42,7 @@ impl Compiler {
             chunk: Chunk::new(),
             locals: Vec::new(),
             scope_depth: 0,
+            globals_map: HashMap::new(),
         }
     }
 
@@ -51,6 +55,16 @@ impl Compiler {
         self.chunk.write_u16(null_idx as u16, 0);
         self.chunk.write_opcode(OpCode::OpReturn, 0);
         Ok(self.chunk)
+    }
+
+    fn get_or_create_global(&mut self, name: &str) -> usize {
+        if let Some(&id) = self.globals_map.get(name) {
+            id
+        } else {
+            let id = self.globals_map.len();
+            self.globals_map.insert(name.to_string(), id);
+            id
+        }
     }
 
     fn compile_stmt(&mut self, stmt: &Stmt) -> Result<()> {
@@ -66,9 +80,9 @@ impl Compiler {
                         flags: LocalFlags::new(true),
                     });
                 } else {
-                    let idx = self.chunk.add_constant(Value::Str(name.clone()));
+                    let global_id = self.get_or_create_global(name);
                     self.chunk.write_opcode(OpCode::OpDefineGlobal, 0);
-                    self.chunk.write_u16(idx as u16, 0);
+                    self.chunk.write_u16(global_id as u16, 0);
                 }
             }
 
@@ -78,9 +92,9 @@ impl Compiler {
                     self.chunk.write_opcode(OpCode::OpSetLocal, 0);
                     self.chunk.write_u16(slot as u16, 0);
                 } else {
-                    let idx = self.chunk.add_constant(Value::Str(name.clone()));
+                    let global_id = self.get_or_create_global(name);
                     self.chunk.write_opcode(OpCode::OpDefineGlobal, 0);
-                    self.chunk.write_u16(idx as u16, 0);
+                    self.chunk.write_u16(global_id as u16, 0);
                 }
             }
 
@@ -137,9 +151,9 @@ impl Compiler {
 
             Stmt::Const { name, value, .. } => {
                 self.compile_expr(value)?;
-                let idx = self.chunk.add_constant(Value::Str(name.clone()));
+                let global_id = self.get_or_create_global(name);
                 self.chunk.write_opcode(OpCode::OpDefineGlobal, 0);
-                self.chunk.write_u16(idx as u16, 0);
+                self.chunk.write_u16(global_id as u16, 0);
             }
 
             Stmt::IndexAssign { target, index, value } => {
@@ -186,9 +200,9 @@ impl Compiler {
                     self.chunk.write_opcode(OpCode::OpGetLocal, 0);
                     self.chunk.write_u16(slot as u16, 0);
                 } else {
-                    let idx = self.chunk.add_constant(Value::Str(name.clone()));
+                    let global_id = self.get_or_create_global(name);
                     self.chunk.write_opcode(OpCode::OpGetGlobal, 0);
-                    self.chunk.write_u16(idx as u16, 0);
+                    self.chunk.write_u16(global_id as u16, 0);
                 }
             }
             Expr::BinOp { op, left, right } => {
@@ -258,9 +272,9 @@ impl Compiler {
                     for arg in args {
                         self.compile_expr(arg)?;
                     }
-                    let idx = self.chunk.add_constant(Value::Str(name.clone()));
+                    let global_id = self.get_or_create_global(name);
                     self.chunk.write_opcode(OpCode::OpGetGlobal, 0);
-                    self.chunk.write_u16(idx as u16, 0);
+                    self.chunk.write_u16(global_id as u16, 0);
                     self.chunk.write_opcode(OpCode::OpCall, 0);
                     self.chunk.write_u16(args.len() as u16, 0);
                 }
