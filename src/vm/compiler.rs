@@ -3,9 +3,28 @@ use crate::env::Value;
 use crate::error::Result;
 use super::chunk::{Chunk, OpCode};
 
-struct Local {
-    name: String,
-    depth: usize,
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LocalFlags {
+    pub is_captured: bool,
+    pub is_mutable: bool,
+    pub is_initialized: bool,
+}
+
+impl LocalFlags {
+    pub fn new(is_mutable: bool) -> Self {
+        LocalFlags {
+            is_captured: false,
+            is_mutable,
+            is_initialized: true,
+        }
+    }
+}
+
+pub struct Local {
+    pub name: String,
+    pub slot: usize,
+    pub depth: usize,
+    pub flags: LocalFlags,
 }
 
 pub struct Compiler {
@@ -39,7 +58,13 @@ impl Compiler {
             Stmt::Let { name, value, .. } => {
                 self.compile_expr(value)?;
                 if self.scope_depth > 0 {
-                    self.locals.push(Local { name: name.clone(), depth: self.scope_depth });
+                    let slot = self.locals.len();
+                    self.locals.push(Local {
+                        name: name.clone(),
+                        slot,
+                        depth: self.scope_depth,
+                        flags: LocalFlags::new(true),
+                    });
                 } else {
                     let idx = self.chunk.add_constant(Value::Str(name.clone()));
                     self.chunk.write_opcode(OpCode::OpDefineGlobal, 0);
@@ -268,9 +293,9 @@ impl Compiler {
     }
 
     fn resolve_local(&self, name: &str) -> Option<usize> {
-        for (i, local) in self.locals.iter().enumerate().rev() {
+        for local in self.locals.iter().rev() {
             if local.name == name {
-                return Some(i);
+                return Some(local.slot);
             }
         }
         None
