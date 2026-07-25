@@ -1,8 +1,9 @@
 use crate::env::Value;
 use crate::error::{LatchError, Result};
 
+#[derive(Debug, Clone, Default)]
 pub struct ValueStack {
-    stack: Vec<Value>,
+    pub stack: Vec<Value>,
 }
 
 impl ValueStack {
@@ -47,7 +48,17 @@ impl ValueStack {
     }
 
     #[inline(always)]
+    pub fn is_empty(&self) -> bool {
+        self.stack.is_empty()
+    }
+
+    #[inline(always)]
     pub fn truncate(&mut self, len: usize) {
         self.stack.truncate(len);
+    }
+
+    #[inline(always)]
+    pub fn clear(&mut self) {
+        self.stack.clear();
     }
 }

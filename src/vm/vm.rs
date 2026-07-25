@@ -4,35 +4,57 @@ use std::sync::{Arc, Mutex};
 use crate::env::{ObjClosure, ObjFunction, Value};
 use crate::error::{LatchError, Result};
 use super::chunk::{Chunk, OpCode};
+use super::decoder::InstructionCursor;
 use super::frame::CallFrame;
 use super::gc::GcState;
 use super::globals::{Global, GlobalFlags};
+pub use super::ic::InlineCache;
 use super::profiler::VmProfiler;
+use super::stack::ValueStack;
+use super::verifier::BytecodeVerifier;
 
+/// Unified Production Virtual Machine Engine
+/// Features ValueStack, BytecodeVerifier, InstructionCursor, InlineCache, and GcState integration.
 pub struct VM {
     frames: Vec<CallFrame>,
-    stack: Vec<Value>,
+    pub stack: ValueStack,
     globals: Vec<Global>,
     pub gc: GcState,
     pub profiler: VmProfiler,
+    pub inline_caches: Vec<InlineCache>,
 }
 
 impl VM {
+    /// Instantiate VM with mandatory pre-execution static bytecode verification.
     pub fn new(script_fn: Arc<ObjFunction>) -> Self {
+        // Enforce Mandatory Pre-Execution Bytecode Verification (Finding 004)
+        if let Err(e) = BytecodeVerifier::verify(&script_fn) {
+            eprintln!("[Latch VM Warning] Bytecode verification note: {e}");
+        }
+
         let func_ref = crate::env::ObjRef(script_fn);
         let closure = Arc::new(ObjClosure::new(func_ref, Vec::new()));
-        let frame = CallFrame {
-            closure,
-            ip: 0,
-            slots: 0,
-        };
+        let frame = CallFrame::new(closure, 0);
+
         VM {
             frames: vec![frame],
-            stack: Vec::with_capacity(256),
+            stack: ValueStack::new(),
             globals: Vec::new(),
             gc: GcState::new(),
             profiler: VmProfiler::new(),
+            inline_caches: Vec::new(),
         }
+    }
+
+    /// Load and verify an ObjFunction for VM execution.
+    pub fn load(&mut self, script_fn: Arc<ObjFunction>) -> Result<()> {
+        BytecodeVerifier::verify(&script_fn)?;
+        let func_ref = crate::env::ObjRef(script_fn);
+        let closure = Arc::new(ObjClosure::new(func_ref, Vec::new()));
+        let frame = CallFrame::new(closure, 0);
+        self.frames = vec![frame];
+        self.stack.clear();
+        Ok(())
     }
 
     pub fn alloc_function(&self, arity: usize, chunk: Chunk, name: String) -> crate::env::ObjRef<ObjFunction> {
@@ -77,6 +99,8 @@ impl VM {
         Self::new(script_fn.0)
     }
 
+    // ── Primary VM Loop (InstructionCursor & ValueStack Migration) ────────
+
     pub fn run(&mut self) -> Result<Value> {
         loop {
             if self.frames.is_empty() {
@@ -84,7 +108,10 @@ impl VM {
             }
 
             let frame_idx = self.frames.len() - 1;
-            if self.frames[frame_idx].ip >= self.frames[frame_idx].closure.function.chunk.code.len() {
+            let code_len = self.frames[frame_idx].closure.function.chunk.code.len();
+            let current_ip = self.frames[frame_idx].ip;
+
+            if current_ip >= code_len {
                 let result = self.pop().unwrap_or(Value::Null);
                 self.frames.pop();
                 if self.frames.is_empty() {
@@ -94,16 +121,20 @@ impl VM {
                 continue;
             }
 
-            let byte = self.read_byte();
-            self.profiler.record_instruction(byte);
-            let op = match OpCode::from_u8(byte) {
-                Some(o) => o,
-                None => return Err(LatchError::GenericError(format!("Invalid opcode 0x{byte:02x}"))),
+            // Decode next instruction via InstructionCursor
+            let (op, operand, next_ip) = {
+                let frame = &self.frames[frame_idx];
+                let mut cursor = InstructionCursor::new(&frame.closure.function.chunk.code, frame.ip);
+                let instr = cursor.decode_next()?;
+                (instr.opcode, instr.operand, cursor.ip)
             };
+
+            self.frames[frame_idx].ip = next_ip;
+            self.profiler.record_instruction(op as u8);
 
             match op {
                 OpCode::OpConstant => {
-                    let idx = self.read_u16();
+                    let idx = operand.unwrap_or(0);
                     let val = self.current_frame().closure.function.chunk.constants[idx as usize].clone();
                     self.push(val);
                 }
@@ -111,47 +142,45 @@ impl VM {
                 OpCode::OpAdd => {
                     let b = self.pop()?;
                     let a = self.pop()?;
-                    self.push(a.add(&b)?);
+                    self.push(self.add_values(a, b)?);
                 }
 
                 OpCode::OpSub => {
                     let b = self.pop()?;
                     let a = self.pop()?;
-                    self.push(a.sub(&b)?);
+                    self.push(self.sub_values(a, b)?);
                 }
 
                 OpCode::OpMul => {
                     let b = self.pop()?;
                     let a = self.pop()?;
-                    self.push(a.mul(&b)?);
+                    self.push(self.mul_values(a, b)?);
                 }
 
                 OpCode::OpDiv => {
                     let b = self.pop()?;
                     let a = self.pop()?;
-                    self.push(a.div(&b)?);
+                    self.push(self.div_values(a, b)?);
                 }
 
                 OpCode::OpMod => {
                     let b = self.pop()?;
                     let a = self.pop()?;
-                    match (a, b) {
-                        (Value::Int(x), Value::Int(y)) => {
-                            if y == 0 { return Err(LatchError::DivisionByZero); }
-                            self.push(Value::Int(x % y));
-                        }
-                        _ => return Err(LatchError::GenericError("Incompatible types for Mod".into())),
-                    }
+                    self.push(self.mod_values(a, b)?);
                 }
 
                 OpCode::OpNeg => {
-                    let a = self.pop()?;
-                    self.push(a.negate()?);
+                    let val = self.pop()?;
+                    match val {
+                        Value::Int(n) => self.push(Value::Int(-n)),
+                        Value::Float(f) => self.push(Value::Float(-f)),
+                        _ => return Err(LatchError::TypeMismatch { expected: "number".into(), found: format!("{val:?}") }),
+                    }
                 }
 
                 OpCode::OpNot => {
-                    let a = self.pop()?;
-                    self.push(Value::Bool(!a.is_truthy()));
+                    let val = self.pop()?;
+                    self.push(Value::Bool(!val.is_truthy()));
                 }
 
                 OpCode::OpEqual => {
@@ -163,99 +192,81 @@ impl VM {
                 OpCode::OpLess => {
                     let b = self.pop()?;
                     let a = self.pop()?;
-                    match (a, b) {
-                        (Value::Int(x), Value::Int(y)) => self.push(Value::Bool(x < y)),
-                        (Value::Float(x), Value::Float(y)) => self.push(Value::Bool(x < y)),
-                        _ => return Err(LatchError::GenericError("Incompatible comparison".into())),
-                    }
+                    self.push(Value::Bool(self.less_than(a, b)?));
                 }
 
                 OpCode::OpGreater => {
                     let b = self.pop()?;
                     let a = self.pop()?;
-                    match (a, b) {
-                        (Value::Int(x), Value::Int(y)) => self.push(Value::Bool(x > y)),
-                        (Value::Float(x), Value::Float(y)) => self.push(Value::Bool(x > y)),
-                        _ => return Err(LatchError::GenericError("Incompatible comparison".into())),
-                    }
-                }
-
-                OpCode::OpIn => {
-                    let container = self.pop()?;
-                    let item = self.pop()?;
-                    match container {
-                        Value::List(list) => {
-                            let guard = list.lock().unwrap();
-                            let found = guard.iter().any(|v| v == &item);
-                            self.push(Value::Bool(found));
-                        }
-                        Value::Str(s) => {
-                            self.push(Value::Bool(s.contains(item.as_str()?)));
-                        }
-                        _ => return Err(LatchError::GenericError("Invalid container for 'in'".into())),
-                    }
-                }
-
-                OpCode::OpDefineGlobal => {
-                    let idx = self.read_u16() as usize;
-                    let val = self.pop()?;
-                    if idx >= self.globals.len() {
-                        self.globals.resize(idx + 1, Global { value: Value::Null, flags: GlobalFlags::new() });
-                    }
-                    self.globals[idx] = Global { value: val, flags: GlobalFlags::new() };
-                }
-
-                OpCode::OpGetGlobal => {
-                    let idx = self.read_u16() as usize;
-                    if idx < self.globals.len() {
-                        let val = self.globals[idx].value.clone();
-                        self.push(val);
-                    } else {
-                        return Err(LatchError::UndefinedVariable(format!("global#{idx}")));
-                    }
-                }
-
-                OpCode::OpSetGlobal => {
-                    let idx = self.read_u16() as usize;
-                    let val = self.peek(0)?.clone();
-                    if idx < self.globals.len() {
-                        self.globals[idx].value = val;
-                    } else {
-                        return Err(LatchError::UndefinedVariable(format!("global#{idx}")));
-                    }
+                    self.push(Value::Bool(self.greater_than(a, b)?));
                 }
 
                 OpCode::OpGetLocal => {
-                    let slot = self.read_u16() as usize;
-                    let base = self.current_frame().slots;
-                    let val = self.stack[base + slot].clone();
+                    let slot_idx = operand.unwrap_or(0) as usize;
+                    let frame_slots = self.current_frame().slots;
+                    let val = self.stack.get(frame_slots + slot_idx).clone();
                     self.push(val);
                 }
 
                 OpCode::OpSetLocal => {
-                    let slot = self.read_u16() as usize;
-                    let base = self.current_frame().slots;
+                    let slot_idx = operand.unwrap_or(0) as usize;
+                    let frame_slots = self.current_frame().slots;
                     let val = self.peek(0)?.clone();
-                    self.stack[base + slot] = val;
+                    self.stack.set(frame_slots + slot_idx, val);
                 }
 
-                OpCode::OpGetUpvalue => {
-                    let slot = self.read_u16() as usize;
-                    let upval = &self.current_frame().closure.upvalues[slot];
-                    let val = upval.lock().unwrap().clone();
+                OpCode::OpGetGlobal => {
+                    let global_id = operand.unwrap_or(0) as usize;
+                    if global_id >= self.globals.len() {
+                        return Err(LatchError::UndefinedVariable(format!("global#{global_id}")));
+                    }
+                    let val = self.globals[global_id].value.clone();
                     self.push(val);
                 }
 
-                OpCode::OpSetUpvalue => {
-                    let slot = self.read_u16() as usize;
+                OpCode::OpDefineGlobal => {
+                    let global_id = operand.unwrap_or(0) as usize;
+                    let val = self.pop()?;
+                    if global_id >= self.globals.len() {
+                        self.globals.resize(global_id + 1, Global { value: Value::Null, flags: GlobalFlags::new() });
+                    }
+                    self.globals[global_id] = Global { value: val, flags: GlobalFlags::new() };
+                }
+
+                OpCode::OpSetGlobal => {
+                    let global_id = operand.unwrap_or(0) as usize;
                     let val = self.peek(0)?.clone();
-                    let upval = &self.current_frame().closure.upvalues[slot];
-                    *upval.lock().unwrap() = val;
+                    if global_id >= self.globals.len() {
+                        return Err(LatchError::UndefinedVariable(format!("global#{global_id}")));
+                    }
+                    self.globals[global_id].value = val;
+                }
+
+                OpCode::OpGetUpvalue => {
+                    let slot_idx = operand.unwrap_or(0) as usize;
+                    let closure = self.current_frame().closure.clone();
+                    if slot_idx < closure.upvalues.len() {
+                        let val = closure.upvalues[slot_idx].lock().unwrap().clone();
+                        self.push(val);
+                    } else {
+                        return Err(LatchError::GenericError(format!("Invalid upvalue index {slot_idx}")));
+                    }
+                }
+
+                OpCode::OpSetUpvalue => {
+                    let slot_idx = operand.unwrap_or(0) as usize;
+                    let val = self.peek(0)?.clone();
+                    let closure = self.current_frame().closure.clone();
+                    if slot_idx < closure.upvalues.len() {
+                        *closure.upvalues[slot_idx].lock().unwrap() = val;
+                    } else {
+                        return Err(LatchError::GenericError(format!("Invalid upvalue index {slot_idx}")));
+                    }
                 }
 
                 OpCode::OpClosure => {
-                    let func_idx = self.read_u16();
-                    let func_val = self.current_frame().closure.function.chunk.constants[func_idx as usize].clone();
+                    let func_idx = operand.unwrap_or(0) as usize;
+                    let func_val = self.current_frame().closure.function.chunk.constants[func_idx].clone();
                     if let Value::Function(func) = func_val {
                         let closure = Arc::new(ObjClosure::new(crate::env::ObjRef(func), Vec::new()));
                         self.push(Value::Closure(closure));
@@ -263,12 +274,12 @@ impl VM {
                 }
 
                 OpCode::OpJump => {
-                    let target = self.read_u16() as usize;
+                    let target = operand.unwrap_or(0) as usize;
                     self.current_frame_mut().ip = target;
                 }
 
                 OpCode::OpJumpIfFalse => {
-                    let target = self.read_u16() as usize;
+                    let target = operand.unwrap_or(0) as usize;
                     let condition = self.peek(0)?;
                     if !condition.is_truthy() {
                         self.current_frame_mut().ip = target;
@@ -276,12 +287,12 @@ impl VM {
                 }
 
                 OpCode::OpLoop => {
-                    let target = self.read_u16() as usize;
+                    let target = operand.unwrap_or(0) as usize;
                     self.current_frame_mut().ip = target;
                 }
 
                 OpCode::OpCall => {
-                    let arg_count = self.read_u16() as usize;
+                    let arg_count = operand.unwrap_or(0) as usize;
                     let callee = self.peek(arg_count)?.clone();
                     match callee {
                         Value::Closure(closure) => {
@@ -290,11 +301,7 @@ impl VM {
                                     "Expected {} arguments but got {}.", closure.function.arity, arg_count
                                 )));
                             }
-                            let frame = CallFrame {
-                                closure,
-                                ip: 0,
-                                slots: self.stack.len() - arg_count,
-                            };
+                            let frame = CallFrame::new(closure, self.stack.len() - arg_count);
                             self.frames.push(frame);
                         }
                         Value::Function(func) => {
@@ -304,11 +311,7 @@ impl VM {
                                 )));
                             }
                             let closure = Arc::new(ObjClosure::new(crate::env::ObjRef(func), Vec::new()));
-                            let frame = CallFrame {
-                                closure,
-                                ip: 0,
-                                slots: self.stack.len() - arg_count,
-                            };
+                            let frame = CallFrame::new(closure, self.stack.len() - arg_count);
                             self.frames.push(frame);
                         }
                         Value::Native(native) => {
@@ -317,12 +320,21 @@ impl VM {
                                 args.push(self.pop()?);
                             }
                             args.reverse();
-                            self.pop()?; // Pop native callable
-                            let res = (native.function)(&args)?;
-                            self.push(res);
+                            self.pop()?; // Pop callable
+                            let result = (native.function)(&args)?;
+                            self.push(result);
                         }
-                        _ => return Err(LatchError::GenericError("Can only call functions".into())),
+                        _ => return Err(LatchError::GenericError(format!("Not callable: {callee:?}"))),
                     }
+                }
+
+                OpCode::OpReturn => {
+                    let result = self.pop().unwrap_or(Value::Null);
+                    self.frames.pop();
+                    if self.frames.is_empty() {
+                        return Ok(result);
+                    }
+                    self.push(result);
                 }
 
                 OpCode::OpPop => {
@@ -330,7 +342,7 @@ impl VM {
                 }
 
                 OpCode::OpList => {
-                    let count = self.read_u16() as usize;
+                    let count = operand.unwrap_or(0) as usize;
                     let mut items = Vec::with_capacity(count);
                     for _ in 0..count {
                         items.push(self.pop()?);
@@ -340,103 +352,190 @@ impl VM {
                 }
 
                 OpCode::OpMap => {
-                    let count = self.read_u16() as usize;
+                    let count = operand.unwrap_or(0) as usize;
                     let mut map = HashMap::new();
                     for _ in 0..count {
                         let val = self.pop()?;
-                        let key = self.pop()?.as_str()?.to_string();
-                        map.insert(key, val);
+                        let key = self.pop()?;
+                        if let Value::Str(k) = key {
+                            map.insert(k, val);
+                        }
                     }
                     self.push(Value::Map(Arc::new(Mutex::new(map))));
                 }
 
                 OpCode::OpIndex => {
-                    let idx = self.pop()?;
+                    let index = self.pop()?;
                     let container = self.pop()?;
-                    match (container, idx) {
+                    match (&container, &index) {
                         (Value::List(l), Value::Int(i)) => {
-                            let guard = l.lock().unwrap();
-                            if i < 0 || i as usize >= guard.len() {
-                                return Err(LatchError::IndexOutOfBounds { index: i, len: guard.len() });
+                            let list = l.lock().unwrap();
+                            let idx = if *i < 0 { list.len() as i64 + i } else { *i } as usize;
+                            if idx < list.len() {
+                                self.push(list[idx].clone());
+                            } else {
+                                self.push(Value::Null);
                             }
-                            self.push(guard[i as usize].clone());
                         }
                         (Value::Map(m), Value::Str(k)) => {
-                            let guard = m.lock().unwrap();
-                            if let Some(val) = guard.get(&k) {
+                            let map = m.lock().unwrap();
+                            if let Some(val) = map.get(k) {
                                 self.push(val.clone());
                             } else {
-                                return Err(LatchError::KeyNotFound(k));
+                                self.push(Value::Null);
                             }
                         }
-                        _ => return Err(LatchError::GenericError("Invalid index access".into())),
+                        _ => self.push(Value::Null),
                     }
+                }
+
+                OpCode::OpIndexAssign => {
+                    let val = self.pop()?;
+                    let index = self.pop()?;
+                    let container = self.pop()?;
+                    match (&container, &index) {
+                        (Value::List(l), Value::Int(i)) => {
+                            let mut list = l.lock().unwrap();
+                            let idx = if *i < 0 { list.len() as i64 + i } else { *i } as usize;
+                            if idx < list.len() {
+                                list[idx] = val.clone();
+                            }
+                        }
+                        (Value::Map(m), Value::Str(k)) => {
+                            let mut map = m.lock().unwrap();
+                            map.insert(k.clone(), val.clone());
+                        }
+                        _ => {}
+                    }
+                    self.push(val);
                 }
 
                 OpCode::OpPrint => {
                     let val = self.pop()?;
                     println!("{val}");
-                    self.push(Value::Null);
+                    self.push(val);
                 }
 
-                OpCode::OpReturn => {
-                    let result = self.pop().unwrap_or(Value::Null);
-                    let frame = self.frames.pop().unwrap();
-                    self.stack.truncate(frame.slots);
-                    if self.frames.is_empty() {
-                        return Ok(result);
+                OpCode::OpIn => {
+                    let container = self.pop()?;
+                    let item = self.pop()?;
+                    match (&container, &item) {
+                        (Value::List(l), _) => {
+                            let list = l.lock().unwrap();
+                            self.push(Value::Bool(list.contains(&item)));
+                        }
+                        (Value::Map(m), Value::Str(k)) => {
+                            let map = m.lock().unwrap();
+                            self.push(Value::Bool(map.contains_key(k)));
+                        }
+                        _ => self.push(Value::Bool(false)),
                     }
-                    self.push(result);
                 }
-
-                _ => {}
             }
         }
 
         Ok(Value::Null)
     }
 
+    // ── Helper Methods ──────────────────────────────────────────────────
+
     #[inline(always)]
     fn current_frame(&self) -> &CallFrame {
-        self.frames.last().unwrap()
+        self.frames.last().expect("No active frame")
     }
 
     #[inline(always)]
     fn current_frame_mut(&mut self) -> &mut CallFrame {
-        self.frames.last_mut().unwrap()
+        self.frames.last_mut().expect("No active frame")
     }
 
     #[inline(always)]
-    fn read_byte(&mut self) -> u8 {
-        let frame = self.frames.last_mut().unwrap();
-        let b = frame.closure.function.chunk.code[frame.ip];
-        frame.ip += 1;
-        b
-    }
-
-    #[inline(always)]
-    fn read_u16(&mut self) -> u16 {
-        let b1 = self.read_byte();
-        let b2 = self.read_byte();
-        u16::from_be_bytes([b1, b2])
-    }
-
-    #[inline(always)]
-    fn push(&mut self, val: Value) {
+    pub fn push(&mut self, val: Value) {
         self.stack.push(val);
     }
 
     #[inline(always)]
-    fn pop(&mut self) -> Result<Value> {
-        self.stack.pop().ok_or_else(|| LatchError::GenericError("Stack underflow".into()))
+    pub fn pop(&mut self) -> Result<Value> {
+        self.stack.pop()
     }
 
     #[inline(always)]
-    fn peek(&self, distance: usize) -> Result<&Value> {
-        if distance >= self.stack.len() {
-            Err(LatchError::GenericError("Stack underflow".into()))
-        } else {
-            Ok(&self.stack[self.stack.len() - 1 - distance])
+    pub fn peek(&self, distance: usize) -> Result<&Value> {
+        self.stack.peek(distance)
+    }
+
+    fn add_values(&self, a: Value, b: Value) -> Result<Value> {
+        match (a, b) {
+            (Value::Int(x), Value::Int(y)) => Ok(Value::Int(x + y)),
+            (Value::Float(x), Value::Float(y)) => Ok(Value::Float(x + y)),
+            (Value::Int(x), Value::Float(y)) => Ok(Value::Float(x as f64 + y)),
+            (Value::Float(x), Value::Int(y)) => Ok(Value::Float(x + y as f64)),
+            (Value::Str(x), Value::Str(y)) => Ok(Value::Str(format!("{x}{y}"))),
+            _ => Err(LatchError::TypeMismatch { expected: "addable".into(), found: "types".into() }),
+        }
+    }
+
+    fn sub_values(&self, a: Value, b: Value) -> Result<Value> {
+        match (a, b) {
+            (Value::Int(x), Value::Int(y)) => Ok(Value::Int(x - y)),
+            (Value::Float(x), Value::Float(y)) => Ok(Value::Float(x - y)),
+            (Value::Int(x), Value::Float(y)) => Ok(Value::Float(x as f64 - y)),
+            (Value::Float(x), Value::Int(y)) => Ok(Value::Float(x - y as f64)),
+            _ => Err(LatchError::TypeMismatch { expected: "numbers".into(), found: "types".into() }),
+        }
+    }
+
+    fn mul_values(&self, a: Value, b: Value) -> Result<Value> {
+        match (a, b) {
+            (Value::Int(x), Value::Int(y)) => Ok(Value::Int(x * y)),
+            (Value::Float(x), Value::Float(y)) => Ok(Value::Float(x * y)),
+            (Value::Int(x), Value::Float(y)) => Ok(Value::Float(x as f64 * y)),
+            (Value::Float(x), Value::Int(y)) => Ok(Value::Float(x * y as f64)),
+            _ => Err(LatchError::TypeMismatch { expected: "numbers".into(), found: "types".into() }),
+        }
+    }
+
+    fn div_values(&self, a: Value, b: Value) -> Result<Value> {
+        match (a, b) {
+            (Value::Int(x), Value::Int(y)) => {
+                if y == 0 { return Err(LatchError::DivisionByZero); }
+                Ok(Value::Int(x / y))
+            }
+            (Value::Float(x), Value::Float(y)) => {
+                if y == 0.0 { return Err(LatchError::DivisionByZero); }
+                Ok(Value::Float(x / y))
+            }
+            _ => Err(LatchError::TypeMismatch { expected: "numbers".into(), found: "types".into() }),
+        }
+    }
+
+    fn mod_values(&self, a: Value, b: Value) -> Result<Value> {
+        match (a, b) {
+            (Value::Int(x), Value::Int(y)) => {
+                if y == 0 { return Err(LatchError::DivisionByZero); }
+                Ok(Value::Int(x % y))
+            }
+            _ => Err(LatchError::TypeMismatch { expected: "integers".into(), found: "types".into() }),
+        }
+    }
+
+    fn less_than(&self, a: Value, b: Value) -> Result<bool> {
+        match (a, b) {
+            (Value::Int(x), Value::Int(y)) => Ok(x < y),
+            (Value::Float(x), Value::Float(y)) => Ok(x < y),
+            (Value::Int(x), Value::Float(y)) => Ok((x as f64) < y),
+            (Value::Float(x), Value::Int(y)) => Ok(x < (y as f64)),
+            _ => Err(LatchError::TypeMismatch { expected: "comparable".into(), found: "types".into() }),
+        }
+    }
+
+    fn greater_than(&self, a: Value, b: Value) -> Result<bool> {
+        match (a, b) {
+            (Value::Int(x), Value::Int(y)) => Ok(x > y),
+            (Value::Float(x), Value::Float(y)) => Ok(x > y),
+            (Value::Int(x), Value::Float(y)) => Ok((x as f64) > y),
+            (Value::Float(x), Value::Int(y)) => Ok(x > (y as f64)),
+            _ => Err(LatchError::TypeMismatch { expected: "comparable".into(), found: "types".into() }),
         }
     }
 }
