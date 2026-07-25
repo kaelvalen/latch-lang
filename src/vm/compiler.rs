@@ -27,7 +27,9 @@ impl Compiler {
         for stmt in stmts {
             self.compile_stmt(stmt)?;
         }
-        self.chunk.write_opcode(OpCode::OpNull, 0);
+        let null_idx = self.chunk.add_constant(Value::Null);
+        self.chunk.write_opcode(OpCode::OpConstant, 0);
+        self.chunk.write_u16(null_idx as u16, 0);
         self.chunk.write_opcode(OpCode::OpReturn, 0);
         Ok(self.chunk)
     }
@@ -140,11 +142,9 @@ impl Compiler {
                 self.chunk.write_u16(idx as u16, 0);
             }
             Expr::Bool(b) => {
-                if *b {
-                    self.chunk.write_opcode(OpCode::OpTrue, 0);
-                } else {
-                    self.chunk.write_opcode(OpCode::OpFalse, 0);
-                }
+                let idx = self.chunk.add_constant(Value::Bool(*b));
+                self.chunk.write_opcode(OpCode::OpConstant, 0);
+                self.chunk.write_u16(idx as u16, 0);
             }
             Expr::Str(s) => {
                 let idx = self.chunk.add_constant(Value::Str(s.clone()));
@@ -152,7 +152,9 @@ impl Compiler {
                 self.chunk.write_u16(idx as u16, 0);
             }
             Expr::Null => {
-                self.chunk.write_opcode(OpCode::OpNull, 0);
+                let idx = self.chunk.add_constant(Value::Null);
+                self.chunk.write_opcode(OpCode::OpConstant, 0);
+                self.chunk.write_u16(idx as u16, 0);
             }
             Expr::Ident(name) => {
                 if let Some(slot) = self.resolve_local(name) {
@@ -168,26 +170,35 @@ impl Compiler {
                 self.compile_expr(left)?;
                 self.compile_expr(right)?;
                 match op {
-                    BinOp::Add => self.chunk.write_opcode(OpCode::OpAdd, 0),
-                    BinOp::Sub => self.chunk.write_opcode(OpCode::OpSub, 0),
-                    BinOp::Mul => self.chunk.write_opcode(OpCode::OpMul, 0),
-                    BinOp::Div => self.chunk.write_opcode(OpCode::OpDiv, 0),
-                    BinOp::Mod => self.chunk.write_opcode(OpCode::OpMod, 0),
-                    BinOp::Eq => self.chunk.write_opcode(OpCode::OpEq, 0),
-                    BinOp::NotEq => self.chunk.write_opcode(OpCode::OpNotEq, 0),
-                    BinOp::Lt => self.chunk.write_opcode(OpCode::OpLt, 0),
-                    BinOp::Gt => self.chunk.write_opcode(OpCode::OpGt, 0),
-                    BinOp::LtEq => self.chunk.write_opcode(OpCode::OpLtEq, 0),
-                    BinOp::GtEq => self.chunk.write_opcode(OpCode::OpGtEq, 0),
-                    BinOp::In => self.chunk.write_opcode(OpCode::OpIn, 0),
-                    _ => 0,
+                    BinOp::Add => { self.chunk.write_opcode(OpCode::OpAdd, 0); }
+                    BinOp::Sub => { self.chunk.write_opcode(OpCode::OpSub, 0); }
+                    BinOp::Mul => { self.chunk.write_opcode(OpCode::OpMul, 0); }
+                    BinOp::Div => { self.chunk.write_opcode(OpCode::OpDiv, 0); }
+                    BinOp::Mod => { self.chunk.write_opcode(OpCode::OpMod, 0); }
+                    BinOp::Eq => { self.chunk.write_opcode(OpCode::OpEqual, 0); }
+                    BinOp::NotEq => {
+                        self.chunk.write_opcode(OpCode::OpEqual, 0);
+                        self.chunk.write_opcode(OpCode::OpNot, 0);
+                    }
+                    BinOp::Lt => { self.chunk.write_opcode(OpCode::OpLess, 0); }
+                    BinOp::Gt => { self.chunk.write_opcode(OpCode::OpGreater, 0); }
+                    BinOp::LtEq => {
+                        self.chunk.write_opcode(OpCode::OpGreater, 0);
+                        self.chunk.write_opcode(OpCode::OpNot, 0);
+                    }
+                    BinOp::GtEq => {
+                        self.chunk.write_opcode(OpCode::OpLess, 0);
+                        self.chunk.write_opcode(OpCode::OpNot, 0);
+                    }
+                    BinOp::In => { self.chunk.write_opcode(OpCode::OpIn, 0); }
+                    _ => {}
                 };
             }
             Expr::UnaryOp { op, expr } => {
                 self.compile_expr(expr)?;
                 match op {
-                    UnaryOp::Neg => self.chunk.write_opcode(OpCode::OpNeg, 0),
-                    UnaryOp::Not => self.chunk.write_opcode(OpCode::OpNot, 0),
+                    UnaryOp::Neg => { self.chunk.write_opcode(OpCode::OpNeg, 0); }
+                    UnaryOp::Not => { self.chunk.write_opcode(OpCode::OpNot, 0); }
                 };
             }
             Expr::List(items) => {
@@ -230,7 +241,9 @@ impl Compiler {
                 }
             }
             _ => {
-                self.chunk.write_opcode(OpCode::OpNull, 0);
+                let null_idx = self.chunk.add_constant(Value::Null);
+                self.chunk.write_opcode(OpCode::OpConstant, 0);
+                self.chunk.write_u16(null_idx as u16, 0);
             }
         }
         Ok(())

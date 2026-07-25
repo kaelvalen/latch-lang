@@ -41,10 +41,6 @@ impl VM {
                     self.push(val);
                 }
 
-                OpCode::OpNull  => self.push(Value::Null),
-                OpCode::OpTrue  => self.push(Value::Bool(true)),
-                OpCode::OpFalse => self.push(Value::Bool(false)),
-
                 OpCode::OpAdd => {
                     let b = self.pop()?;
                     let a = self.pop()?;
@@ -118,19 +114,13 @@ impl VM {
                     self.push(Value::Bool(!a.is_truthy()));
                 }
 
-                OpCode::OpEq => {
+                OpCode::OpEqual => {
                     let b = self.pop()?;
                     let a = self.pop()?;
                     self.push(Value::Bool(format!("{a}") == format!("{b}")));
                 }
 
-                OpCode::OpNotEq => {
-                    let b = self.pop()?;
-                    let a = self.pop()?;
-                    self.push(Value::Bool(format!("{a}") != format!("{b}")));
-                }
-
-                OpCode::OpLt => {
+                OpCode::OpLess => {
                     let b = self.pop()?;
                     let a = self.pop()?;
                     match (a, b) {
@@ -140,32 +130,12 @@ impl VM {
                     }
                 }
 
-                OpCode::OpGt => {
+                OpCode::OpGreater => {
                     let b = self.pop()?;
                     let a = self.pop()?;
                     match (a, b) {
                         (Value::Int(x), Value::Int(y)) => self.push(Value::Bool(x > y)),
                         (Value::Float(x), Value::Float(y)) => self.push(Value::Bool(x > y)),
-                        _ => return Err(LatchError::GenericError("Incompatible comparison".into())),
-                    }
-                }
-
-                OpCode::OpLtEq => {
-                    let b = self.pop()?;
-                    let a = self.pop()?;
-                    match (a, b) {
-                        (Value::Int(x), Value::Int(y)) => self.push(Value::Bool(x <= y)),
-                        (Value::Float(x), Value::Float(y)) => self.push(Value::Bool(x <= y)),
-                        _ => return Err(LatchError::GenericError("Incompatible comparison".into())),
-                    }
-                }
-
-                OpCode::OpGtEq => {
-                    let b = self.pop()?;
-                    let a = self.pop()?;
-                    match (a, b) {
-                        (Value::Int(x), Value::Int(y)) => self.push(Value::Bool(x >= y)),
-                        (Value::Float(x), Value::Float(y)) => self.push(Value::Bool(x >= y)),
                         _ => return Err(LatchError::GenericError("Incompatible comparison".into())),
                     }
                 }
