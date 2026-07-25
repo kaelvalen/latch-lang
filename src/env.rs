@@ -110,6 +110,26 @@ impl PartialEq for ObjInstance {
     }
 }
 
+/// Isolated Module Object in the VM.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ObjModule {
+    pub header: ObjHeader,
+    pub name: String,
+    pub globals: Vec<Value>,
+    pub exports: HashMap<String, usize>,
+}
+
+impl ObjModule {
+    pub fn new(name: impl Into<String>) -> Self {
+        ObjModule {
+            header: ObjHeader::new(ObjKind::Module),
+            name: name.into(),
+            globals: Vec::new(),
+            exports: HashMap::new(),
+        }
+    }
+}
+
 /// Runtime value – the result of evaluating any expression.
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
