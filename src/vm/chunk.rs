@@ -70,7 +70,7 @@ impl OpCode {
     }
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct Chunk {
     pub code: Vec<u8>,
     pub constants: Vec<Value>,

@@ -159,15 +159,15 @@ fn main() {
             let opt_ast = optimizer.optimize_stmts(&ast);
 
             let compiler = crate::vm::Compiler::new();
-            let chunk = match compiler.compile(&opt_ast) {
-                Ok(c) => c,
+            let script_fn = match compiler.compile(&opt_ast) {
+                Ok(f) => f,
                 Err(e) => {
                     print_error(&e, &file, &source);
                     std::process::exit(1);
                 }
             };
 
-            let mut vm = crate::vm::VM::new(chunk);
+            let mut vm = crate::vm::VM::new(script_fn);
             if let Err(e) = vm.run() {
                 print_error(&e, &file, &source);
                 std::process::exit(1);

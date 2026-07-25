@@ -1,15 +1,36 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-use crate::env::Value;
+use crate::env::{ObjFunction, Value};
 use crate::error::{LatchError, Result};
 use super::chunk::{Chunk, OpCode};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GlobalFlags {
+    pub is_mutable: bool,
+    pub is_exported: bool,
+}
+
+impl GlobalFlags {
+    pub fn new() -> Self {
+        GlobalFlags {
+            is_mutable: true,
+            is_exported: false,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Global {
+    pub value: Value,
+    pub flags: GlobalFlags,
+}
+
 /// A CallFrame represents an active function execution frame.
-/// It tracks the bytecode chunk, instruction pointer, and base stack slot.
+/// It tracks the executing ObjFunction, instruction pointer (ip), and base stack slot.
 #[derive(Debug, Clone)]
 pub struct CallFrame {
-    pub chunk: Arc<Chunk>,
+    pub function: Arc<ObjFunction>,
     pub ip: usize,
     pub slots: usize,
 }
@@ -17,13 +38,13 @@ pub struct CallFrame {
 pub struct VM {
     frames: Vec<CallFrame>,
     stack: Vec<Value>,
-    globals: Vec<Value>,
+    globals: Vec<Global>,
 }
 
 impl VM {
-    pub fn new(chunk: Chunk) -> Self {
+    pub fn new(script_fn: Arc<ObjFunction>) -> Self {
         let frame = CallFrame {
-            chunk: Arc::new(chunk),
+            function: script_fn,
             ip: 0,
             slots: 0,
         };
@@ -34,6 +55,16 @@ impl VM {
         }
     }
 
+    pub fn new_with_chunk(chunk: Chunk) -> Self {
+        let script_fn = Arc::new(ObjFunction {
+            arity: 0,
+            chunk,
+            name: "<script>".into(),
+            upvalue_count: 0,
+        });
+        Self::new(script_fn)
+    }
+
     pub fn run(&mut self) -> Result<Value> {
         loop {
             if self.frames.is_empty() {
@@ -41,7 +72,7 @@ impl VM {
             }
 
             let frame_idx = self.frames.len() - 1;
-            if self.frames[frame_idx].ip >= self.frames[frame_idx].chunk.code.len() {
+            if self.frames[frame_idx].ip >= self.frames[frame_idx].function.chunk.code.len() {
                 let result = self.pop().unwrap_or(Value::Null);
                 self.frames.pop();
                 if self.frames.is_empty() {
@@ -60,7 +91,7 @@ impl VM {
             match op {
                 OpCode::OpConstant => {
                     let idx = self.read_u16();
-                    let val = self.current_frame().chunk.constants[idx as usize].clone();
+                    let val = self.current_frame().function.chunk.constants[idx as usize].clone();
                     self.push(val);
                 }
 
@@ -156,15 +187,15 @@ impl VM {
                     let idx = self.read_u16() as usize;
                     let val = self.pop()?;
                     if idx >= self.globals.len() {
-                        self.globals.resize(idx + 1, Value::Null);
+                        self.globals.resize(idx + 1, Global { value: Value::Null, flags: GlobalFlags::new() });
                     }
-                    self.globals[idx] = val;
+                    self.globals[idx] = Global { value: val, flags: GlobalFlags::new() };
                 }
 
                 OpCode::OpGetGlobal => {
                     let idx = self.read_u16() as usize;
                     if idx < self.globals.len() {
-                        let val = self.globals[idx].clone();
+                        let val = self.globals[idx].value.clone();
                         self.push(val);
                     } else {
                         return Err(LatchError::UndefinedVariable(format!("global#{idx}")));
@@ -175,7 +206,7 @@ impl VM {
                     let idx = self.read_u16() as usize;
                     let val = self.peek(0)?.clone();
                     if idx < self.globals.len() {
-                        self.globals[idx] = val;
+                        self.globals[idx].value = val;
                     } else {
                         return Err(LatchError::UndefinedVariable(format!("global#{idx}")));
                     }
@@ -211,6 +242,27 @@ impl VM {
                 OpCode::OpLoop => {
                     let target = self.read_u16() as usize;
                     self.current_frame_mut().ip = target;
+                }
+
+                OpCode::OpCall => {
+                    let arg_count = self.read_u16() as usize;
+                    let callee = self.peek(arg_count)?.clone();
+                    match callee {
+                        Value::Function(func) => {
+                            if arg_count != func.arity {
+                                return Err(LatchError::GenericError(format!(
+                                    "Expected {} arguments but got {}.", func.arity, arg_count
+                                )));
+                            }
+                            let frame = CallFrame {
+                                function: func,
+                                ip: 0,
+                                slots: self.stack.len() - arg_count,
+                            };
+                            self.frames.push(frame);
+                        }
+                        _ => return Err(LatchError::GenericError("Can only call functions".into())),
+                    }
                 }
 
                 OpCode::OpPop => {
@@ -297,7 +349,7 @@ impl VM {
     #[inline(always)]
     fn read_byte(&mut self) -> u8 {
         let frame = self.frames.last_mut().unwrap();
-        let b = frame.chunk.code[frame.ip];
+        let b = frame.function.chunk.code[frame.ip];
         frame.ip += 1;
         b
     }
@@ -319,6 +371,7 @@ impl VM {
         self.stack.pop().ok_or_else(|| LatchError::GenericError("Stack underflow".into()))
     }
 
+    #[inline(always)]
     fn peek(&self, distance: usize) -> Result<&Value> {
         if distance >= self.stack.len() {
             Err(LatchError::GenericError("Stack underflow".into()))

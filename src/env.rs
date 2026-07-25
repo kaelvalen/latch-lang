@@ -5,6 +5,28 @@ use std::sync::{Arc, Mutex};
 use crate::ast::{Block, Param, Type};
 use crate::error::{LatchError, Result};
 
+use crate::vm::Chunk;
+
+/// First-class Compiled Function Object in the VM.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ObjFunction {
+    pub arity: usize,
+    pub chunk: Chunk,
+    pub name: String,
+    pub upvalue_count: usize,
+}
+
+impl ObjFunction {
+    pub fn new(name: impl Into<String>, arity: usize) -> Self {
+        ObjFunction {
+            arity,
+            chunk: Chunk::new(),
+            name: name.into(),
+            upvalue_count: 0,
+        }
+    }
+}
+
 /// Runtime value – the result of evaluating any expression.
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
@@ -15,6 +37,7 @@ pub enum Value {
     Str(String),
     List(Arc<Mutex<Vec<Value>>>),
     Map(Arc<Mutex<HashMap<String, Value>>>),
+    Function(Arc<ObjFunction>),
     Fn {
         params: Vec<Param>,
         body: Block,
@@ -150,6 +173,7 @@ impl Value {
             Value::List(_)           => "list",
             Value::Map(_)            => "dict",
             Value::Fn { .. }         => "fn",
+            Value::Function(_)       => "fn",
             Value::ProcessResult { .. } => "process",
             Value::HttpResponse { .. }  => "response",
             Value::Class { .. }      => "class",
@@ -296,6 +320,7 @@ impl PartialEq for Value {
                 let gb = b.lock().unwrap();
                 *ga == *gb
             }
+            (Value::Function(a), Value::Function(b)) => Arc::ptr_eq(a, b) || a == b,
             (Value::Class { name: na, .. }, Value::Class { name: nb, .. }) => na == nb,
             (Value::Instance { class_name: ca, fields: fa, .. }, Value::Instance { class_name: cb, fields: fb, .. }) => {
                 if ca != cb { return false; }
@@ -337,6 +362,7 @@ impl fmt::Display for Value {
                 write!(f, "}}")
             }
             Value::Fn { .. } => write!(f, "<fn>"),
+            Value::Function(func) => write!(f, "<fn {}>", func.name),
             Value::Class { name, .. } => write!(f, "<class {name}>"),
             Value::Instance { class_name, fields, .. } => {
                 let guard = fields.lock().unwrap();

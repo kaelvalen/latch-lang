@@ -47,8 +47,8 @@ fn test_vm_disassembler() {
 
     let stmts = vec![Stmt::Break];
     let compiler = Compiler::new();
-    if let Ok(chunk) = compiler.compile(&stmts) {
-        chunk.disassemble("test_chunk");
+    if let Ok(func) = compiler.compile(&stmts) {
+        func.chunk.disassemble("test_chunk");
     }
 }
 
@@ -111,8 +111,8 @@ fn test_execution_abi_contract() {
     ];
 
     let compiler = Compiler::new();
-    let chunk = compiler.compile(&stmts).expect("Compilation failed");
-    let mut vm = VM::new(chunk);
+    let script_fn = compiler.compile(&stmts).expect("Compilation failed");
+    let mut vm = VM::new(script_fn);
     let result = vm.run().expect("VM execution failed");
     assert_eq!(result.as_int().unwrap(), 40);
 }

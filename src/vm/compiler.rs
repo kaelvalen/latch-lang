@@ -1,7 +1,8 @@
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use crate::ast::*;
-use crate::env::Value;
+use crate::env::{ObjFunction, Value};
 use crate::error::Result;
 use super::chunk::{Chunk, OpCode};
 
@@ -47,13 +48,20 @@ impl Compiler {
         }
     }
 
-    pub fn compile(mut self, stmts: &[Stmt]) -> Result<Chunk> {
+    pub fn compile(mut self, stmts: &[Stmt]) -> Result<Arc<ObjFunction>> {
         for stmt in stmts {
             self.compile_stmt(stmt)?;
         }
         self.emit_constant(Value::Null, 0);
         self.emit_opcode(OpCode::OpReturn, 0);
-        Ok(self.chunk)
+
+        let script_fn = ObjFunction {
+            arity: 0,
+            chunk: self.chunk,
+            name: "<script>".into(),
+            upvalue_count: 0,
+        };
+        Ok(Arc::new(script_fn))
     }
 
     // ── Low-Level Emitter Methods ─────────────────────────────
