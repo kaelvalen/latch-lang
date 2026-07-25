@@ -51,3 +51,32 @@ fn test_vm_disassembler() {
         chunk.disassemble("test_chunk");
     }
 }
+
+#[test]
+fn test_optimizer_constant_folding() {
+    use latch_lang::ast::{Expr, Stmt, BinOp};
+    use latch_lang::vm::Optimizer;
+
+    // stmt: let x = 10 + 20 * 2;
+    let stmt = Stmt::Let {
+        name: "x".into(),
+        value: Expr::BinOp {
+            op: BinOp::Add,
+            left: Box::new(Expr::Int(10)),
+            right: Box::new(Expr::BinOp {
+                op: BinOp::Mul,
+                left: Box::new(Expr::Int(20)),
+                right: Box::new(Expr::Int(2)),
+            }),
+        },
+        type_ann: None,
+    };
+
+    let optimizer = Optimizer::new();
+    let opt_stmts = optimizer.optimize_stmts(&[stmt]);
+    if let Stmt::Let { value: Expr::Int(val), .. } = &opt_stmts[0] {
+        assert_eq!(*val, 50);
+    } else {
+        panic!("Constant folding failed!");
+    }
+}

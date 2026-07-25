@@ -155,8 +155,11 @@ fn main() {
                 std::process::exit(1);
             }
 
+            let optimizer = crate::vm::Optimizer::new();
+            let opt_ast = optimizer.optimize_stmts(&ast);
+
             let compiler = crate::vm::Compiler::new();
-            let chunk = match compiler.compile(&ast) {
+            let chunk = match compiler.compile(&opt_ast) {
                 Ok(c) => c,
                 Err(e) => {
                     print_error(&e, &file, &source);
