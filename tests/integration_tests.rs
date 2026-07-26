@@ -122,3 +122,55 @@ fn test_execution_abi_contract() {
     let result = vm.run().expect("VM run error");
     assert_eq!(result, latch_lang::env::Value::Null);
 }
+
+#[test]
+fn test_obj_ref_is_used_for_function_and_closure() {
+    use latch_lang::ast::{Expr, Stmt};
+    use latch_lang::resolver::Resolver;
+    use latch_lang::vm::{Compiler, VM};
+    use latch_lang::env::ObjRef;
+
+    let stmts = vec![Stmt::Assign { name: "a".into(), value: Expr::Int(1) }];
+    let mut resolver = Resolver::new();
+    let module = resolver.resolve_module("test", &stmts).expect("resolve");
+    let compiler = Compiler::new();
+    let func = compiler.compile_module(&module).expect("compile");
+    let _func_ref: ObjRef<_> = func.clone();
+    let mut vm = VM::new(func).expect("VM construction error");
+    let result = vm.run().expect("VM run error");
+    assert_eq!(result, latch_lang::env::Value::Null);
+}
+
+#[test]
+fn test_obj_function_builder_produces_valid_function() {
+    use latch_lang::env::ObjFunctionBuilder;
+    use latch_lang::vm::Chunk;
+    let chunk = Chunk::new();
+    let func = ObjFunctionBuilder::new("test", 2)
+        .with_chunk(chunk)
+        .with_max_stack(64)
+        .with_upvalue_count(1)
+        .build();
+    assert_eq!(func.name, "test");
+    assert_eq!(func.arity, 2);
+    assert_eq!(func.max_stack, 64);
+    assert_eq!(func.upvalue_count, 1);
+}
+
+#[test]
+fn test_gc_state_allocation_api() {
+    use latch_lang::env::ObjFunctionBuilder;
+    use latch_lang::vm::gc::GcState;
+
+    let gc = GcState::new();
+    let func = gc.allocate_function(
+        ObjFunctionBuilder::new("api_test", 0)
+    );
+    assert_eq!(func.name, "api_test");
+
+    let closure = gc.allocate_closure(func.clone(), Vec::new());
+    assert_eq!(closure.function().name, "api_test");
+
+    let class = gc.allocate_class("ApiClass");
+    assert_eq!(class.name, "ApiClass");
+}

@@ -1,6 +1,4 @@
-use std::sync::Arc;
-
-use crate::env::{ObjFunction, ObjHeader, ObjKind};
+use crate::env::{ObjFunction, ObjFunctionBuilder, ObjRef};
 use crate::error::{LatchError, Result};
 use super::chunk::Chunk;
 
@@ -51,8 +49,8 @@ impl LbcSerializer {
         buf
     }
 
-    /// Deserialize binary .lbc byte stream back into Arc<ObjFunction>.
-    pub fn deserialize(bytes: &[u8]) -> Result<Arc<ObjFunction>> {
+    /// Deserialize binary .lbc byte stream back into ObjRef<ObjFunction>.
+    pub fn deserialize(bytes: &[u8]) -> Result<ObjRef<ObjFunction>> {
         if bytes.len() < 12 || &bytes[0..6] != LBC_MAGIC {
             return Err(LatchError::GenericError("Invalid .lbc magic binary header".into()));
         }
@@ -115,20 +113,11 @@ impl LbcSerializer {
         }
 
         let chunk = Chunk::from_parts(code, constants, lines);
-        let func = ObjFunction {
-            header: ObjHeader::new(ObjKind::Function),
-            arity,
-            chunk,
-            name,
-            upvalue_count: 0,
-            max_stack: 256,
-            local_count: 0,
-            module_id: 0,
-            debug_id: 0,
-            flags: 0,
-        };
+        let func = ObjFunctionBuilder::new(name, arity)
+            .with_chunk(chunk)
+            .build();
 
-        Ok(Arc::new(func))
+        Ok(ObjRef::new(func))
     }
 
     fn serialize_value(val: &super::chunk::Constant, buf: &mut Vec<u8>) {

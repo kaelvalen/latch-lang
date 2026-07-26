@@ -1,6 +1,4 @@
-use std::sync::Arc;
-
-use crate::env::{ObjFunction, ObjHeader, ObjKind};
+use crate::env::{ObjFunction, ObjFunctionBuilder, ObjRef};
 use crate::error::Result;
 use crate::hir::*;
 use super::chunk::{ChunkBuilder, Constant, OpCode};
@@ -20,7 +18,7 @@ impl Compiler {
     }
 
     /// Pure Compiler entry point — accepts a resolved HirModule.
-    pub fn compile_module(mut self, module: &HirModule) -> Result<Arc<ObjFunction>> {
+    pub fn compile_module(mut self, module: &HirModule) -> Result<ObjRef<ObjFunction>> {
         for stmt in &module.stmts {
             self.compile_stmt(stmt)?;
         }
@@ -28,22 +26,13 @@ impl Compiler {
         self.emit_return(0);
         BytecodePeephole::optimize(&mut self.chunk);
 
-        let script_fn = ObjFunction {
-            header: ObjHeader::new(ObjKind::Function),
-            arity: 0,
-            chunk: self.chunk.build(),
-            name: module.name.clone(),
-            upvalue_count: 0,
-            max_stack: 256,
-            local_count: 0,
-            module_id: 0,
-            debug_id: 0,
-            flags: 0,
-        };
-        Ok(Arc::new(script_fn))
+        let script_fn = ObjFunctionBuilder::new(module.name.clone(), 0)
+            .with_chunk(self.chunk.build())
+            .build();
+        Ok(ObjRef::new(script_fn))
     }
 
-    pub fn compile_hir(self, stmts: &[HirStmt]) -> Result<Arc<ObjFunction>> {
+    pub fn compile_hir(self, stmts: &[HirStmt]) -> Result<ObjRef<ObjFunction>> {
         let module = HirModule {
             name: "<script>".into(),
             stmts: stmts.to_vec(),

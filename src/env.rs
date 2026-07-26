@@ -16,6 +16,10 @@ impl<T> ObjRef<T> {
         ObjRef(Arc::new(val))
     }
 
+    pub fn into_arc(self) -> Arc<T> {
+        self.0
+    }
+
     pub fn ptr_eq(a: &Self, b: &Self) -> bool {
         Arc::ptr_eq(&a.0, &b.0)
     }
@@ -29,7 +33,7 @@ impl<T> std::ops::Deref for ObjRef<T> {
 }
 
 /// Unified Object Header for Wren / Lua style heap object representations.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ObjKind {
     String,
     List,
@@ -42,11 +46,19 @@ pub enum ObjKind {
     Native,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GcColor {
+    White,
+    Gray,
+    Black,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct ObjHeader {
     pub kind: ObjKind,
     pub flags: u8,
     pub mark: bool,
+    pub gc_color: GcColor,
     pub generation: u8,
     pub size: usize,
     pub type_id: u32,
@@ -58,10 +70,23 @@ impl ObjHeader {
             kind,
             flags: 0,
             mark: false,
+            gc_color: GcColor::White,
             generation: 0,
             size: std::mem::size_of::<Self>(),
             type_id: 0,
         }
+    }
+
+    pub fn with_kind(kind: ObjKind) -> Self {
+        Self::new(kind)
+    }
+
+    pub fn color(&self) -> GcColor {
+        self.gc_color
+    }
+
+    pub fn set_color(&mut self, color: GcColor) {
+        self.gc_color = color;
     }
 }
 
@@ -96,12 +121,94 @@ impl ObjFunction {
     }
 }
 
+/// Immutable builder for `ObjFunction`.
+/// Production code should construct every compiled function through this builder
+/// so that the `ObjFunction` layout can be frozen as an ABI.
+#[derive(Debug, Clone)]
+pub struct ObjFunctionBuilder {
+    arity: usize,
+    chunk: Chunk,
+    name: String,
+    upvalue_count: usize,
+    max_stack: usize,
+    local_count: usize,
+    module_id: u32,
+    debug_id: u32,
+    flags: u32,
+}
+
+impl ObjFunctionBuilder {
+    pub fn new(name: impl Into<String>, arity: usize) -> Self {
+        Self {
+            arity,
+            chunk: Chunk::new(),
+            name: name.into(),
+            upvalue_count: 0,
+            max_stack: 256,
+            local_count: 0,
+            module_id: 0,
+            debug_id: 0,
+            flags: 0,
+        }
+    }
+
+    pub fn with_chunk(mut self, chunk: Chunk) -> Self {
+        self.chunk = chunk;
+        self
+    }
+
+    pub fn with_max_stack(mut self, max_stack: usize) -> Self {
+        self.max_stack = max_stack;
+        self
+    }
+
+    pub fn with_upvalue_count(mut self, count: usize) -> Self {
+        self.upvalue_count = count;
+        self
+    }
+
+    pub fn with_local_count(mut self, count: usize) -> Self {
+        self.local_count = count;
+        self
+    }
+
+    pub fn with_module_id(mut self, module_id: u32) -> Self {
+        self.module_id = module_id;
+        self
+    }
+
+    pub fn with_debug_id(mut self, debug_id: u32) -> Self {
+        self.debug_id = debug_id;
+        self
+    }
+
+    pub fn with_flags(mut self, flags: u32) -> Self {
+        self.flags = flags;
+        self
+    }
+
+    pub fn build(self) -> ObjFunction {
+        ObjFunction {
+            header: ObjHeader::new(ObjKind::Function),
+            arity: self.arity,
+            chunk: self.chunk,
+            name: self.name,
+            upvalue_count: self.upvalue_count,
+            max_stack: self.max_stack,
+            local_count: self.local_count,
+            module_id: self.module_id,
+            debug_id: self.debug_id,
+            flags: self.flags,
+        }
+    }
+}
+
 /// First-class Compiled Closure Object in the VM.
 #[derive(Debug, Clone)]
 pub struct ObjClosure {
     pub header: ObjHeader,
-    pub function: ObjRef<ObjFunction>,
-    pub upvalues: Vec<Arc<Mutex<Value>>>,
+    pub(crate) function: ObjRef<ObjFunction>,
+    pub(crate) upvalues: Vec<Arc<Mutex<Value>>>,
 }
 
 impl PartialEq for ObjClosure {
@@ -116,6 +223,42 @@ impl ObjClosure {
             header: ObjHeader::new(ObjKind::Closure),
             function,
             upvalues,
+        }
+    }
+
+    pub fn function(&self) -> &ObjRef<ObjFunction> {
+        &self.function
+    }
+
+    pub fn upvalues(&self) -> &[Arc<Mutex<Value>>] {
+        &self.upvalues
+    }
+}
+
+impl HeapObject for ObjFunction {
+    fn header(&self) -> &ObjHeader {
+        &self.header
+    }
+}
+
+impl GcTrace for ObjFunction {
+    fn trace(&self, _visitor: &mut dyn FnMut(&Value)) {
+        // Compiled function templates contain no runtime Values to trace.
+    }
+}
+
+impl HeapObject for ObjClosure {
+    fn header(&self) -> &ObjHeader {
+        &self.header
+    }
+}
+
+impl GcTrace for ObjClosure {
+    fn trace(&self, visitor: &mut dyn FnMut(&Value)) {
+        for upvalue in &self.upvalues {
+            if let Ok(val) = upvalue.lock() {
+                visitor(&*val);
+            }
         }
     }
 }
@@ -205,6 +348,12 @@ pub trait HeapObject: GcTrace {
 /// Native Dynamic Callable Trait Contract
 pub trait NativeCallable: Send + Sync {
     fn call(&self, args: &[Value]) -> Result<Value>;
+}
+
+/// Native Dynamic Object Trait Contract for plugin / FFI objects.
+pub trait NativeObject: HeapObject + NativeCallable {
+    fn type_name(&self) -> &'static str;
+    fn finalize(&mut self) {}
 }
 
 /// Runtime value – the result of evaluating any expression.

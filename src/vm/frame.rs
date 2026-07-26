@@ -1,11 +1,10 @@
-use std::sync::Arc;
-use crate::env::ObjClosure;
+use crate::env::{ObjClosure, ObjRef};
 
 /// CallFrame represents an active function execution frame.
 /// Tracks executing ObjClosure, instruction pointer (ip), base stack slot, return slot, stack limit, and frame flags.
 #[derive(Debug, Clone)]
 pub struct CallFrame {
-    pub closure: Arc<ObjClosure>,
+    pub closure: ObjRef<ObjClosure>,
     pub ip: usize,
     pub slots: usize,
     pub return_slot: usize,
@@ -14,7 +13,7 @@ pub struct CallFrame {
 }
 
 impl CallFrame {
-    pub fn new(closure: Arc<ObjClosure>, slots: usize, return_slot: usize) -> Self {
+    pub fn new(closure: ObjRef<ObjClosure>, slots: usize, return_slot: usize) -> Self {
         CallFrame {
             closure,
             ip: 0,

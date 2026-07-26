@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-use crate::env::{ObjClosure, ObjFunction, Value};
+use crate::env::{ObjClosure, ObjFunction, ObjFunctionBuilder, ObjRef, Value};
 use crate::error::{LatchError, Result};
 use super::chunk::{Chunk, OpCode};
 use super::decoder::InstructionCursor;
@@ -17,19 +17,19 @@ use super::verifier::BytecodeVerifier;
 /// VM only accepts VerifiedProgram — never raw ObjFunction.
 /// (Findings #033, #034)
 pub struct VerifiedProgram {
-    pub(crate) script_fn: Arc<ObjFunction>,
+    pub(crate) script_fn: ObjRef<ObjFunction>,
 }
 
 /// VmBuilder — separates verification, instantiation, and execution concerns.
 /// Replaces monolithic VM::new() that silently swallowed verifier failures.
 /// (Findings #026, #029, #032, #033)
 pub struct VmBuilder {
-    script_fn: Arc<ObjFunction>,
+    script_fn: ObjRef<ObjFunction>,
 }
 
 impl VmBuilder {
     /// Create a builder from a compiled function.
-    pub fn new(script_fn: Arc<ObjFunction>) -> Self {
+    pub fn new(script_fn: ObjRef<ObjFunction>) -> Self {
         VmBuilder { script_fn }
     }
 
@@ -44,32 +44,21 @@ impl VmBuilder {
     /// Only use in tests where the chunk is trivially known-valid.
     #[cfg(test)]
     pub fn from_chunk(chunk: Chunk) -> Result<VM> {
-        let script_fn = Arc::new(ObjFunction {
-            header: crate::env::ObjHeader::new(crate::env::ObjKind::Function),
-            arity: 0,
-            chunk,
-            name: "<script>".into(),
-            upvalue_count: 0,
-            max_stack: 256,
-            local_count: 0,
-            module_id: 0,
-            debug_id: 0,
-            flags: 0,
-        });
+        let script_fn = ObjRef::new(ObjFunctionBuilder::new("<script>", 0).with_chunk(chunk).build());
         VmBuilder::new(script_fn).verify()?.instantiate()
     }
 
     /// Instantiate VM without verification. ONLY use when chunk has already
     /// been verified externally. Never call from production paths.
     pub fn instantiate_unchecked(self) -> VM {
-        let func_ref = crate::env::ObjRef(self.script_fn);
-        let closure = Arc::new(ObjClosure::new(func_ref, Vec::new()));
-        let frame = CallFrame::new(closure, 0, 0);
+        let gc = GcState::new();
+        let closure = gc.allocate_closure(self.script_fn.clone(), Vec::new()).into_arc();
+        let frame = CallFrame::new(crate::env::ObjRef(closure), 0, 0);
         VM {
             frames: vec![frame],
             stack: ValueStack::new(),
             globals: Vec::new(),
-            gc: GcState::new(),
+            gc,
             profiler: VmProfiler::new(),
             inline_caches: HashMap::new(),
         }
@@ -80,14 +69,14 @@ impl VerifiedProgram {
     /// Instantiate a VM from a verified program token.
     /// This is the only public VM construction path in production code.
     pub fn instantiate(self) -> Result<VM> {
-        let func_ref = crate::env::ObjRef(self.script_fn);
-        let closure = Arc::new(ObjClosure::new(func_ref, Vec::new()));
-        let frame = CallFrame::new(closure, 0, 0);
+        let gc = GcState::new();
+        let closure = gc.allocate_closure(self.script_fn.clone(), Vec::new()).into_arc();
+        let frame = CallFrame::new(crate::env::ObjRef(closure), 0, 0);
         Ok(VM {
             frames: vec![frame],
             stack: ValueStack::new(),
             globals: Vec::new(),
-            gc: GcState::new(),
+            gc,
             profiler: VmProfiler::new(),
             inline_caches: HashMap::new(),
         })
@@ -118,62 +107,36 @@ impl VM {
     /// Instantiate VM from a compiled ObjFunction.
     /// Performs mandatory bytecode verification. Returns Err on invalid bytecode.
     /// (Findings #026, #029, #032)
-    pub fn new(script_fn: Arc<ObjFunction>) -> Result<Self> {
+    pub fn new(script_fn: ObjRef<ObjFunction>) -> Result<Self> {
         VmBuilder::new(script_fn).verify()?.instantiate()
     }
 
     /// Build and run from a Chunk directly; primarily used in integration tests.
     pub fn new_with_chunk(chunk: Chunk) -> Result<Self> {
-        let script_fn = Arc::new(ObjFunction {
-            header: crate::env::ObjHeader::new(crate::env::ObjKind::Function),
-            arity: 0,
-            chunk,
-            name: "<script>".into(),
-            upvalue_count: 0,
-            max_stack: 256,
-            local_count: 0,
-            module_id: 0,
-            debug_id: 0,
-            flags: 0,
-        });
+        let script_fn = ObjRef::new(ObjFunctionBuilder::new("<script>", 0).with_chunk(chunk).build());
         VmBuilder::new(script_fn).verify()?.instantiate()
     }
 
     /// Load and run a new script into an existing VM instance.
-    pub fn load(&mut self, script_fn: Arc<ObjFunction>) -> Result<()> {
+    pub fn load(&mut self, script_fn: ObjRef<ObjFunction>) -> Result<()> {
         BytecodeVerifier::verify(&script_fn)?;
-        let func_ref = crate::env::ObjRef(script_fn);
-        let closure = Arc::new(ObjClosure::new(func_ref, Vec::new()));
-        let frame = CallFrame::new(closure, 0, 0);
+        let closure = self.gc.allocate_closure(script_fn, Vec::new()).into_arc();
+        let frame = CallFrame::new(crate::env::ObjRef(closure), 0, 0);
         self.frames = vec![frame];
         self.stack.clear();
         Ok(())
     }
 
     pub fn alloc_function(&self, arity: usize, chunk: Chunk, name: String) -> crate::env::ObjRef<ObjFunction> {
-        self.gc.track_alloc(std::mem::size_of::<ObjFunction>());
-        crate::env::ObjRef::new(ObjFunction {
-            header: crate::env::ObjHeader::new(crate::env::ObjKind::Function),
-            arity,
-            chunk,
-            name,
-            upvalue_count: 0,
-            max_stack: 256,
-            local_count: 0,
-            module_id: 0,
-            debug_id: 0,
-            flags: 0,
-        })
+        self.gc.allocate_function(ObjFunctionBuilder::new(name, arity).with_chunk(chunk))
     }
 
     pub fn alloc_closure(&self, function: crate::env::ObjRef<ObjFunction>, upvalues: Vec<Arc<Mutex<Value>>>) -> crate::env::ObjRef<ObjClosure> {
-        self.gc.track_alloc(std::mem::size_of::<ObjClosure>());
-        crate::env::ObjRef::new(ObjClosure::new(function, upvalues))
+        self.gc.allocate_closure(function, upvalues)
     }
 
     pub fn alloc_class(&self, name: impl Into<String>) -> crate::env::ObjRef<crate::env::ObjClass> {
-        self.gc.track_alloc(std::mem::size_of::<crate::env::ObjClass>());
-        crate::env::ObjRef::new(crate::env::ObjClass::new(name))
+        self.gc.allocate_class(name)
     }
 
     // ── Primary VM Loop (InstructionCursor & ValueStack Migration) ────────
@@ -185,7 +148,7 @@ impl VM {
             }
 
             let frame_idx = self.frames.len() - 1;
-            let code_len = self.frames[frame_idx].closure.function.chunk.code().len();
+            let code_len = self.frames[frame_idx].closure.function().chunk.code().len();
             let current_ip = self.frames[frame_idx].ip;
 
             if current_ip >= code_len {
@@ -201,7 +164,7 @@ impl VM {
             // Decode next instruction via InstructionCursor
             let (op, operand, next_ip) = {
                 let frame = &self.frames[frame_idx];
-                let mut cursor = InstructionCursor::new(frame.closure.function.chunk.code(), frame.ip);
+                let mut cursor = InstructionCursor::new(frame.closure.function().chunk.code(), frame.ip);
                 let instr = cursor.decode_next()?;
                 (instr.opcode, instr.operand, cursor.ip)
             };
@@ -212,7 +175,7 @@ impl VM {
             match op {
                 OpCode::OpConstant => {
                     let idx = operand.unwrap_or(0);
-                    let val = self.current_frame().closure.function.chunk.constants()[idx as usize].to_value();
+                    let val = self.current_frame().closure.function().chunk.constants()[idx as usize].to_value();
                     self.push(val);
                 }
 
@@ -322,9 +285,9 @@ impl VM {
                 OpCode::OpGetUpvalue => {
                     let slot_idx = operand.unwrap_or(0) as usize;
                     let closure = self.current_frame().closure.clone();
-                    if slot_idx < closure.upvalues.len() {
+                    if slot_idx < closure.upvalues().len() {
                         // Internal invariant: upvalue Mutex is never poisoned under normal use.
-                        let val = closure.upvalues[slot_idx]
+                        let val = closure.upvalues()[slot_idx]
                             .lock()
                             .map_err(|_| LatchError::GenericError("Upvalue lock poisoned".into()))?
                             .clone();
@@ -338,8 +301,8 @@ impl VM {
                     let slot_idx = operand.unwrap_or(0) as usize;
                     let val = self.peek(0)?.clone();
                     let closure = self.current_frame().closure.clone();
-                    if slot_idx < closure.upvalues.len() {
-                        *closure.upvalues[slot_idx]
+                    if slot_idx < closure.upvalues().len() {
+                        *closure.upvalues()[slot_idx]
                             .lock()
                             .map_err(|_| LatchError::GenericError("Upvalue lock poisoned".into()))? = val;
                     } else {
@@ -349,9 +312,9 @@ impl VM {
 
                 OpCode::OpClosure => {
                     let func_idx = operand.unwrap_or(0) as usize;
-                    let func_val = self.current_frame().closure.function.chunk.constants()[func_idx].to_value();
+                    let func_val = self.current_frame().closure.function().chunk.constants()[func_idx].to_value();
                     if let Value::Function(func) = func_val {
-                        let closure = Arc::new(ObjClosure::new(crate::env::ObjRef(func), Vec::new()));
+                        let closure = self.gc.allocate_closure(crate::env::ObjRef(func), Vec::new()).into_arc();
                         self.push(Value::Closure(closure));
                     }
                 }
@@ -379,14 +342,14 @@ impl VM {
                     let callee = self.peek(arg_count)?.clone();
                     match callee {
                         Value::Closure(closure) => {
-                            if arg_count != closure.function.arity {
+                            if arg_count != closure.function().arity {
                                 return Err(LatchError::GenericError(format!(
-                                    "Expected {} arguments but got {}.", closure.function.arity, arg_count
+                                    "Expected {} arguments but got {}.", closure.function().arity, arg_count
                                 )));
                             }
                             let arg_base = self.stack.len() - arg_count;
                             let return_slot = arg_base - 1;
-                            let frame = CallFrame::new(closure, arg_base, return_slot);
+                            let frame = CallFrame::new(crate::env::ObjRef(closure), arg_base, return_slot);
                             self.frames.push(frame);
                         }
                         Value::Function(func) => {
@@ -395,10 +358,10 @@ impl VM {
                                     "Expected {} arguments but got {}.", func.arity, arg_count
                                 )));
                             }
-                            let closure = Arc::new(ObjClosure::new(crate::env::ObjRef(func), Vec::new()));
+                            let closure = self.gc.allocate_closure(crate::env::ObjRef(func), Vec::new()).into_arc();
                             let arg_base = self.stack.len() - arg_count;
                             let return_slot = arg_base - 1;
-                            let frame = CallFrame::new(closure, arg_base, return_slot);
+                            let frame = CallFrame::new(crate::env::ObjRef(closure), arg_base, return_slot);
                             self.frames.push(frame);
                         }
                         Value::Native(native) => {
