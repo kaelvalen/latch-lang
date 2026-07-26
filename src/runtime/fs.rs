@@ -85,7 +85,7 @@ pub fn call(method: &str, args: Vec<Value>) -> Result<Value> {
             Ok(Value::Bool(true))
         }
 
-        "remove" => {
+        "remove" | "delete" => {
             let path = args.first()
                 .ok_or_else(|| LatchError::ArgCountMismatch { name: "fs.remove".into(), expected: 1, found: 0 })?
                 .as_str()?;

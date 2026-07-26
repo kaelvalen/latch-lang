@@ -1,4 +1,3 @@
-use latch_lang::hir::{HirExpr, HirLiteral, HirStmt, LocalId};
 use latch_lang::hir_verifier::HirVerifier;
 use latch_lang::lexer::Lexer;
 use latch_lang::lowering::HirLowering;

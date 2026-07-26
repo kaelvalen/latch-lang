@@ -1,19 +1,6 @@
-mod ast;
-mod env;
-mod error;
-mod hir;
-mod hir_verifier;
-mod interpreter;
-mod lexer;
-mod lowering;
-mod lsp;
-mod parser;
-mod resolver;
-mod runtime;
-mod semantic;
-mod symbol;
-mod typechecker;
-mod vm;
+use latch_lang::{ast, error, interpreter, lexer, lsp, parser, resolver, semantic, typechecker, vm};
+
+
 
 use std::io::{self, BufRead, Write};
 

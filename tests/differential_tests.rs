@@ -1,4 +1,3 @@
-use latch_lang::ast::Stmt;
 use latch_lang::interpreter::Interpreter;
 use latch_lang::lexer::Lexer;
 use latch_lang::parser::Parser;

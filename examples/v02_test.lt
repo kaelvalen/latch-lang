@@ -168,6 +168,8 @@ print(m?.missing)
 
 // ═══ 13. keys/values on dict ═══
 print("--- keys/values ---")
+d := {"a": 1, "b": 2}
+nums := [1, 2, 3, 4, 5]
 print(keys(d))
 print(values(d))
 

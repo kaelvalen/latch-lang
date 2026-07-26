@@ -608,7 +608,7 @@ impl Value {
             Value::ProcessResult { stdout, stderr, code } => match field {
                 "stdout" => Some(Value::Str(stdout.clone())),
                 "stderr" => Some(Value::Str(stderr.clone())),
-                "code"   => Some(Value::Int(*code as i64)),
+                "code" | "exit_code" => Some(Value::Int(*code as i64)),
                 _ => None,
             },
             Value::Map(map) => {
@@ -625,8 +625,12 @@ impl Value {
                 fields.lock().unwrap().insert(field.to_string(), val);
                 Ok(())
             }
+            Value::Map(map) => {
+                map.lock().unwrap().insert(field.to_string(), val);
+                Ok(())
+            }
             _ => Err(LatchError::TypeMismatch {
-                expected: "instance".into(),
+                expected: "instance or dict".into(),
                 found: self.type_name().into(),
             }),
         }
@@ -727,74 +731,107 @@ impl fmt::Display for Value {
 
 #[derive(Debug, Clone)]
 pub struct Env {
-    vars: HashMap<String, Value>,
-    consts: HashSet<String>,
-    parent: Option<Box<Env>>,
+    inner: std::sync::Arc<std::sync::Mutex<EnvInner>>,
+}
+
+#[derive(Debug)]
+pub struct EnvInner {
+    pub vars: HashMap<String, Value>,
+    pub consts: HashSet<String>,
+    pub parent: Option<Env>,
 }
 
 impl Env {
     pub fn new() -> Self {
-        Env { vars: HashMap::new(), consts: HashSet::new(), parent: None }
+        Env {
+            inner: std::sync::Arc::new(std::sync::Mutex::new(EnvInner {
+                vars: HashMap::new(),
+                consts: HashSet::new(),
+                parent: None,
+            })),
+        }
     }
 
-    pub fn get(&self, name: &str) -> Option<&Value> {
-        self.vars.get(name)
-            .or_else(|| self.parent.as_ref()?.get(name))
+    pub fn get(&self, name: &str) -> Option<Value> {
+        let inner = self.inner.lock().unwrap();
+        if let Some(val) = inner.vars.get(name) {
+            Some(val.clone())
+        } else if let Some(ref parent) = inner.parent {
+            parent.get(name)
+        } else {
+            None
+        }
     }
 
     /// Declare or overwrite a mutable variable in the current scope.
-    pub fn set(&mut self, name: &str, val: Value) {
-        self.vars.insert(name.to_string(), val);
+    pub fn set(&self, name: &str, val: Value) {
+        let mut inner = self.inner.lock().unwrap();
+        inner.vars.insert(name.to_string(), val);
     }
 
     /// Declare an immutable constant in the current scope.
-    pub fn set_const(&mut self, name: &str, val: Value) {
-        self.vars.insert(name.to_string(), val);
-        self.consts.insert(name.to_string());
+    pub fn set_const(&self, name: &str, val: Value) {
+        let mut inner = self.inner.lock().unwrap();
+        inner.vars.insert(name.to_string(), val.clone());
+        inner.consts.insert(name.to_string());
     }
 
     fn is_const(&self, name: &str) -> bool {
-        if self.consts.contains(name) { return true; }
-        self.parent.as_ref().map(|p| p.is_const(name)).unwrap_or(false)
+        let inner = self.inner.lock().unwrap();
+        if inner.consts.contains(name) {
+            return true;
+        }
+        if let Some(ref parent) = inner.parent {
+            parent.is_const(name)
+        } else {
+            false
+        }
     }
 
     fn has(&self, name: &str) -> bool {
-        self.vars.contains_key(name)
-            || self.parent.as_ref().map(|p| p.has(name)).unwrap_or(false)
+        let inner = self.inner.lock().unwrap();
+        if inner.vars.contains_key(name) {
+            return true;
+        }
+        if let Some(ref parent) = inner.parent {
+            parent.has(name)
+        } else {
+            false
+        }
     }
 
     /// Assign to a variable — walks up the chain if it already exists there,
     /// otherwise declares in the current scope (Python-style).
-    pub fn assign(&mut self, name: &str, val: Value) -> Result<()> {
+    pub fn assign(&self, name: &str, val: Value) -> Result<()> {
         if self.is_const(name) {
             return Err(LatchError::GenericError(
                 format!("Cannot reassign constant '{name}'")
             ));
         }
-        if self.vars.contains_key(name) {
-            self.vars.insert(name.to_string(), val);
+        let mut inner = self.inner.lock().unwrap();
+        if inner.vars.contains_key(name) {
+            inner.vars.insert(name.to_string(), val);
             Ok(())
-        } else if let Some(ref mut parent) = self.parent {
+        } else if let Some(ref parent) = inner.parent {
             if parent.has(name) {
                 parent.assign(name, val)
             } else {
-                // Not found anywhere — declare in current scope
-                self.vars.insert(name.to_string(), val);
+                inner.vars.insert(name.to_string(), val);
                 Ok(())
             }
         } else {
-            // Top-level scope — just declare
-            self.vars.insert(name.to_string(), val);
+            inner.vars.insert(name.to_string(), val);
             Ok(())
         }
     }
 
     /// Mutate a list or map element in-place: `name[index] = val`.
-    pub fn index_assign(&mut self, name: &str, index: &Value, val: Value) -> Result<()> {
-        // Find the variable in the scope chain and mutate it.
-        // With Arc<Mutex> values, mutation goes through the lock,
-        // so aliased lists/maps see the change.
-        if let Some(container) = self.vars.get(name) {
+    pub fn index_assign(&self, name: &str, index: &Value, val: Value) -> Result<()> {
+        let container_opt = {
+            let inner = self.inner.lock().unwrap();
+            inner.vars.get(name).cloned()
+        };
+        if let Some(container) = container_opt {
             match (container, index) {
                 (Value::List(list), Value::Int(i)) => {
                     let i = *i as usize;
@@ -814,24 +851,33 @@ impl Env {
                     found: "incompatible types".into(),
                 }),
             }
-        } else if let Some(parent) = &mut self.parent {
-            parent.index_assign(name, index, val)
         } else {
-            Err(LatchError::UndefinedVariable(name.to_string()))
+            let parent_opt = {
+                let inner = self.inner.lock().unwrap();
+                inner.parent.clone()
+            };
+            if let Some(parent) = parent_opt {
+                parent.index_assign(name, index, val)
+            } else {
+                Err(LatchError::UndefinedVariable(name.to_string()))
+            }
         }
     }
 
     /// Create a child scope.
-    pub fn child(self) -> Env {
+    pub fn child(&self) -> Env {
         Env {
-            vars: HashMap::new(),
-            consts: HashSet::new(),
-            parent: Some(Box::new(self)),
+            inner: std::sync::Arc::new(std::sync::Mutex::new(EnvInner {
+                vars: HashMap::new(),
+                consts: HashSet::new(),
+                parent: Some(self.clone()),
+            })),
         }
     }
 
     /// Flatten into parent (for returning from a child scope).
-    pub fn into_parent(self) -> Option<Env> {
-        self.parent.map(|p| *p)
+    pub fn into_parent(&self) -> Option<Env> {
+        let inner = self.inner.lock().unwrap();
+        inner.parent.clone()
     }
 }

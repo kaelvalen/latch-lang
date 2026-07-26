@@ -43,7 +43,7 @@ fn spec_closure_abi_accessors_exist() {
 
 #[test]
 fn spec_gc_api_stubs_exist() {
-    use latch_lang::env::{ObjFunctionBuilder, ObjRef, HeapObject};
+    use latch_lang::env::{ObjFunctionBuilder, ObjRef};
     use latch_lang::vm::gc::GcState;
 
     let gc = GcState::new();
@@ -88,7 +88,7 @@ fn spec_allocation_profiler_records_allocations() {
     use latch_lang::env::ObjKind;
     use latch_lang::vm::profiler::VmProfiler;
 
-    let mut profiler = VmProfiler::new();
+    let profiler = VmProfiler::new();
     profiler.record_allocation(ObjKind::Function, 64);
     profiler.record_allocation(ObjKind::Function, 64);
     profiler.record_allocation(ObjKind::Class, 32);

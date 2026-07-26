@@ -101,6 +101,7 @@ impl VM {
     pub fn stack(&self) -> &ValueStack { &self.stack }
     pub fn gc(&self) -> &GcState { &self.gc }
     pub fn profiler(&self) -> &VmProfiler { &self.profiler }
+    pub fn inline_caches(&self) -> &HashMap<usize, InlineCache> { &self.inline_caches }
 
     // ── Legacy compatibility entry point (deprecated — prefer VmBuilder) ─
 

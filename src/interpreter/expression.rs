@@ -40,7 +40,6 @@ impl Interpreter {
 
             Expr::Ident(name) => {
                 self.env.get(&name)
-                    .cloned()
                     .ok_or(LatchError::UndefinedVariable(name))
             }
 
@@ -63,9 +62,27 @@ impl Interpreter {
             }
 
             Expr::BinOp { op, left, right } => {
-                let l = self.eval_expr(*left)?;
-                let r = self.eval_expr(*right)?;
-                self.eval_binop(op, l, r)
+                match op {
+                    BinOp::Or => {
+                        match self.eval_expr(*left) {
+                            Ok(val) if val.is_truthy() => Ok(val),
+                            _ => self.eval_expr(*right),
+                        }
+                    }
+                    BinOp::And => {
+                        let l = self.eval_expr(*left)?;
+                        if !l.is_truthy() {
+                            Ok(l)
+                        } else {
+                            self.eval_expr(*right)
+                        }
+                    }
+                    _ => {
+                        let l = self.eval_expr(*left)?;
+                        let r = self.eval_expr(*right)?;
+                        self.eval_binop(op, l, r)
+                    }
+                }
             }
 
             Expr::UnaryOp { op, expr } => {
@@ -156,7 +173,7 @@ impl Interpreter {
                         match field.as_str() {
                             "stdout" => Ok(Value::Str(stdout)),
                             "stderr" => Ok(Value::Str(stderr)),
-                            "code"   => Ok(Value::Int(code as i64)),
+                            "code" | "exit_code" => Ok(Value::Int(code as i64)),
                             _ => Err(LatchError::KeyNotFound(field)),
                         }
                     }
@@ -287,7 +304,7 @@ impl Interpreter {
                         match field.as_str() {
                             "stdout" => Ok(Value::Str(stdout)),
                             "stderr" => Ok(Value::Str(stderr)),
-                            "code"   => Ok(Value::Int(code as i64)),
+                            "code" | "exit_code" => Ok(Value::Int(code as i64)),
                             _ => Ok(Value::Null),
                         }
                     }

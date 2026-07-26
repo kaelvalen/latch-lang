@@ -49,7 +49,6 @@ impl Interpreter {
 
             Stmt::CompoundAssign { name, op, value } => {
                 let current = self.env.get(&name)
-                    .cloned()
                     .ok_or_else(|| LatchError::UndefinedVariable(name.clone()))?;
                 let rhs = self.eval_expr(value)?;
                 let result = self.eval_binop(op, current, rhs)?;
@@ -135,7 +134,7 @@ impl Interpreter {
                 let results: Vec<std::result::Result<(), LatchError>> = pool.install(|| {
                     list.into_par_iter()
                         .map(|item| {
-                            let mut child_env = env_snapshot.clone().child();
+                            let child_env = env_snapshot.clone().child();
                             child_env.set(&var, item);
                             let mut interp = Interpreter::with_env(child_env);
                             interp.run(body_clone.clone())
@@ -300,7 +299,7 @@ impl Interpreter {
 
                 for item in items {
                     let export_key = format!("__export_{}", item);
-                    if let Some(val) = mod_interp.env.get(&export_key).or_else(|| mod_interp.env.get(&item)).cloned() {
+                    if let Some(val) = mod_interp.env.get(&export_key).or_else(|| mod_interp.env.get(&item)) {
                         self.env.set(&item, val);
                     } else {
                         return Err(LatchError::ImportNotFound(format!("{item} from {module}")));

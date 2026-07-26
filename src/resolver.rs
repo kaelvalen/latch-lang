@@ -8,7 +8,7 @@ use crate::symbol::{SemanticDatabase, SymbolId};
 struct ResolverLocal {
     symbol_id: SymbolId,
     id: LocalId,
-    depth: usize,
+    _depth: usize,
 }
 
 pub struct Resolver {
@@ -80,7 +80,7 @@ impl Resolver {
                     self.locals.push(ResolverLocal {
                         symbol_id: sym_id,
                         id,
-                        depth: self.scope_depth,
+                        _depth: self.scope_depth,
                     });
                     Ok(HirStmt::LetLocal { id, value: val })
                 } else {
@@ -142,6 +142,21 @@ impl Resolver {
                 Ok(HirStmt::While {
                     cond: opt_cond,
                     body: opt_body,
+                })
+            }
+
+            Stmt::Fn { name, params: _, body, .. } => {
+                let sym_id = self.db.intern_symbol(name);
+                let global_id = self.get_or_create_global(sym_id);
+                self.scope_depth += 1;
+                let mut resolved_body = Vec::new();
+                for s in body {
+                    resolved_body.push(self.resolve_stmt(s)?);
+                }
+                self.scope_depth -= 1;
+                Ok(HirStmt::LetGlobal {
+                    id: global_id,
+                    value: HirExpr::Constant(HirLiteral::Str(name.clone())),
                 })
             }
 

@@ -29,6 +29,76 @@ fn test_bytecode_vm() {
 }
 
 #[test]
+fn test_closure_mutation_upvalue() {
+    use latch_lang::lexer::Lexer;
+    use latch_lang::parser::Parser;
+    use latch_lang::interpreter::Interpreter;
+
+    let src = r#"
+        counter := fn() {
+            n := 0
+            inc := fn() { n = n + 1; return n }
+            return inc
+        }
+        c := counter()
+        r1 := c()
+        r2 := c()
+        r3 := c()
+    "#;
+    let mut lexer = Lexer::new(src);
+    let tokens = lexer.tokenize().unwrap();
+    let mut parser = Parser::new(tokens);
+    let ast = parser.parse_program().unwrap();
+    let mut interp = Interpreter::new();
+    interp.run(ast).unwrap();
+    assert_eq!(interp.env.get("r1").unwrap().to_string(), "1");
+    assert_eq!(interp.env.get("r2").unwrap().to_string(), "2");
+    assert_eq!(interp.env.get("r3").unwrap().to_string(), "3");
+}
+
+#[test]
+fn test_or_error_fallback() {
+    use latch_lang::lexer::Lexer;
+    use latch_lang::parser::Parser;
+    use latch_lang::interpreter::Interpreter;
+
+    let src = r#"
+        data := json.parse("{invalid json") or {"fallback": 42}
+        res := data["fallback"]
+    "#;
+    let mut lexer = Lexer::new(src);
+    let tokens = lexer.tokenize().unwrap();
+    let mut parser = Parser::new(tokens);
+    let ast = parser.parse_program().unwrap();
+    let mut interp = Interpreter::new();
+    interp.run(ast).unwrap();
+    assert_eq!(interp.env.get("res").unwrap().to_string(), "42");
+}
+
+#[test]
+fn test_standalone_trim_upper_and_exit_code() {
+    use latch_lang::lexer::Lexer;
+    use latch_lang::parser::Parser;
+    use latch_lang::interpreter::Interpreter;
+
+    let src = r#"
+        t := trim("  hello  ")
+        u := upper(t)
+        res := proc.exec("echo ok")
+        code := res.exit_code
+    "#;
+    let mut lexer = Lexer::new(src);
+    let tokens = lexer.tokenize().unwrap();
+    let mut parser = Parser::new(tokens);
+    let ast = parser.parse_program().unwrap();
+    let mut interp = Interpreter::new();
+    interp.run(ast).unwrap();
+    assert_eq!(interp.env.get("t").unwrap().to_string(), "hello");
+    assert_eq!(interp.env.get("u").unwrap().to_string(), "HELLO");
+    assert_eq!(interp.env.get("code").unwrap().to_string(), "0");
+}
+
+#[test]
 fn test_typechecker_and_check() {
     let output = Command::new("./target/debug/latch")
         .args(["check", "examples/vm_test.lt"])
