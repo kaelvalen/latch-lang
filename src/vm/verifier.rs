@@ -8,7 +8,7 @@ pub struct BytecodeVerifier;
 
 impl BytecodeVerifier {
     pub fn verify(func: &ObjFunction) -> Result<()> {
-        let code = &func.chunk.code;
+        let code = func.chunk.code();
         let mut cursor = InstructionCursor::new(code, 0);
 
         let mut simulated_stack_depth: isize = 0;
@@ -33,18 +33,40 @@ impl BytecodeVerifier {
             // Validate constant pool bounds
             if instr.opcode == OpCode::OpConstant {
                 if let Some(const_idx) = instr.operand {
-                    if (const_idx as usize) >= func.chunk.constants.len() {
+                    if (const_idx as usize) >= func.chunk.constants().len() {
                         return Err(LatchError::GenericError(format!(
                             "Verifier error: Constant index {} out of constants bounds (len={}) at offset={offset}",
-                            const_idx, func.chunk.constants.len()
+                            const_idx, func.chunk.constants().len()
                         )));
                     }
                 }
             }
 
             // Stack depth simulation
-            simulated_stack_depth -= desc.stack_in as isize;
-            simulated_stack_depth += desc.stack_out as isize;
+            match instr.opcode {
+                OpCode::OpList | OpCode::OpMap => {
+                    let count = instr.operand.unwrap_or(0) as isize;
+                    let consumed = if instr.opcode == OpCode::OpList { count } else { count * 2 };
+                    simulated_stack_depth -= consumed;
+                    if simulated_stack_depth < 0 {
+                        return Err(LatchError::GenericError(format!(
+                            "Verifier error: Stack underflow for {} at offset={offset}",
+                            desc.name
+                        )));
+                    }
+                    simulated_stack_depth += 1;
+                }
+                _ => {
+                    simulated_stack_depth -= desc.stack_in as isize;
+                    if simulated_stack_depth < 0 {
+                        return Err(LatchError::GenericError(format!(
+                            "Verifier error: Stack underflow for {} at offset={offset}",
+                            desc.name
+                        )));
+                    }
+                    simulated_stack_depth += desc.stack_out as isize;
+                }
+            }
         }
 
         Ok(())

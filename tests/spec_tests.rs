@@ -1,4 +1,4 @@
-use latch_lang::vm::{OpCode, LbcSerializer, LBC_MAGIC, LBC_VERSION};
+use latch_lang::vm::{OpCode, LBC_MAGIC, LBC_VERSION, LBC_ISA_VERSION, LBC_FLAGS};
 use latch_lang::hir::{HirLiteral, HirOp};
 
 #[test]
@@ -28,6 +28,8 @@ fn spec_vm_opcode_descriptors_match_isa_specification() {
 fn spec_lbc_binary_format_header_matches_specification() {
     assert_eq!(LBC_MAGIC, b"LATCHB");
     assert_eq!(LBC_VERSION, 1);
+    assert_eq!(LBC_ISA_VERSION, 1);
+    assert_eq!(LBC_FLAGS, 0);
 }
 
 #[test]

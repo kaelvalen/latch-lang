@@ -3,18 +3,19 @@ use std::sync::Arc;
 use crate::env::{ObjFunction, ObjHeader, ObjKind};
 use crate::error::Result;
 use crate::hir::*;
-use super::chunk::{Chunk, Constant, OpCode};
+use super::chunk::{ChunkBuilder, Constant, OpCode};
+use super::peephole::BytecodePeephole;
 
 /// Dumb Bytecode Emitter — transforms resolved HirModule directly into a compiled Chunk.
 /// Contains zero AST imports, Value runtime dependencies, scope maps, or semantic checking logic.
 pub struct Compiler {
-    chunk: Chunk,
+    chunk: ChunkBuilder,
 }
 
 impl Compiler {
     pub fn new() -> Self {
         Compiler {
-            chunk: Chunk::new(),
+            chunk: ChunkBuilder::new(),
         }
     }
 
@@ -24,12 +25,13 @@ impl Compiler {
             self.compile_stmt(stmt)?;
         }
         self.emit_constant(Constant::Null, 0);
-        self.emit_opcode(OpCode::OpReturn, 0);
+        self.emit_return(0);
+        BytecodePeephole::optimize(&mut self.chunk);
 
         let script_fn = ObjFunction {
             header: ObjHeader::new(ObjKind::Function),
             arity: 0,
-            chunk: self.chunk,
+            chunk: self.chunk.build(),
             name: module.name.clone(),
             upvalue_count: 0,
             max_stack: 256,
@@ -71,19 +73,30 @@ impl Compiler {
     fn emit_jump(&mut self, instruction: OpCode, line: u32) -> usize {
         self.emit_opcode(instruction, line);
         self.emit_u16(0xffff, line);
-        self.chunk.code.len() - 2
+        self.chunk.code_len() - 2
     }
 
     fn patch_jump(&mut self, offset: usize) {
-        let jump = self.chunk.code.len();
-        let bytes = (jump as u16).to_be_bytes();
-        self.chunk.code[offset] = bytes[0];
-        self.chunk.code[offset + 1] = bytes[1];
+        let jump = self.chunk.code_len();
+        self.chunk.patch_u16(offset, jump as u16);
     }
 
     fn emit_loop(&mut self, loop_start: usize, line: u32) {
         self.emit_opcode(OpCode::OpLoop, line);
         self.emit_u16(loop_start as u16, line);
+    }
+
+    fn emit_call(&mut self, argc: u16, line: u32) {
+        self.emit_opcode(OpCode::OpCall, line);
+        self.emit_u16(argc, line);
+    }
+
+    fn emit_return(&mut self, line: u32) {
+        self.emit_opcode(OpCode::OpReturn, line);
+    }
+
+    fn emit_pop(&mut self, line: u32) {
+        self.emit_opcode(OpCode::OpPop, line);
     }
 
     // ── HIR Emitter ──────────────────────────────────────────
@@ -94,7 +107,7 @@ impl Compiler {
                 self.compile_expr(value)?;
                 self.emit_opcode(OpCode::OpSetLocal, 0);
                 self.emit_u16(id.0 as u16, 0);
-                self.emit_opcode(OpCode::OpPop, 0);
+                self.emit_pop(0);
             }
 
             HirStmt::LetGlobal { id, value } => {
@@ -107,25 +120,24 @@ impl Compiler {
                 self.compile_expr(value)?;
                 self.emit_opcode(OpCode::OpSetLocal, 0);
                 self.emit_u16(id.0 as u16, 0);
-                self.emit_opcode(OpCode::OpPop, 0);
+                self.emit_pop(0);
             }
 
             HirStmt::AssignGlobal { id, value } => {
                 self.compile_expr(value)?;
                 self.emit_opcode(OpCode::OpSetGlobal, 0);
                 self.emit_u16(id.0 as u16, 0);
-                self.emit_opcode(OpCode::OpPop, 0);
+                self.emit_pop(0);
             }
 
             HirStmt::Expr(expr) => {
                 self.compile_expr(expr)?;
-                self.emit_opcode(OpCode::OpPop, 0);
+                self.emit_pop(0);
             }
 
             HirStmt::If { cond, then, else_ } => {
                 self.compile_expr(cond)?;
                 let jump_false = self.emit_jump(OpCode::OpJumpIfFalse, 0);
-                self.emit_opcode(OpCode::OpPop, 0);
 
                 for s in then {
                     self.compile_stmt(s)?;
@@ -133,7 +145,6 @@ impl Compiler {
 
                 let jump_then = self.emit_jump(OpCode::OpJump, 0);
                 self.patch_jump(jump_false);
-                self.emit_opcode(OpCode::OpPop, 0);
 
                 if let Some(else_s) = else_ {
                     self.compile_stmt(else_s)?;
@@ -143,11 +154,10 @@ impl Compiler {
             }
 
             HirStmt::While { cond, body } => {
-                let loop_start = self.chunk.code.len();
+                let loop_start = self.chunk.code_len();
                 self.compile_expr(cond)?;
 
                 let exit_jump = self.emit_jump(OpCode::OpJumpIfFalse, 0);
-                self.emit_opcode(OpCode::OpPop, 0);
 
                 for s in body {
                     self.compile_stmt(s)?;
@@ -155,12 +165,11 @@ impl Compiler {
 
                 self.emit_loop(loop_start, 0);
                 self.patch_jump(exit_jump);
-                self.emit_opcode(OpCode::OpPop, 0);
             }
 
             HirStmt::Return(expr) => {
                 self.compile_expr(expr)?;
-                self.emit_opcode(OpCode::OpReturn, 0);
+                self.emit_return(0);
             }
         }
         Ok(())
@@ -227,9 +236,7 @@ impl Compiler {
                 for arg in args {
                     self.compile_expr(arg)?;
                 }
-                let argc = args.len();
-                self.emit_opcode(OpCode::OpCall, 0);
-                self.emit_u16(argc as u16, 0);
+                self.emit_call(args.len() as u16, 0);
             }
 
             HirExpr::List(items) => {

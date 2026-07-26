@@ -14,12 +14,12 @@ pub struct CallFrame {
 }
 
 impl CallFrame {
-    pub fn new(closure: Arc<ObjClosure>, slots: usize) -> Self {
+    pub fn new(closure: Arc<ObjClosure>, slots: usize, return_slot: usize) -> Self {
         CallFrame {
             closure,
             ip: 0,
             slots,
-            return_slot: slots,
+            return_slot,
             stack_limit: 256,
             flags: 0,
         }

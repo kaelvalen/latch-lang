@@ -64,7 +64,7 @@ impl VmBuilder {
     pub fn instantiate_unchecked(self) -> VM {
         let func_ref = crate::env::ObjRef(self.script_fn);
         let closure = Arc::new(ObjClosure::new(func_ref, Vec::new()));
-        let frame = CallFrame::new(closure, 0);
+        let frame = CallFrame::new(closure, 0, 0);
         VM {
             frames: vec![frame],
             stack: ValueStack::new(),
@@ -82,7 +82,7 @@ impl VerifiedProgram {
     pub fn instantiate(self) -> Result<VM> {
         let func_ref = crate::env::ObjRef(self.script_fn);
         let closure = Arc::new(ObjClosure::new(func_ref, Vec::new()));
-        let frame = CallFrame::new(closure, 0);
+        let frame = CallFrame::new(closure, 0, 0);
         Ok(VM {
             frames: vec![frame],
             stack: ValueStack::new(),
@@ -144,7 +144,7 @@ impl VM {
         BytecodeVerifier::verify(&script_fn)?;
         let func_ref = crate::env::ObjRef(script_fn);
         let closure = Arc::new(ObjClosure::new(func_ref, Vec::new()));
-        let frame = CallFrame::new(closure, 0);
+        let frame = CallFrame::new(closure, 0, 0);
         self.frames = vec![frame];
         self.stack.clear();
         Ok(())
@@ -185,7 +185,7 @@ impl VM {
             }
 
             let frame_idx = self.frames.len() - 1;
-            let code_len = self.frames[frame_idx].closure.function.chunk.code.len();
+            let code_len = self.frames[frame_idx].closure.function.chunk.code().len();
             let current_ip = self.frames[frame_idx].ip;
 
             if current_ip >= code_len {
@@ -201,7 +201,7 @@ impl VM {
             // Decode next instruction via InstructionCursor
             let (op, operand, next_ip) = {
                 let frame = &self.frames[frame_idx];
-                let mut cursor = InstructionCursor::new(&frame.closure.function.chunk.code, frame.ip);
+                let mut cursor = InstructionCursor::new(frame.closure.function.chunk.code(), frame.ip);
                 let instr = cursor.decode_next()?;
                 (instr.opcode, instr.operand, cursor.ip)
             };
@@ -212,7 +212,7 @@ impl VM {
             match op {
                 OpCode::OpConstant => {
                     let idx = operand.unwrap_or(0);
-                    let val = self.current_frame().closure.function.chunk.constants[idx as usize].to_value();
+                    let val = self.current_frame().closure.function.chunk.constants()[idx as usize].to_value();
                     self.push(val);
                 }
 
@@ -349,7 +349,7 @@ impl VM {
 
                 OpCode::OpClosure => {
                     let func_idx = operand.unwrap_or(0) as usize;
-                    let func_val = self.current_frame().closure.function.chunk.constants[func_idx].to_value();
+                    let func_val = self.current_frame().closure.function.chunk.constants()[func_idx].to_value();
                     if let Value::Function(func) = func_val {
                         let closure = Arc::new(ObjClosure::new(crate::env::ObjRef(func), Vec::new()));
                         self.push(Value::Closure(closure));
@@ -363,7 +363,7 @@ impl VM {
 
                 OpCode::OpJumpIfFalse => {
                     let target = operand.unwrap_or(0) as usize;
-                    let condition = self.peek(0)?;
+                    let condition = self.pop()?;
                     if !condition.is_truthy() {
                         self.current_frame_mut().ip = target;
                     }
@@ -384,7 +384,9 @@ impl VM {
                                     "Expected {} arguments but got {}.", closure.function.arity, arg_count
                                 )));
                             }
-                            let frame = CallFrame::new(closure, self.stack.len() - arg_count);
+                            let arg_base = self.stack.len() - arg_count;
+                            let return_slot = arg_base - 1;
+                            let frame = CallFrame::new(closure, arg_base, return_slot);
                             self.frames.push(frame);
                         }
                         Value::Function(func) => {
@@ -394,7 +396,9 @@ impl VM {
                                 )));
                             }
                             let closure = Arc::new(ObjClosure::new(crate::env::ObjRef(func), Vec::new()));
-                            let frame = CallFrame::new(closure, self.stack.len() - arg_count);
+                            let arg_base = self.stack.len() - arg_count;
+                            let return_slot = arg_base - 1;
+                            let frame = CallFrame::new(closure, arg_base, return_slot);
                             self.frames.push(frame);
                         }
                         Value::Native(native) => {
@@ -413,7 +417,9 @@ impl VM {
 
                 OpCode::OpReturn => {
                     let result = self.pop().unwrap_or(Value::Null);
+                    let return_slot = self.current_frame().return_slot;
                     self.frames.pop();
+                    self.stack.truncate(return_slot);
                     if self.frames.is_empty() {
                         return Ok(result);
                     }

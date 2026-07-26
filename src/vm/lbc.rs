@@ -1,11 +1,13 @@
 use std::sync::Arc;
 
-use crate::env::{ObjFunction, ObjHeader, ObjKind, Value};
+use crate::env::{ObjFunction, ObjHeader, ObjKind};
 use crate::error::{LatchError, Result};
 use super::chunk::Chunk;
 
 pub const LBC_MAGIC: &[u8; 6] = b"LATCHB";
 pub const LBC_VERSION: u16 = 1;
+pub const LBC_ISA_VERSION: u16 = 1;
+pub const LBC_FLAGS: u16 = 0;
 
 pub struct LbcSerializer;
 
@@ -17,29 +19,32 @@ impl LbcSerializer {
         buf.extend_from_slice(LBC_MAGIC);
         // 2. Version
         buf.extend_from_slice(&LBC_VERSION.to_be_bytes());
+        // 3. ISA version & flags
+        buf.extend_from_slice(&LBC_ISA_VERSION.to_be_bytes());
+        buf.extend_from_slice(&LBC_FLAGS.to_be_bytes());
 
-        // 3. Arity & Name
+        // 4. Arity & Name
         buf.extend_from_slice(&(func.arity as u16).to_be_bytes());
         let name_bytes = func.name.as_bytes();
         buf.extend_from_slice(&(name_bytes.len() as u16).to_be_bytes());
         buf.extend_from_slice(name_bytes);
 
         // 4. Constant Pool
-        let const_count = func.chunk.constants.len() as u16;
+        let const_count = func.chunk.constants().len() as u16;
         buf.extend_from_slice(&const_count.to_be_bytes());
-        for c in &func.chunk.constants {
+        for c in func.chunk.constants() {
             Self::serialize_value(c, &mut buf);
         }
 
         // 5. Bytecode Stream
-        let code_len = func.chunk.code.len() as u32;
+        let code_len = func.chunk.code().len() as u32;
         buf.extend_from_slice(&code_len.to_be_bytes());
-        buf.extend_from_slice(&func.chunk.code);
+        buf.extend_from_slice(func.chunk.code());
 
         // 6. Line table
-        let lines_len = func.chunk.lines.len() as u32;
+        let lines_len = func.chunk.lines().len() as u32;
         buf.extend_from_slice(&lines_len.to_be_bytes());
-        for line in &func.chunk.lines {
+        for line in func.chunk.lines() {
             buf.extend_from_slice(&line.to_be_bytes());
         }
 
@@ -48,15 +53,25 @@ impl LbcSerializer {
 
     /// Deserialize binary .lbc byte stream back into Arc<ObjFunction>.
     pub fn deserialize(bytes: &[u8]) -> Result<Arc<ObjFunction>> {
-        if bytes.len() < 8 || &bytes[0..6] != LBC_MAGIC {
+        if bytes.len() < 12 || &bytes[0..6] != LBC_MAGIC {
             return Err(LatchError::GenericError("Invalid .lbc magic binary header".into()));
         }
 
         let mut cursor = 6;
         let version = u16::from_be_bytes([bytes[cursor], bytes[cursor + 1]]);
         cursor += 2;
-        if version != LBC_VERSION {
-            return Err(LatchError::GenericError(format!("Unsupported .lbc version {version}")));
+        let isa_version = u16::from_be_bytes([bytes[cursor], bytes[cursor + 1]]);
+        cursor += 2;
+        let flags = u16::from_be_bytes([bytes[cursor], bytes[cursor + 1]]);
+        cursor += 2;
+
+        if version != LBC_VERSION || isa_version != LBC_ISA_VERSION {
+            return Err(LatchError::GenericError(format!(
+                "Unsupported .lbc version {version} (isa {isa_version})"
+            )));
+        }
+        if flags != 0 {
+            return Err(LatchError::GenericError(format!("Unsupported .lbc flags {flags}")));
         }
 
         let arity = u16::from_be_bytes([bytes[cursor], bytes[cursor + 1]]) as usize;
@@ -99,7 +114,7 @@ impl LbcSerializer {
             cursor += 4;
         }
 
-        let chunk = Chunk { code, constants, lines };
+        let chunk = Chunk::from_parts(code, constants, lines);
         let func = ObjFunction {
             header: ObjHeader::new(ObjKind::Function),
             arity,

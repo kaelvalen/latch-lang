@@ -40,7 +40,7 @@ impl<'a> InstructionCursor<'a> {
         self.ip += 1;
         let desc = op.descriptor();
 
-        let operand = if desc.operand_count == 1 {
+        let operand = if desc.operand_width == 2 {
             if self.ip + 1 > self.code.len() {
                 return Err(LatchError::GenericError(format!("Truncated operand for {} at offset={offset}", desc.name)));
             }
