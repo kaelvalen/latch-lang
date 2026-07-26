@@ -109,3 +109,32 @@ impl SymbolTable {
         self.symbols.is_empty()
     }
 }
+
+/// Single Source of Truth Semantic Database for Latch Language Compilation
+/// Aggregates String Interner, Resolved Symbols, Scopes, and Inferred Types across all stages.
+#[derive(Debug, Clone, Default)]
+pub struct SemanticDatabase {
+    pub symbols: SymbolTable,
+    pub resolved_types: HashMap<SymbolId, String>,
+}
+
+impl SemanticDatabase {
+    pub fn new() -> Self {
+        SemanticDatabase {
+            symbols: SymbolTable::new(),
+            resolved_types: HashMap::new(),
+        }
+    }
+
+    pub fn intern_symbol(&mut self, name: impl Into<String>) -> SymbolId {
+        self.symbols.intern(name)
+    }
+
+    pub fn set_type(&mut self, id: SymbolId, type_str: String) {
+        self.resolved_types.insert(id, type_str);
+    }
+
+    pub fn get_type(&self, id: SymbolId) -> Option<&str> {
+        self.resolved_types.get(&id).map(|s| s.as_str())
+    }
+}

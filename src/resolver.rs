@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use crate::ast::*;
 use crate::error::Result;
 use crate::hir::*;
-use crate::symbol::{SymbolId, SymbolTable};
+use crate::symbol::{SemanticDatabase, SymbolId};
 
 struct ResolverLocal {
     symbol_id: SymbolId,
@@ -12,7 +12,7 @@ struct ResolverLocal {
 }
 
 pub struct Resolver {
-    pub symbols: SymbolTable,
+    pub db: SemanticDatabase,
     locals: Vec<ResolverLocal>,
     scope_depth: usize,
     globals_map: HashMap<SymbolId, GlobalId>,
@@ -21,7 +21,7 @@ pub struct Resolver {
 impl Resolver {
     pub fn new() -> Self {
         Resolver {
-            symbols: SymbolTable::new(),
+            db: SemanticDatabase::new(),
             locals: Vec::new(),
             scope_depth: 0,
             globals_map: HashMap::new(),
@@ -73,7 +73,7 @@ impl Resolver {
     fn resolve_stmt(&mut self, stmt: &Stmt) -> Result<HirStmt> {
         match stmt {
             Stmt::Let { name, value, .. } => {
-                let sym_id = self.symbols.intern(name);
+                let sym_id = self.db.intern_symbol(name);
                 let val = self.resolve_expr(value)?;
                 if self.scope_depth > 0 {
                     let id = LocalId(self.locals.len() as u32);
@@ -90,7 +90,7 @@ impl Resolver {
             }
 
             Stmt::Assign { name, value } => {
-                let sym_id = self.symbols.intern(name);
+                let sym_id = self.db.intern_symbol(name);
                 let val = self.resolve_expr(value)?;
                 if let Some(id) = self.resolve_local(sym_id) {
                     Ok(HirStmt::AssignLocal { id, value: val })
@@ -161,7 +161,7 @@ impl Resolver {
             Expr::Bool(b) => Ok(HirExpr::Constant(HirLiteral::Bool(*b))),
             Expr::Str(s) => Ok(HirExpr::Constant(HirLiteral::Str(s.clone()))),
             Expr::Ident(name) => {
-                let sym_id = self.symbols.intern(name);
+                let sym_id = self.db.intern_symbol(name);
                 if let Some(id) = self.resolve_local(sym_id) {
                     Ok(HirExpr::Local(id))
                 } else {
@@ -200,7 +200,7 @@ impl Resolver {
                 if name == "print" && !opt_args.is_empty() {
                     return Ok(HirExpr::Print(Box::new(opt_args.remove(0))));
                 }
-                let sym_id = self.symbols.intern(name);
+                let sym_id = self.db.intern_symbol(name);
                 let global_id = self.get_or_create_global(sym_id);
                 let func_id = FunctionId(global_id.0);
                 Ok(HirExpr::Call {
