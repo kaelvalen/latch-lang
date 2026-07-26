@@ -54,7 +54,7 @@ fn test_bytecode_fuzzer_resilience() {
         let verify_res = BytecodeVerifier::verify(&func);
         assert!(verify_res.is_ok(), "Generated fuzzing bytecode failed verifier!");
 
-        let mut vm = VM::new(std::sync::Arc::new(func));
+        let mut vm = VM::new(std::sync::Arc::new(func)).expect("VM construction error");
         let run_res = vm.run();
         assert!(run_res.is_ok(), "VM crashed executing verified fuzzing bytecode!");
         assert_eq!(run_res.unwrap().as_int().unwrap(), seed as i64);

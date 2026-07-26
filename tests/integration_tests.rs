@@ -118,7 +118,7 @@ fn test_execution_abi_contract() {
 
     let compiler = Compiler::new();
     let func = compiler.compile_module(&module).expect("Compile error");
-    let mut vm = VM::new(func);
+    let mut vm = VM::new(func).expect("VM construction error");
     let result = vm.run().expect("VM run error");
     assert_eq!(result, latch_lang::env::Value::Null);
 }

@@ -27,4 +27,4 @@ pub use optimizer::Optimizer;
 pub use profiler::VmProfiler;
 pub use stack::ValueStack;
 pub use verifier::BytecodeVerifier;
-pub use vm::VM;
+pub use vm::{VM, VmBuilder, VerifiedProgram};

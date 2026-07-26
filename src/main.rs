@@ -190,7 +190,13 @@ fn main() {
                 }
             };
 
-            let mut vm = crate::vm::VM::new(script_fn);
+            let mut vm = match crate::vm::VM::new(script_fn) {
+                Ok(v) => v,
+                Err(e) => {
+                    print_error(&e, &file, &source);
+                    std::process::exit(1);
+                }
+            };
             if let Err(e) = vm.run() {
                 print_error(&e, &file, &source);
                 std::process::exit(1);

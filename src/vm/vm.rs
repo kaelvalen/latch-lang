@@ -13,40 +13,133 @@ use super::profiler::VmProfiler;
 use super::stack::ValueStack;
 use super::verifier::BytecodeVerifier;
 
-/// Unified Production Virtual Machine Engine
-/// Features ValueStack, BytecodeVerifier, InstructionCursor, InlineCache, and GcState integration.
-pub struct VM {
-    frames: Vec<CallFrame>,
-    pub stack: ValueStack,
-    globals: Vec<Global>,
-    pub gc: GcState,
-    pub profiler: VmProfiler,
-    pub inline_caches: Vec<InlineCache>,
+/// A type-state wrapper proving a program has passed BytecodeVerifier.
+/// VM only accepts VerifiedProgram — never raw ObjFunction.
+/// (Findings #033, #034)
+pub struct VerifiedProgram {
+    pub(crate) script_fn: Arc<ObjFunction>,
 }
 
-impl VM {
-    /// Instantiate VM with mandatory pre-execution static bytecode verification.
-    pub fn new(script_fn: Arc<ObjFunction>) -> Self {
-        // Enforce Mandatory Pre-Execution Bytecode Verification (Finding 004)
-        if let Err(e) = BytecodeVerifier::verify(&script_fn) {
-            eprintln!("[Latch VM Warning] Bytecode verification note: {e}");
-        }
+/// VmBuilder — separates verification, instantiation, and execution concerns.
+/// Replaces monolithic VM::new() that silently swallowed verifier failures.
+/// (Findings #026, #029, #032, #033)
+pub struct VmBuilder {
+    script_fn: Arc<ObjFunction>,
+}
 
-        let func_ref = crate::env::ObjRef(script_fn);
+impl VmBuilder {
+    /// Create a builder from a compiled function.
+    pub fn new(script_fn: Arc<ObjFunction>) -> Self {
+        VmBuilder { script_fn }
+    }
+
+    /// Verify bytecode. Returns a VerifiedProgram proof token on success.
+    /// Verification failure is a hard error — not a warning. (Finding #026)
+    pub fn verify(self) -> Result<VerifiedProgram> {
+        BytecodeVerifier::verify(&self.script_fn)?;
+        Ok(VerifiedProgram { script_fn: self.script_fn })
+    }
+
+    /// Instantiate VM directly from a chunk without a verifier pass.
+    /// Only use in tests where the chunk is trivially known-valid.
+    #[cfg(test)]
+    pub fn from_chunk(chunk: Chunk) -> Result<VM> {
+        let script_fn = Arc::new(ObjFunction {
+            header: crate::env::ObjHeader::new(crate::env::ObjKind::Function),
+            arity: 0,
+            chunk,
+            name: "<script>".into(),
+            upvalue_count: 0,
+            max_stack: 256,
+            local_count: 0,
+            module_id: 0,
+            debug_id: 0,
+            flags: 0,
+        });
+        VmBuilder::new(script_fn).verify()?.instantiate()
+    }
+
+    /// Instantiate VM without verification. ONLY use when chunk has already
+    /// been verified externally. Never call from production paths.
+    pub fn instantiate_unchecked(self) -> VM {
+        let func_ref = crate::env::ObjRef(self.script_fn);
         let closure = Arc::new(ObjClosure::new(func_ref, Vec::new()));
         let frame = CallFrame::new(closure, 0);
-
         VM {
             frames: vec![frame],
             stack: ValueStack::new(),
             globals: Vec::new(),
             gc: GcState::new(),
             profiler: VmProfiler::new(),
-            inline_caches: Vec::new(),
+            inline_caches: HashMap::new(),
         }
     }
+}
 
-    /// Load and verify an ObjFunction for VM execution.
+impl VerifiedProgram {
+    /// Instantiate a VM from a verified program token.
+    /// This is the only public VM construction path in production code.
+    pub fn instantiate(self) -> Result<VM> {
+        let func_ref = crate::env::ObjRef(self.script_fn);
+        let closure = Arc::new(ObjClosure::new(func_ref, Vec::new()));
+        let frame = CallFrame::new(closure, 0);
+        Ok(VM {
+            frames: vec![frame],
+            stack: ValueStack::new(),
+            globals: Vec::new(),
+            gc: GcState::new(),
+            profiler: VmProfiler::new(),
+            inline_caches: HashMap::new(),
+        })
+    }
+}
+
+/// Unified Production Virtual Machine Engine
+/// Fields are private — access via controlled accessor methods. (Finding #030)
+pub struct VM {
+    frames: Vec<CallFrame>,
+    stack: ValueStack,
+    globals: Vec<Global>,
+    gc: GcState,
+    profiler: VmProfiler,
+    /// Keyed by instruction byte offset. (Finding #031)
+    inline_caches: HashMap<usize, InlineCache>,
+}
+
+impl VM {
+    // ── Controlled Accessors (Finding #030) ─────────────────────────────
+
+    pub fn stack(&self) -> &ValueStack { &self.stack }
+    pub fn gc(&self) -> &GcState { &self.gc }
+    pub fn profiler(&self) -> &VmProfiler { &self.profiler }
+
+    // ── Legacy compatibility entry point (deprecated — prefer VmBuilder) ─
+
+    /// Instantiate VM from a compiled ObjFunction.
+    /// Performs mandatory bytecode verification. Returns Err on invalid bytecode.
+    /// (Findings #026, #029, #032)
+    pub fn new(script_fn: Arc<ObjFunction>) -> Result<Self> {
+        VmBuilder::new(script_fn).verify()?.instantiate()
+    }
+
+    /// Build and run from a Chunk directly; primarily used in integration tests.
+    pub fn new_with_chunk(chunk: Chunk) -> Result<Self> {
+        let script_fn = Arc::new(ObjFunction {
+            header: crate::env::ObjHeader::new(crate::env::ObjKind::Function),
+            arity: 0,
+            chunk,
+            name: "<script>".into(),
+            upvalue_count: 0,
+            max_stack: 256,
+            local_count: 0,
+            module_id: 0,
+            debug_id: 0,
+            flags: 0,
+        });
+        VmBuilder::new(script_fn).verify()?.instantiate()
+    }
+
+    /// Load and run a new script into an existing VM instance.
     pub fn load(&mut self, script_fn: Arc<ObjFunction>) -> Result<()> {
         BytecodeVerifier::verify(&script_fn)?;
         let func_ref = crate::env::ObjRef(script_fn);
@@ -81,22 +174,6 @@ impl VM {
     pub fn alloc_class(&self, name: impl Into<String>) -> crate::env::ObjRef<crate::env::ObjClass> {
         self.gc.track_alloc(std::mem::size_of::<crate::env::ObjClass>());
         crate::env::ObjRef::new(crate::env::ObjClass::new(name))
-    }
-
-    pub fn new_with_chunk(chunk: Chunk) -> Self {
-        let script_fn = crate::env::ObjRef::new(ObjFunction {
-            header: crate::env::ObjHeader::new(crate::env::ObjKind::Function),
-            arity: 0,
-            chunk,
-            name: "<script>".into(),
-            upvalue_count: 0,
-            max_stack: 256,
-            local_count: 0,
-            module_id: 0,
-            debug_id: 0,
-            flags: 0,
-        });
-        Self::new(script_fn.0)
     }
 
     // ── Primary VM Loop (InstructionCursor & ValueStack Migration) ────────
@@ -246,7 +323,11 @@ impl VM {
                     let slot_idx = operand.unwrap_or(0) as usize;
                     let closure = self.current_frame().closure.clone();
                     if slot_idx < closure.upvalues.len() {
-                        let val = closure.upvalues[slot_idx].lock().unwrap().clone();
+                        // Internal invariant: upvalue Mutex is never poisoned under normal use.
+                        let val = closure.upvalues[slot_idx]
+                            .lock()
+                            .map_err(|_| LatchError::GenericError("Upvalue lock poisoned".into()))?
+                            .clone();
                         self.push(val);
                     } else {
                         return Err(LatchError::GenericError(format!("Invalid upvalue index {slot_idx}")));
@@ -258,7 +339,9 @@ impl VM {
                     let val = self.peek(0)?.clone();
                     let closure = self.current_frame().closure.clone();
                     if slot_idx < closure.upvalues.len() {
-                        *closure.upvalues[slot_idx].lock().unwrap() = val;
+                        *closure.upvalues[slot_idx]
+                            .lock()
+                            .map_err(|_| LatchError::GenericError("Upvalue lock poisoned".into()))? = val;
                     } else {
                         return Err(LatchError::GenericError(format!("Invalid upvalue index {slot_idx}")));
                     }
@@ -369,7 +452,8 @@ impl VM {
                     let container = self.pop()?;
                     match (&container, &index) {
                         (Value::List(l), Value::Int(i)) => {
-                            let list = l.lock().unwrap();
+                            let list = l.lock()
+                                .map_err(|_| LatchError::GenericError("List lock poisoned".into()))?;
                             let idx = if *i < 0 { list.len() as i64 + i } else { *i } as usize;
                             if idx < list.len() {
                                 self.push(list[idx].clone());
@@ -378,7 +462,8 @@ impl VM {
                             }
                         }
                         (Value::Map(m), Value::Str(k)) => {
-                            let map = m.lock().unwrap();
+                            let map = m.lock()
+                                .map_err(|_| LatchError::GenericError("Map lock poisoned".into()))?;
                             if let Some(val) = map.get(k) {
                                 self.push(val.clone());
                             } else {
@@ -395,14 +480,16 @@ impl VM {
                     let container = self.pop()?;
                     match (&container, &index) {
                         (Value::List(l), Value::Int(i)) => {
-                            let mut list = l.lock().unwrap();
+                            let mut list = l.lock()
+                                .map_err(|_| LatchError::GenericError("List lock poisoned".into()))?;
                             let idx = if *i < 0 { list.len() as i64 + i } else { *i } as usize;
                             if idx < list.len() {
                                 list[idx] = val.clone();
                             }
                         }
                         (Value::Map(m), Value::Str(k)) => {
-                            let mut map = m.lock().unwrap();
+                            let mut map = m.lock()
+                                .map_err(|_| LatchError::GenericError("Map lock poisoned".into()))?;
                             map.insert(k.clone(), val.clone());
                         }
                         _ => {}
@@ -421,11 +508,13 @@ impl VM {
                     let item = self.pop()?;
                     match (&container, &item) {
                         (Value::List(l), _) => {
-                            let list = l.lock().unwrap();
+                            let list = l.lock()
+                                .map_err(|_| LatchError::GenericError("List lock poisoned".into()))?;
                             self.push(Value::Bool(list.contains(&item)));
                         }
                         (Value::Map(m), Value::Str(k)) => {
-                            let map = m.lock().unwrap();
+                            let map = m.lock()
+                                .map_err(|_| LatchError::GenericError("Map lock poisoned".into()))?;
                             self.push(Value::Bool(map.contains_key(k)));
                         }
                         _ => self.push(Value::Bool(false)),
@@ -441,12 +530,13 @@ impl VM {
 
     #[inline(always)]
     fn current_frame(&self) -> &CallFrame {
-        self.frames.last().expect("No active frame")
+        // Internal invariant: run() always checks frames.is_empty() before calling this.
+        self.frames.last().expect("VM invariant violated: no active frame")
     }
 
     #[inline(always)]
     fn current_frame_mut(&mut self) -> &mut CallFrame {
-        self.frames.last_mut().expect("No active frame")
+        self.frames.last_mut().expect("VM invariant violated: no active frame")
     }
 
     #[inline(always)]

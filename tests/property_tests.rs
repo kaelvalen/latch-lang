@@ -15,7 +15,7 @@ fn test_roundtrip_program(source: &str) {
     // 1. Direct compilation to VM
     let compiler1 = Compiler::new();
     let script_fn1 = compiler1.compile_hir(&hir).expect("Compile error");
-    let mut vm1 = VM::new(script_fn1);
+    let mut vm1 = VM::new(script_fn1).expect("VM1 construction error");
     let res1 = vm1.run().expect("VM1 run error");
 
     // 2. Compile -> Serialize -> Deserialize -> VM
@@ -23,7 +23,7 @@ fn test_roundtrip_program(source: &str) {
     let script_fn2 = compiler2.compile_hir(&hir).expect("Compile error");
     let bytes = LbcSerializer::serialize(&script_fn2);
     let script_fn3 = LbcSerializer::deserialize(&bytes).expect("Deserialize error");
-    let mut vm2 = VM::new(script_fn3);
+    let mut vm2 = VM::new(script_fn3).expect("VM2 construction error");
     let res2 = vm2.run().expect("VM2 run error");
 
     assert_eq!(res1, res2, "Roundtrip serialization test failed!");
