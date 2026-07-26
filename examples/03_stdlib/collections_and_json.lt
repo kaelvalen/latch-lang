@@ -1,0 +1,43 @@
+# 03_stdlib/collections_and_json.lt
+# Latch Language - Standard Library: List & JSON Builtins
+
+print("=== 1. List Operations (push, pop, reverse, sort, len) ===")
+items_list := [45, 12, 89, 3, 27]
+print("Initial items: " + str(items_list))
+
+print("List length: " + str(len(items_list)))
+
+push(items_list, 99)
+print("After push(99): " + str(items_list))
+
+popped := pop(items_list, 4)
+print("Popped item: " + str(popped))
+print("After pop(): " + str(items_list))
+
+reverse(items_list)
+print("Reversed list: " + str(items_list))
+
+sort(items_list)
+print("Sorted list: " + str(items_list))
+
+print("\n=== 2. JSON Module (json.*) ===")
+config_str := '{"server": "localhost", "port": 8080, "ssl": true}'
+print("Raw JSON String: " + config_str)
+
+parsed := json.parse(config_str)
+print("Parsed JSON Object - Server: " + str(parsed["server"]))
+print("Parsed JSON Object - Port: " + str(parsed["port"]))
+print("Parsed JSON Object - SSL: " + str(parsed["ssl"]))
+
+parsed["port"] = 9090
+
+stringified := json.stringify(parsed)
+print("Stringified JSON: " + stringified)
+
+print("\n=== 3. Dict Builtins (keys, values, items) ===")
+d := {"b": 2, "a": 1}
+print("Dict keys: " + str(keys(d)))
+print("Dict values: " + str(values(d)))
+print("Dict items: " + str(items(d)))
+
+print("\n=== 03_stdlib/collections_and_json.lt PASSED ===")

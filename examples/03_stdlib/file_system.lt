@@ -1,0 +1,27 @@
+# 03_stdlib/file_system.lt
+# Latch Language - Standard Library: fs module
+
+test_file := "/tmp/latch_fs_sample.txt"
+
+print("=== 1. Directory & File Creation ===")
+content := "Line 1: Latch FS API Test\nLine 2: Built-in File Management\n"
+
+fs.write(test_file, content)
+print("File written to: " + test_file)
+
+print("File exists?: " + str(fs.exists(test_file)))
+
+print("\n=== 2. Appending & Reading Content ===")
+fs.append(test_file, "Line 3: Appended line\n")
+
+read_back := fs.read(test_file)
+print("File content read back:")
+print("--------------------------------")
+print(read_back)
+print("--------------------------------")
+
+print("\n=== 3. Cleaning Up ===")
+fs.remove(test_file)
+print("File exists after removal?: " + str(fs.exists(test_file)))
+
+print("\n=== 03_stdlib/file_system.lt PASSED ===")

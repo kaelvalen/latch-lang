@@ -1,0 +1,65 @@
+# 04_advanced/algorithms_suite.lt
+# Latch Language - Algorithms & Data Structures Suite
+
+print("=== 1. Quicksort Algorithm ===")
+
+fn quicksort(arr) {
+    if len(arr) <= 1 {
+        return arr
+    }
+    pivot := arr[0]
+    less := []
+    equal := []
+    greater := []
+
+    for item in arr {
+        if item < pivot {
+            push(less, item)
+        } elif item == pivot {
+            push(equal, item)
+        } else {
+            push(greater, item)
+        }
+    }
+
+    sorted_less := quicksort(less)
+    sorted_greater := quicksort(greater)
+
+    result := []
+    for x in sorted_less { push(result, x) }
+    for x in equal { push(result, x) }
+    for x in sorted_greater { push(result, x) }
+    return result
+}
+
+unsorted := [34, 7, 23, 32, 5, 62, 11, 2]
+print("Unsorted array: " + str(unsorted))
+sorted_arr := quicksort(unsorted)
+print("Quicksort result: " + str(sorted_arr))
+
+print("\n=== 2. Binary Search Algorithm ===")
+
+fn binary_search(arr, target) {
+    low := 0
+    high := len(arr) - 1
+
+    while low <= high {
+        mid := (low + high) / 2
+        val := arr[mid]
+
+        if val == target {
+            return mid
+        } elif val < target {
+            low = mid + 1
+        } else {
+            high = mid - 1
+        }
+    }
+    return -1
+}
+
+target_val := 32
+found_idx := binary_search(sorted_arr, target_val)
+print("Searching for 32 in sorted array -> Index: " + str(found_idx))
+
+print("\n=== 04_advanced/algorithms_suite.lt PASSED ===")

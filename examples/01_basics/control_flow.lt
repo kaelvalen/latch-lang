@@ -1,0 +1,69 @@
+# 01_basics/control_flow.lt
+# Latch Language - Control Flow Constructs
+
+print("=== 1. If / Elif / Else Branching ===")
+score := 85
+grade := ""
+
+if score >= 90 {
+    grade = "A"
+} elif score >= 80 {
+    grade = "B"
+} elif score >= 70 {
+    grade = "C"
+} else {
+    grade = "F"
+}
+print("Score: " + str(score) + " -> Grade: " + grade)
+
+print("\n=== 2. While Loops with Break & Continue ===")
+count := 0
+even_sum := 0
+
+while count < 10 {
+    count = count + 1
+    if count % 2 != 0 {
+        continue
+    }
+    even_sum = even_sum + count
+    if count == 8 {
+        print("Reached count 8, breaking loop...")
+        break
+    }
+}
+print("Sum of even numbers up to 8: " + str(even_sum))
+
+print("\n=== 3. For Loops over Lists ===")
+fruits := ["apple", "banana", "cherry", "dragonfruit"]
+print("Iterating over fruits list:")
+for fruit in fruits {
+    print(" - Fruit: " + fruit)
+}
+
+print("\n=== 4. Nested Loops ===")
+grid_sum := 0
+for i in [1, 2, 3] {
+    for j in [10, 20] {
+        grid_sum = grid_sum + i + j
+    }
+}
+print("Sum of 3x2 grid values: " + str(grid_sum))
+
+print("\n=== 5. Match Statements ===")
+cmd := "start"
+status := ""
+
+match cmd {
+    case "start": {
+        status = "System is starting..."
+    }
+    case "stop": {
+        status = "System stopped."
+    }
+    default: {
+        status = "Unknown command."
+    }
+}
+print("Command: " + cmd + " -> Status: " + status)
+
+print("\n=== 01_basics/control_flow.lt PASSED ===")

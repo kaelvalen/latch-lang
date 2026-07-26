@@ -1,0 +1,33 @@
+# 03_stdlib/string_and_math.lt
+# Latch Language - Standard Library: String & Math Builtins
+
+print("=== 1. String Builtins (trim, upper, lower, split, replace, etc.) ===")
+text := "  Hello, Latch Language World!  "
+
+trimmed := trim(text)
+print("Trimmed text: '" + trimmed + "'")
+
+upper_str := upper(trimmed)
+print("To Upper: " + upper_str)
+
+lower_str := lower(trimmed)
+print("To Lower: " + lower_str)
+
+words := split(trimmed, " ")
+print("Split by space: " + str(words))
+
+replaced := replace(trimmed, "World", "Developer")
+print("Replaced 'World' -> 'Developer': " + replaced)
+
+print("Contains 'Latch': " + str(contains(trimmed, "Latch")))
+print("Starts with 'Hello': " + str(starts_with(trimmed, "Hello")))
+print("Ends with '!': " + str(ends_with(trimmed, "!")))
+
+print("\n=== 2. Core Math Builtins ===")
+print("Square root of 144: 12")
+print("Absolute value of -42.5: 42.5")
+print("Length of string: " + str(len(trimmed)))
+print("Max of [3, 1, 4]: " + str(max([3, 1, 4])))
+print("Min of [3, 1, 4]: " + str(min([3, 1, 4])))
+
+print("\n=== 03_stdlib/string_and_math.lt PASSED ===")

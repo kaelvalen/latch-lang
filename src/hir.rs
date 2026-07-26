@@ -69,6 +69,10 @@ pub enum HirExpr {
     },
     List(Vec<HirExpr>),
     Map(Vec<(HirExpr, HirExpr)>),
+    Index {
+        target: Box<HirExpr>,
+        index: Box<HirExpr>,
+    },
     Print(Box<HirExpr>),
 }
 
@@ -98,6 +102,11 @@ pub enum HirStmt {
     },
     While {
         cond: HirExpr,
+        body: Vec<HirStmt>,
+    },
+    For {
+        var_id: LocalId,
+        iter: HirExpr,
         body: Vec<HirStmt>,
     },
     Return(HirExpr),

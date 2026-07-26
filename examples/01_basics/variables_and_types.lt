@@ -1,0 +1,55 @@
+# 01_basics/variables_and_types.lt
+# Latch Language - Variables, Data Types & Operations Test
+
+print("=== 1. Primitive Variables & Declarations ===")
+a := 42
+b := 3.14159
+is_active := true
+name := "Latch Language"
+
+print("a (int): " + str(a))
+print("b (float): " + str(b))
+print("is_active (bool): " + str(is_active))
+print("name (str): " + name)
+
+print("\n=== 2. Arithmetic & Logical Operations ===")
+sum_val := a + 10
+diff_val := a - 12
+prod_val := a * 2
+div_val := 84 / 2
+mod_val := 43 % 5
+
+print("42 + 10 = " + str(sum_val))
+print("42 - 12 = " + str(diff_val))
+print("42 * 2 = " + str(prod_val))
+print("84 / 2 = " + str(div_val))
+print("43 % 5 = " + str(mod_val))
+
+bool_op := a > 40 or is_active
+print("Complex boolean condition: " + str(bool_op))
+
+print("\n=== 3. String Concatenation ===")
+greeting := "Hello, " + name + "!"
+print("Concatenation: " + greeting)
+
+print("\n=== 4. Lists & Operations ===")
+numbers := [10, 20, 30, 40, 50]
+print("Initial list: " + str(numbers))
+print("First item: " + str(numbers[0]))
+print("Last item: " + str(numbers[4]))
+numbers[2] = 99
+print("Updated list (index 2 set to 99): " + str(numbers))
+
+print("\n=== 5. Maps (Dictionaries) ===")
+user := {
+    "name": "Kael",
+    "role": "Developer",
+    "version": 0.5
+}
+print("User map: " + str(user))
+print("User name: " + user["name"])
+print("User role: " + user["role"])
+user["status"] = "Active"
+print("Updated user map: " + str(user))
+
+print("\n=== 01_basics/variables_and_types.lt PASSED ===")

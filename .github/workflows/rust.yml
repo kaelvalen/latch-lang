@@ -58,8 +58,11 @@ jobs:
           cargo run --release -- vm examples/ci-check.lt
           cargo run --release -- run examples/parallel-tasks.lt
           cargo run --release -- vm examples/parallel-tasks.lt
-          cargo run --release -- run examples/vm_test.lt
-          cargo run --release -- vm examples/vm_test.lt
+          for f in examples/*/*.lt; do
+            echo "Testing $f..."
+            cargo run --release -- check "$f"
+            cargo run --release -- run "$f"
+          done
 
   editor-extensions:
     name: Editor Extensions Validation

@@ -116,6 +116,16 @@ impl Optimizer {
                 })
             }
 
+            HirStmt::For { var_id, iter, body } => {
+                let opt_iter = self.optimize_expr(iter);
+                let opt_body = body.iter().filter_map(|s| self.optimize_stmt(s)).collect();
+                Some(HirStmt::For {
+                    var_id: *var_id,
+                    iter: opt_iter,
+                    body: opt_body,
+                })
+            }
+
             HirStmt::Return(expr) => Some(HirStmt::Return(self.optimize_expr(expr))),
         }
     }
@@ -160,13 +170,17 @@ impl Optimizer {
                 HirExpr::List(opt_items)
             }
 
-            HirExpr::Map(pairs) => {
-                let opt_pairs = pairs
+            HirExpr::Map(pairs) => HirExpr::Map(
+                pairs
                     .iter()
                     .map(|(k, v)| (self.optimize_expr(k), self.optimize_expr(v)))
-                    .collect();
-                HirExpr::Map(opt_pairs)
-            }
+                    .collect(),
+            ),
+
+            HirExpr::Index { target, index } => HirExpr::Index {
+                target: Box::new(self.optimize_expr(target)),
+                index: Box::new(self.optimize_expr(index)),
+            },
 
             HirExpr::Print(expr) => HirExpr::Print(Box::new(self.optimize_expr(expr))),
 

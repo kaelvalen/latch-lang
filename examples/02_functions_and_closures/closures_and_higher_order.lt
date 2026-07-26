@@ -1,0 +1,49 @@
+# 02_functions_and_closures/closures_and_higher_order.lt
+# Latch Language - Closures, Upvalues & Higher Order Functions
+
+print("=== 1. Currying & Parameter Capture ===")
+make_adder := fn(x) {
+    return fn(y) {
+        return x + y
+    }
+}
+
+add10 := make_adder(10)
+add100 := make_adder(100)
+
+print("add10(5) = " + str(add10(5)))
+print("add10(25) = " + str(add10(25)))
+print("add100(50) = " + str(add100(50)))
+
+print("\n=== 2. Stateful Counter Closures (Upvalue Mutation) ===")
+make_counter := fn(start) {
+    count := start
+    return fn() {
+        count = count + 1
+        return count
+    }
+}
+
+c1 := make_counter(0)
+c2 := make_counter(100)
+
+print("c1 step 1: " + str(c1()))
+print("c1 step 2: " + str(c1()))
+print("c1 step 3: " + str(c1()))
+
+print("c2 step 1: " + str(c2()))
+print("c2 step 2: " + str(c2()))
+
+print("\n=== 3. Higher-Order Functions: map & filter ===")
+nums := [1, 2, 3, 4, 5, 6]
+print("Original numbers: " + str(nums))
+
+# Map: double numbers
+doubled := map(nums, fn(x) { return x * 2 })
+print("Doubled numbers: " + str(doubled))
+
+# Filter: keep even numbers
+evens := filter(nums, fn(x) { return x % 2 == 0 })
+print("Even numbers: " + str(evens))
+
+print("\n=== 02_functions_and_closures/closures_and_higher_order.lt PASSED ===")

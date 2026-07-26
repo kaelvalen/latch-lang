@@ -105,7 +105,7 @@ impl Resolver {
                     Ok(HirStmt::AssignLocal { id, value: val })
                 } else {
                     let id = self.get_or_create_global(sym_id);
-                    Ok(HirStmt::LetGlobal { id, value: val })
+                    Ok(HirStmt::AssignGlobal { id, value: val })
                 }
             }
 
@@ -167,6 +167,30 @@ impl Resolver {
                 })
             }
 
+            Stmt::For { var, iter, body } => {
+                let opt_iter = self.resolve_expr(iter)?;
+                self.scope_depth += 1;
+                let var_sym = self.db.intern_symbol(var);
+                let var_id = LocalId(self.locals.len() as u32);
+                self.locals.push(ResolverLocal {
+                    symbol_id: var_sym,
+                    id: var_id,
+                    _depth: self.scope_depth,
+                });
+                let mut opt_body = Vec::new();
+                for s in body {
+                    opt_body.push(self.resolve_stmt(s)?);
+                }
+                self.scope_depth -= 1;
+                self.locals.pop();
+
+                Ok(HirStmt::For {
+                    var_id,
+                    iter: opt_iter,
+                    body: opt_body,
+                })
+            }
+
             Stmt::Fn {
                 name, params, body, ..
             } => {
@@ -219,6 +243,28 @@ impl Resolver {
             Expr::Float(f) => Ok(HirExpr::Constant(HirLiteral::Float(*f))),
             Expr::Bool(b) => Ok(HirExpr::Constant(HirLiteral::Bool(*b))),
             Expr::Str(s) => Ok(HirExpr::Constant(HirLiteral::Str(s.clone()))),
+            Expr::Interpolated(parts) => {
+                let mut current: Option<HirExpr> = None;
+                for part in parts {
+                    let part_expr = match part {
+                        StringPart::Literal(s) => HirExpr::Constant(HirLiteral::Str(s.clone())),
+                        StringPart::Expr(tokens) => {
+                            let mut parser = crate::parser::Parser::new(tokens.clone());
+                            let ast_expr = parser.parse_expr()?;
+                            self.resolve_expr(&ast_expr)?
+                        }
+                    };
+                    current = match current {
+                        None => Some(part_expr),
+                        Some(prev) => Some(HirExpr::BinOp {
+                            op: HirOp::Add,
+                            left: Box::new(prev),
+                            right: Box::new(part_expr),
+                        }),
+                    };
+                }
+                Ok(current.unwrap_or(HirExpr::Constant(HirLiteral::Str(String::new()))))
+            }
             Expr::Fn { params, body, .. } => {
                 let outer_locals = std::mem::take(&mut self.locals);
                 self.outer_locals_stack.push(outer_locals.clone());
@@ -295,6 +341,13 @@ impl Resolver {
                 if name == "print" && !opt_args.is_empty() {
                     return Ok(HirExpr::Print(Box::new(opt_args.remove(0))));
                 }
+                if name == "str" && !opt_args.is_empty() {
+                    return Ok(HirExpr::BinOp {
+                        op: HirOp::Add,
+                        left: Box::new(HirExpr::Constant(HirLiteral::Str("".into()))),
+                        right: Box::new(opt_args.remove(0)),
+                    });
+                }
                 let sym_id = self.db.intern_symbol(name);
                 let global_id = self.get_or_create_global(sym_id);
                 let func_id = FunctionId(global_id.0);
@@ -303,6 +356,10 @@ impl Resolver {
                     args: opt_args,
                 })
             }
+            Expr::Index { expr, index } => Ok(HirExpr::Index {
+                target: Box::new(self.resolve_expr(expr)?),
+                index: Box::new(self.resolve_expr(index)?),
+            }),
             Expr::List(items) => {
                 let mut opt_items = Vec::with_capacity(items.len());
                 for item in items {

@@ -51,6 +51,12 @@ impl HirVerifier {
                     Self::verify_stmt(s)?;
                 }
             }
+            HirStmt::For { iter, body, .. } => {
+                Self::verify_expr(iter)?;
+                for s in body {
+                    Self::verify_stmt(s)?;
+                }
+            }
             HirStmt::Return(expr) => {
                 Self::verify_expr(expr)?;
             }
@@ -87,6 +93,11 @@ impl HirVerifier {
                     Self::verify_expr(k)?;
                     Self::verify_expr(v)?;
                 }
+                Ok(())
+            }
+            HirExpr::Index { target, index } => {
+                Self::verify_expr(target)?;
+                Self::verify_expr(index)?;
                 Ok(())
             }
             HirExpr::Function { body, .. } => {

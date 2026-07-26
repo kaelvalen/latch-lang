@@ -138,6 +138,15 @@ impl TypeChecker {
                 self.pop_scope();
             }
 
+            HirStmt::For { iter, body, .. } => {
+                self.check_expr(iter)?;
+                self.push_scope();
+                for s in body {
+                    self.check_stmt(s)?;
+                }
+                self.pop_scope();
+            }
+
             HirStmt::Return(expr) => {
                 self.check_expr(expr)?;
             }
@@ -214,6 +223,12 @@ impl TypeChecker {
                     self.check_expr(v)?;
                 }
                 Ok(Type::Dict)
+            }
+
+            HirExpr::Index { target, index } => {
+                self.check_expr(target)?;
+                self.check_expr(index)?;
+                Ok(Type::Any)
             }
 
             HirExpr::Print(expr) => {

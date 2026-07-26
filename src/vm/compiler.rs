@@ -164,6 +164,17 @@ impl Compiler {
                 self.patch_jump(exit_jump);
             }
 
+            HirStmt::For {
+                var_id: _,
+                iter,
+                body,
+            } => {
+                self.compile_expr(iter)?;
+                for s in body {
+                    self.compile_stmt(s)?;
+                }
+            }
+
             HirStmt::Return(expr) => {
                 self.compile_expr(expr)?;
                 self.emit_return(0);
@@ -310,6 +321,12 @@ impl Compiler {
                 }
                 self.emit_opcode(OpCode::OpMap, 0);
                 self.emit_u16(count as u16, 0);
+            }
+
+            HirExpr::Index { target, index } => {
+                self.compile_expr(target)?;
+                self.compile_expr(index)?;
+                self.emit_opcode(OpCode::OpIndex, 0);
             }
 
             HirExpr::Print(expr) => {

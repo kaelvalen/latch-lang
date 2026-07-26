@@ -153,14 +153,20 @@ fn test_optimizer_constant_folding() {
 
     let optimizer = Optimizer::new();
     let opt_module = optimizer.optimize_module(&module);
-    if let HirStmt::LetGlobal {
-        value: HirExpr::Constant(HirLiteral::Int(val)),
-        ..
-    } = &opt_module.stmts[0]
-    {
-        assert_eq!(*val, 50);
-    } else {
-        panic!("HIR Constant folding failed!");
+    match &opt_module.stmts[0] {
+        HirStmt::LetGlobal {
+            value: HirExpr::Constant(HirLiteral::Int(val)),
+            ..
+        }
+        | HirStmt::AssignGlobal {
+            value: HirExpr::Constant(HirLiteral::Int(val)),
+            ..
+        } => {
+            assert_eq!(*val, 50);
+        }
+        _ => {
+            panic!("HIR Constant folding failed!");
+        }
     }
 }
 

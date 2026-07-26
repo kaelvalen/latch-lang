@@ -741,7 +741,7 @@ impl Parser {
 
     // ── Expressions (precedence climbing) ────────────────────
 
-    fn parse_expr(&mut self) -> Result<Expr> {
+    pub(crate) fn parse_expr(&mut self) -> Result<Expr> {
         self.parse_or_default()
     }
 

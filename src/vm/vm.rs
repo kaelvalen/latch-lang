@@ -299,7 +299,13 @@ impl VM {
                 OpCode::OpGetGlobal => {
                     let global_id = operand.unwrap_or(0) as usize;
                     if global_id >= self.globals.len() {
-                        return Err(LatchError::UndefinedVariable(format!("global#{global_id}")));
+                        self.globals.resize(
+                            global_id + 1,
+                            Global {
+                                value: Value::Null,
+                                flags: GlobalFlags::new(),
+                            },
+                        );
                     }
                     let val = self.globals[global_id].value.clone();
                     self.push(val);
@@ -327,7 +333,13 @@ impl VM {
                     let global_id = operand.unwrap_or(0) as usize;
                     let val = self.peek(0)?.clone();
                     if global_id >= self.globals.len() {
-                        return Err(LatchError::UndefinedVariable(format!("global#{global_id}")));
+                        self.globals.resize(
+                            global_id + 1,
+                            Global {
+                                value: Value::Null,
+                                flags: GlobalFlags::new(),
+                            },
+                        );
                     }
                     self.globals[global_id].value = val;
                 }
@@ -623,6 +635,8 @@ impl VM {
             (Value::Int(x), Value::Float(y)) => Ok(Value::Float(x as f64 + y)),
             (Value::Float(x), Value::Int(y)) => Ok(Value::Float(x + y as f64)),
             (Value::Str(x), Value::Str(y)) => Ok(Value::Str(format!("{x}{y}"))),
+            (Value::Str(x), y) => Ok(Value::Str(format!("{x}{y}"))),
+            (x, Value::Str(y)) => Ok(Value::Str(format!("{x}{y}"))),
             _ => Err(LatchError::TypeMismatch {
                 expected: "addable".into(),
                 found: "types".into(),

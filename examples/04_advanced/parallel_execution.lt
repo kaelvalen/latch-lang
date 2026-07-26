@@ -1,0 +1,17 @@
+# 04_advanced/parallel_execution.lt
+# Latch Language - Parallel Task Execution
+
+print("=== 1. Parallel Task Execution ===")
+
+tasks := [1, 2, 3, 4, 5, 6, 7, 8]
+
+print("Launching 8 tasks in parallel workers...")
+
+parallel task_id in tasks {
+    computation := task_id * 10 + task_id
+    print("Worker task completed for ID: " + str(task_id) + " -> Result: " + str(computation))
+}
+
+print("Parallel execution block finished successfully!")
+
+print("\n=== 04_advanced/parallel_execution.lt PASSED ===")
