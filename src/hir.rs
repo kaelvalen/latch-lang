@@ -82,7 +82,7 @@ pub enum HirStmt {
     If {
         cond: HirExpr,
         then: Vec<HirStmt>,
-        else_: Option<Box<HirStmt>>,
+        else_: Option<Vec<HirStmt>>,
     },
     While {
         cond: HirExpr,

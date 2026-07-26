@@ -315,7 +315,14 @@ impl VM {
                     let func_idx = operand.unwrap_or(0) as usize;
                     let func_val = self.current_frame().closure.function().chunk.constants()[func_idx].to_value();
                     if let Value::Function(func) = func_val {
-                        let closure = self.gc.allocate_closure(crate::env::ObjRef(func), Vec::new()).into_arc();
+                        let frame_offset = self.current_frame().slots;
+                        let frame_len = self.stack.len().saturating_sub(frame_offset);
+                        let mut upvalues = Vec::with_capacity(frame_len);
+                        for i in 0..frame_len {
+                            let val = self.stack.get(frame_offset + i).clone();
+                            upvalues.push(std::sync::Arc::new(std::sync::Mutex::new(val)));
+                        }
+                        let closure = self.gc.allocate_closure(crate::env::ObjRef(func), upvalues).into_arc();
                         self.push(Value::Closure(closure));
                     }
                 }

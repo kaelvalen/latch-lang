@@ -39,8 +39,10 @@ impl HirVerifier {
                 for s in then {
                     Self::verify_stmt(s)?;
                 }
-                if let Some(else_stmt) = else_ {
-                    Self::verify_stmt(else_stmt)?;
+                if let Some(else_stmts) = else_ {
+                    for s in else_stmts {
+                        Self::verify_stmt(s)?;
+                    }
                 }
             }
             HirStmt::While { cond, body } => {

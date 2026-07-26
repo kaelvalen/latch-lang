@@ -64,8 +64,14 @@ impl Optimizer {
                             }
                         }
                         return Some(HirStmt::Expr(HirExpr::Constant(HirLiteral::Null)));
-                    } else if let Some(else_stmt) = else_ {
-                        return self.optimize_stmt(else_stmt);
+                    } else if let Some(else_stmts) = else_ {
+                        let mut body = Vec::new();
+                        for s in else_stmts {
+                            if let Some(st) = self.optimize_stmt(s) {
+                                body.push(st);
+                            }
+                        }
+                        return Some(HirStmt::Expr(HirExpr::Constant(HirLiteral::Null)));
                     } else {
                         return None; // Dead branch
                     }
@@ -78,7 +84,9 @@ impl Optimizer {
                     }
                 }
 
-                let opt_else = else_.as_ref().and_then(|s| self.optimize_stmt(s)).map(Box::new);
+                let opt_else = else_.as_ref().map(|stmts| {
+                    stmts.iter().filter_map(|s| self.optimize_stmt(s)).collect()
+                });
 
                 Some(HirStmt::If {
                     cond: opt_cond,

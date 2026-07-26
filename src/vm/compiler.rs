@@ -135,8 +135,10 @@ impl Compiler {
                 let jump_then = self.emit_jump(OpCode::OpJump, 0);
                 self.patch_jump(jump_false);
 
-                if let Some(else_s) = else_ {
-                    self.compile_stmt(else_s)?;
+                if let Some(else_stmts) = else_ {
+                    for s in else_stmts {
+                        self.compile_stmt(s)?;
+                    }
                 }
 
                 self.patch_jump(jump_then);
@@ -205,7 +207,9 @@ impl Compiler {
                     .with_chunk(sub_compiler.chunk.build())
                     .build();
                 let func_arc = std::sync::Arc::new(sub_fn);
-                self.emit_constant(Constant::Function(func_arc), 0);
+                let const_idx = self.chunk.add_constant(Constant::Function(func_arc));
+                self.emit_opcode(OpCode::OpClosure, 0);
+                self.emit_u16(const_idx as u16, 0);
             }
 
             HirExpr::BinOp { op, left, right } => {

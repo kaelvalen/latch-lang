@@ -5,6 +5,7 @@ use crate::error::Result;
 use crate::hir::*;
 use crate::symbol::{SemanticDatabase, SymbolId};
 
+#[derive(Clone)]
 struct ResolverLocal {
     symbol_id: SymbolId,
     id: LocalId,
@@ -14,6 +15,7 @@ struct ResolverLocal {
 pub struct Resolver {
     pub db: SemanticDatabase,
     locals: Vec<ResolverLocal>,
+    outer_locals_stack: Vec<Vec<ResolverLocal>>,
     scope_depth: usize,
     globals_map: HashMap<SymbolId, GlobalId>,
 }
@@ -23,6 +25,7 @@ impl Resolver {
         Resolver {
             db: SemanticDatabase::new(),
             locals: Vec::new(),
+            outer_locals_stack: Vec::new(),
             scope_depth: 0,
             globals_map: HashMap::new(),
         }
@@ -115,10 +118,23 @@ impl Resolver {
                 self.scope_depth -= 1;
 
                 let opt_else = if let Some(else_s) = else_ {
-                    self.scope_depth += 1;
-                    let res = self.resolve_stmt(else_s)?;
-                    self.scope_depth -= 1;
-                    Some(Box::new(res))
+                    match else_s.as_ref() {
+                        Stmt::Expr(Expr::Fn { params, body, .. }) if params.is_empty() => {
+                            self.scope_depth += 1;
+                            let mut else_stmts = Vec::new();
+                            for s in body {
+                                else_stmts.push(self.resolve_stmt(s)?);
+                            }
+                            self.scope_depth -= 1;
+                            Some(else_stmts)
+                        }
+                        _ => {
+                            self.scope_depth += 1;
+                            let res = self.resolve_stmt(else_s)?;
+                            self.scope_depth -= 1;
+                            Some(vec![res])
+                        }
+                    }
                 } else {
                     None
                 };
@@ -150,6 +166,7 @@ impl Resolver {
                 let global_id = self.get_or_create_global(sym_id);
 
                 let outer_locals = std::mem::take(&mut self.locals);
+                self.outer_locals_stack.push(outer_locals.clone());
                 self.scope_depth += 1;
                 for p in params {
                     let p_sym = self.db.intern_symbol(&p.name);
@@ -161,6 +178,7 @@ impl Resolver {
                     resolved_body.push(self.resolve_stmt(s)?);
                 }
                 self.scope_depth -= 1;
+                self.outer_locals_stack.pop();
                 self.locals = outer_locals;
 
                 let param_names = params.iter().map(|p| p.name.clone()).collect();
@@ -191,6 +209,7 @@ impl Resolver {
             Expr::Str(s) => Ok(HirExpr::Constant(HirLiteral::Str(s.clone()))),
             Expr::Fn { params, body, .. } => {
                 let outer_locals = std::mem::take(&mut self.locals);
+                self.outer_locals_stack.push(outer_locals.clone());
                 self.scope_depth += 1;
                 for p in params {
                     let p_sym = self.db.intern_symbol(&p.name);
@@ -202,6 +221,7 @@ impl Resolver {
                     resolved_body.push(self.resolve_stmt(s)?);
                 }
                 self.scope_depth -= 1;
+                self.outer_locals_stack.pop();
                 self.locals = outer_locals;
 
                 let param_names = params.iter().map(|p| p.name.clone()).collect();
@@ -215,6 +235,8 @@ impl Resolver {
                 let sym_id = self.db.intern_symbol(name);
                 if let Some(id) = self.resolve_local(sym_id) {
                     Ok(HirExpr::Local(id))
+                } else if let Some((up_idx, _)) = self.resolve_upvalue(sym_id) {
+                    Ok(HirExpr::Upvalue(UpvalueId(up_idx as u32)))
                 } else {
                     let id = self.get_or_create_global(sym_id);
                     Ok(HirExpr::Global(id))
@@ -283,6 +305,17 @@ impl Resolver {
         for local in self.locals.iter().rev() {
             if local.symbol_id == sym_id {
                 return Some(local.id);
+            }
+        }
+        None
+    }
+
+    fn resolve_upvalue(&self, sym_id: SymbolId) -> Option<(usize, LocalId)> {
+        for (depth, outer) in self.outer_locals_stack.iter().rev().enumerate() {
+            for local in outer.iter().rev() {
+                if local.symbol_id == sym_id {
+                    return Some((depth, local.id));
+                }
             }
         }
         None

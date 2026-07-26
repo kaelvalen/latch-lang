@@ -108,9 +108,11 @@ impl TypeChecker {
                 }
                 self.pop_scope();
 
-                if let Some(else_stmt) = else_ {
+                if let Some(else_stmts) = else_ {
                     self.push_scope();
-                    self.check_stmt(else_stmt)?;
+                    for s in else_stmts {
+                        self.check_stmt(s)?;
+                    }
                     self.pop_scope();
                 }
             }

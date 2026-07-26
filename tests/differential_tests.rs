@@ -26,7 +26,6 @@ fn run_bytecode_vm(source: &str) -> String {
 
     let mut resolver = Resolver::new();
     let module = resolver.resolve_module("diff_test", &stmts).expect("Resolver error");
-    println!("RESOLVED MODULE: {:#?}", module);
 
     let compiler = Compiler::new();
     let script_fn = compiler.compile_module(&module).expect("Compiler error");
