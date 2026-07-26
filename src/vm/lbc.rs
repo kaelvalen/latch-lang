@@ -116,21 +116,21 @@ impl LbcSerializer {
         Ok(Arc::new(func))
     }
 
-    fn serialize_value(val: &Value, buf: &mut Vec<u8>) {
+    fn serialize_value(val: &super::chunk::Constant, buf: &mut Vec<u8>) {
         match val {
-            Value::Int(n) => {
+            super::chunk::Constant::Int(n) => {
                 buf.push(1);
                 buf.extend_from_slice(&n.to_be_bytes());
             }
-            Value::Float(f) => {
+            super::chunk::Constant::Float(f) => {
                 buf.push(2);
                 buf.extend_from_slice(&f.to_be_bytes());
             }
-            Value::Bool(b) => {
+            super::chunk::Constant::Bool(b) => {
                 buf.push(3);
                 buf.push(if *b { 1 } else { 0 });
             }
-            Value::Str(s) => {
+            super::chunk::Constant::Str(s) => {
                 buf.push(4);
                 let bytes = s.as_bytes();
                 buf.extend_from_slice(&(bytes.len() as u16).to_be_bytes());
@@ -142,27 +142,27 @@ impl LbcSerializer {
         }
     }
 
-    fn deserialize_value(bytes: &[u8]) -> Result<(Value, usize)> {
+    fn deserialize_value(bytes: &[u8]) -> Result<(super::chunk::Constant, usize)> {
         let tag = bytes[0];
         match tag {
             1 => {
                 let n = i64::from_be_bytes(bytes[1..9].try_into().unwrap());
-                Ok((Value::Int(n), 9))
+                Ok((super::chunk::Constant::Int(n), 9))
             }
             2 => {
                 let f = f64::from_be_bytes(bytes[1..9].try_into().unwrap());
-                Ok((Value::Float(f), 9))
+                Ok((super::chunk::Constant::Float(f), 9))
             }
             3 => {
                 let b = bytes[1] != 0;
-                Ok((Value::Bool(b), 2))
+                Ok((super::chunk::Constant::Bool(b), 2))
             }
             4 => {
-                let len = u16::from_be_bytes([bytes[1], bytes[2]]) as usize;
+                let len = u16::from_be_bytes(bytes[1..3].try_into().unwrap()) as usize;
                 let s = String::from_utf8_lossy(&bytes[3..3 + len]).to_string();
-                Ok((Value::Str(s), 3 + len))
+                Ok((super::chunk::Constant::Str(s), 3 + len))
             }
-            _ => Ok((Value::Null, 1)),
+            _ => Ok((super::chunk::Constant::Null, 1)),
         }
     }
 }

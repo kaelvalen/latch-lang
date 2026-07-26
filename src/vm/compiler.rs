@@ -1,12 +1,12 @@
 use std::sync::Arc;
 
-use crate::env::{ObjFunction, ObjHeader, ObjKind, Value};
+use crate::env::{ObjFunction, ObjHeader, ObjKind};
 use crate::error::Result;
 use crate::hir::*;
-use super::chunk::{Chunk, OpCode};
+use super::chunk::{Chunk, Constant, OpCode};
 
 /// Dumb Bytecode Emitter — transforms resolved HirModule directly into a compiled Chunk.
-/// Contains zero AST imports, Resolver instantiations, scope maps, or semantic checking logic.
+/// Contains zero AST imports, Value runtime dependencies, scope maps, or semantic checking logic.
 pub struct Compiler {
     chunk: Chunk,
 }
@@ -23,7 +23,7 @@ impl Compiler {
         for stmt in &module.stmts {
             self.compile_stmt(stmt)?;
         }
-        self.emit_constant(Value::Null, 0);
+        self.emit_constant(Constant::Null, 0);
         self.emit_opcode(OpCode::OpReturn, 0);
 
         let script_fn = ObjFunction {
@@ -62,7 +62,7 @@ impl Compiler {
         self.chunk.write_u16(val, line);
     }
 
-    fn emit_constant(&mut self, val: Value, line: u32) {
+    fn emit_constant(&mut self, val: Constant, line: u32) {
         let idx = self.chunk.add_constant(val);
         self.emit_opcode(OpCode::OpConstant, line);
         self.emit_u16(idx as u16, line);
@@ -167,14 +167,14 @@ impl Compiler {
     fn compile_expr(&mut self, expr: &HirExpr) -> Result<()> {
         match expr {
             HirExpr::Constant(lit) => {
-                let val = match lit {
-                    HirLiteral::Int(n) => Value::Int(*n),
-                    HirLiteral::Float(f) => Value::Float(*f),
-                    HirLiteral::Bool(b) => Value::Bool(*b),
-                    HirLiteral::Str(s) => Value::Str(s.clone()),
-                    HirLiteral::Null => Value::Null,
+                let c = match lit {
+                    HirLiteral::Int(n) => Constant::Int(*n),
+                    HirLiteral::Float(f) => Constant::Float(*f),
+                    HirLiteral::Bool(b) => Constant::Bool(*b),
+                    HirLiteral::Str(s) => Constant::Str(s.clone()),
+                    HirLiteral::Null => Constant::Null,
                 };
-                self.emit_constant(val, 0);
+                self.emit_constant(c, 0);
             }
 
             HirExpr::Local(id) => {

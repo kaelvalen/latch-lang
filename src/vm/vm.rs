@@ -135,7 +135,7 @@ impl VM {
             match op {
                 OpCode::OpConstant => {
                     let idx = operand.unwrap_or(0);
-                    let val = self.current_frame().closure.function.chunk.constants[idx as usize].clone();
+                    let val = self.current_frame().closure.function.chunk.constants[idx as usize].to_value();
                     self.push(val);
                 }
 
@@ -266,7 +266,7 @@ impl VM {
 
                 OpCode::OpClosure => {
                     let func_idx = operand.unwrap_or(0) as usize;
-                    let func_val = self.current_frame().closure.function.chunk.constants[func_idx].clone();
+                    let func_val = self.current_frame().closure.function.chunk.constants[func_idx].to_value();
                     if let Value::Function(func) = func_val {
                         let closure = Arc::new(ObjClosure::new(crate::env::ObjRef(func), Vec::new()));
                         self.push(Value::Closure(closure));

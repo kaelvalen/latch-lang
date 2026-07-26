@@ -125,16 +125,63 @@ pub struct InstructionDescriptor {
     pub gc_safe: bool,
 }
 
+/// Independent Compile-Time Constant Representation (Zero Runtime ABI dependencies)
+#[derive(Debug, Clone, PartialEq)]
+pub enum Constant {
+    Int(i64),
+    Float(f64),
+    Bool(bool),
+    Str(String),
+    Symbol(u32),
+    Null,
+}
+
+impl Constant {
+    pub fn to_value(&self) -> Value {
+        match self {
+            Constant::Int(n) => Value::Int(*n),
+            Constant::Float(f) => Value::Float(*f),
+            Constant::Bool(b) => Value::Bool(*b),
+            Constant::Str(s) => Value::Str(s.clone()),
+            Constant::Symbol(id) => Value::Int(*id as i64),
+            Constant::Null => Value::Null,
+        }
+    }
+}
+
+impl std::fmt::Display for Constant {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Constant::Int(n) => write!(f, "{n}"),
+            Constant::Float(fl) => write!(f, "{fl}"),
+            Constant::Bool(b) => write!(f, "{b}"),
+            Constant::Str(s) => write!(f, "{s}"),
+            Constant::Symbol(id) => write!(f, "symbol#{id}"),
+            Constant::Null => write!(f, "null"),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct Chunk {
     pub code: Vec<u8>,
-    pub constants: Vec<Value>,
+    pub constants: Vec<Constant>,
     pub lines: Vec<u32>,
 }
 
 impl Chunk {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    pub fn add_constant(&mut self, constant: Constant) -> usize {
+        for (i, existing) in self.constants.iter().enumerate() {
+            if existing == &constant {
+                return i;
+            }
+        }
+        self.constants.push(constant);
+        self.constants.len() - 1
     }
 
     pub fn write_u8(&mut self, byte: u8, line: u32) -> usize {
@@ -157,19 +204,10 @@ impl Chunk {
         let bytes = val.to_be_bytes();
         self.write_u8(bytes[0], line);
         self.write_u8(bytes[1], line);
-        self.write_u8(bytes[2], line);
         self.write_u8(bytes[3], line);
     }
 
-    pub fn add_constant(&mut self, val: Value) -> usize {
-        for (i, c) in self.constants.iter().enumerate() {
-            if c == &val {
-                return i;
-            }
-        }
-        self.constants.push(val);
-        self.constants.len() - 1
-    }
+
 
     pub fn disassemble(&self, name: &str) {
         println!("== {name} ==");
