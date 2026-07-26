@@ -50,7 +50,8 @@ impl BytecodePeephole {
                 continue;
             }
 
-            let (Constant::Int(a), Constant::Int(b)) = (&constants[a_idx], &constants[b_idx]) else {
+            let (Constant::Int(a), Constant::Int(b)) = (&constants[a_idx], &constants[b_idx])
+            else {
                 i += 3;
                 continue;
             };
@@ -94,9 +95,12 @@ impl BytecodePeephole {
             };
 
             if op == OpCode::OpJump {
-                let target = u16::from_be_bytes([code_snapshot[offset + 1], code_snapshot[offset + 2]]) as usize;
+                let target =
+                    u16::from_be_bytes([code_snapshot[offset + 1], code_snapshot[offset + 2]])
+                        as usize;
                 if target < code_snapshot.len() && code_snapshot[target] == OpCode::OpJump as u8 {
-                    let final_target = u16::from_be_bytes([code_snapshot[target + 1], code_snapshot[target + 2]]);
+                    let final_target =
+                        u16::from_be_bytes([code_snapshot[target + 1], code_snapshot[target + 2]]);
                     replacements.push((offset + 1, final_target));
                 }
             }
@@ -113,8 +117,8 @@ impl BytecodePeephole {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::super::chunk::Constant;
+    use super::*;
 
     #[test]
     fn peephole_folds_int_add() {
@@ -158,7 +162,10 @@ mod tests {
         let chunk = builder.build();
 
         // First jump operand should now point to 7, not 4.
-        let target = u16::from_be_bytes([chunk.code()[first_jump_offset + 1], chunk.code()[first_jump_offset + 2]]);
+        let target = u16::from_be_bytes([
+            chunk.code()[first_jump_offset + 1],
+            chunk.code()[first_jump_offset + 2],
+        ]);
         assert_eq!(target, 7);
     }
 }

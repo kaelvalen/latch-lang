@@ -1,11 +1,13 @@
+#![allow(clippy::mem_replace_with_default)]
+
 use rayon::prelude::*;
 
+use super::Interpreter;
 use crate::ast::*;
 use crate::env::{Env, Value};
 use crate::error::{LatchError, Result};
 use crate::lexer::Lexer;
 use crate::parser::Parser;
-use super::Interpreter;
 
 impl Interpreter {
     pub(crate) fn exec_stmt(&mut self, stmt: Stmt) -> Result<()> {
@@ -20,7 +22,11 @@ impl Interpreter {
                 self.env.assign(&name, val)?;
             }
 
-            Stmt::IndexAssign { target, index, value } => {
+            Stmt::IndexAssign {
+                target,
+                index,
+                value,
+            } => {
                 let idx = self.eval_expr(index)?;
                 let val = self.eval_expr(value)?;
                 if let Expr::Ident(name) = &target {
@@ -32,23 +38,30 @@ impl Interpreter {
                             let i = *i as usize;
                             let mut guard = list.lock().unwrap();
                             if i >= guard.len() {
-                                return Err(LatchError::IndexOutOfBounds { index: i as i64, len: guard.len() });
+                                return Err(LatchError::IndexOutOfBounds {
+                                    index: i as i64,
+                                    len: guard.len(),
+                                });
                             }
                             guard[i] = val;
                         }
                         (Value::Map(map), Value::Str(key)) => {
                             map.lock().unwrap().insert(key.clone(), val);
                         }
-                        _ => return Err(LatchError::TypeMismatch {
-                            expected: "list[int] or dict[string]".into(),
-                            found: "incompatible types".into(),
-                        }),
+                        _ => {
+                            return Err(LatchError::TypeMismatch {
+                                expected: "list[int] or dict[string]".into(),
+                                found: "incompatible types".into(),
+                            })
+                        }
                     }
                 }
             }
 
             Stmt::CompoundAssign { name, op, value } => {
-                let current = self.env.get(&name)
+                let current = self
+                    .env
+                    .get(&name)
                     .ok_or_else(|| LatchError::UndefinedVariable(name.clone()))?;
                 let rhs = self.eval_expr(value)?;
                 let result = self.eval_binop(op, current, rhs)?;
@@ -80,7 +93,7 @@ impl Interpreter {
                     let parent = std::mem::replace(&mut self.env, Env::new());
                     self.env = parent.child();
                     self.env.set(&var, item);
-                    
+
                     let mut should_continue = false;
                     for s in &body {
                         match self.exec_stmt(s.clone()) {
@@ -101,17 +114,22 @@ impl Interpreter {
                             }
                         }
                     }
-                    
+
                     let child = std::mem::replace(&mut self.env, Env::new());
                     self.env = child.into_parent().unwrap();
-                    
+
                     if should_continue {
                         continue;
                     }
                 }
             }
 
-            Stmt::Parallel { var, iter, workers, body } => {
+            Stmt::Parallel {
+                var,
+                iter,
+                workers,
+                body,
+            } => {
                 let list = self.eval_expr(iter)?.into_list()?;
                 let worker_count = match workers {
                     Some(w) => Some(self.eval_expr(w)?.as_int()? as usize),
@@ -143,14 +161,18 @@ impl Interpreter {
                 });
 
                 for result in results {
-                    if let Err(e) = result {
-                        return Err(e);
-                    }
+                    result?;
                 }
             }
 
-            Stmt::Fn { name, params, body, .. } => {
-                let val = Value::Fn { params, body, captured_env: None };
+            Stmt::Fn {
+                name, params, body, ..
+            } => {
+                let val = Value::Fn {
+                    params,
+                    body,
+                    captured_env: None,
+                };
                 self.env.set(&name, val);
             }
 
@@ -159,7 +181,12 @@ impl Interpreter {
                 return Err(LatchError::ReturnSignal(val));
             }
 
-            Stmt::Try { body, catch_var, catch_body, finally_body } => {
+            Stmt::Try {
+                body,
+                catch_var,
+                catch_body,
+                finally_body,
+            } => {
                 let parent = std::mem::replace(&mut self.env, Env::new());
                 self.env = parent.child();
 
@@ -192,50 +219,50 @@ impl Interpreter {
                     let finally_result = self.exec_block_inner(finally_block);
                     let child = std::mem::replace(&mut self.env, Env::new());
                     self.env = child.into_parent().unwrap();
-                    
-                    if finally_result.is_err() {
-                        return finally_result;
-                    }
+
+                    finally_result?;
                 }
 
                 catch_result?;
             }
 
-            Stmt::Const { name, type_ann: _, value } => {
+            Stmt::Const {
+                name,
+                type_ann: _,
+                value,
+            } => {
                 let val = self.eval_expr(value)?;
                 self.env.set_const(&name, val);
             }
 
-            Stmt::While { cond, body } => {
-                loop {
-                    let val = self.eval_expr(cond.clone())?;
-                    if !val.is_truthy() {
-                        break;
-                    }
-                    let parent = std::mem::replace(&mut self.env, Env::new());
-                    self.env = parent.child();
-                    for s in &body {
-                        match self.exec_stmt(s.clone()) {
-                            Ok(()) => {}
-                            Err(LatchError::BreakSignal) => {
-                                let child = std::mem::replace(&mut self.env, Env::new());
-                                self.env = child.into_parent().unwrap();
-                                return Ok(());
-                            }
-                            Err(LatchError::ContinueSignal) => {
-                                break;
-                            }
-                            Err(e) => {
-                                let child = std::mem::replace(&mut self.env, Env::new());
-                                self.env = child.into_parent().unwrap();
-                                return Err(e);
-                            }
+            Stmt::While { cond, body } => loop {
+                let val = self.eval_expr(cond.clone())?;
+                if !val.is_truthy() {
+                    break;
+                }
+                let parent = std::mem::replace(&mut self.env, Env::new());
+                self.env = parent.child();
+                for s in &body {
+                    match self.exec_stmt(s.clone()) {
+                        Ok(()) => {}
+                        Err(LatchError::BreakSignal) => {
+                            let child = std::mem::replace(&mut self.env, Env::new());
+                            self.env = child.into_parent().unwrap();
+                            return Ok(());
+                        }
+                        Err(LatchError::ContinueSignal) => {
+                            break;
+                        }
+                        Err(e) => {
+                            let child = std::mem::replace(&mut self.env, Env::new());
+                            self.env = child.into_parent().unwrap();
+                            return Err(e);
                         }
                     }
-                    let child = std::mem::replace(&mut self.env, Env::new());
-                    self.env = child.into_parent().unwrap();
                 }
-            }
+                let child = std::mem::replace(&mut self.env, Env::new());
+                self.env = child.into_parent().unwrap();
+            },
 
             Stmt::Break => {
                 return Err(LatchError::BreakSignal);
@@ -249,14 +276,23 @@ impl Interpreter {
                 self.eval_expr(expr)?;
             }
 
-            Stmt::Class { name, fields, methods } => {
-                let field_defs: Vec<(String, Option<crate::ast::Type>, Option<Block>)> = fields.into_iter()
+            Stmt::Class {
+                name,
+                fields,
+                methods,
+            } => {
+                let field_defs: Vec<(String, Option<crate::ast::Type>, Option<Block>)> = fields
+                    .into_iter()
                     .map(|(fname, ftype, fdefault)| {
                         let block = fdefault.map(|expr| vec![Stmt::Return(expr)]);
                         (fname, ftype, block)
                     })
                     .collect();
-                let class_val = Value::Class { name: name.clone(), fields: field_defs, methods };
+                let class_val = Value::Class {
+                    name: name.clone(),
+                    fields: field_defs,
+                    methods,
+                };
                 self.env.set(&name, class_val);
             }
 
@@ -270,16 +306,20 @@ impl Interpreter {
 
             Stmt::Import { items, module } => {
                 let base = self.script_dir.clone().unwrap_or_else(|| ".".to_string());
-                let filename = if module.ends_with(".lt") { module.clone() } else { format!("{}.lt", module) };
+                let filename = if module.ends_with(".lt") {
+                    module.clone()
+                } else {
+                    format!("{}.lt", module)
+                };
                 let path = format!("{base}/{filename}");
                 let canon = std::fs::canonicalize(&path)
                     .map(|p| p.to_string_lossy().to_string())
                     .unwrap_or(path.clone());
 
                 if self.loading.contains(&canon) {
-                    return Err(LatchError::GenericError(
-                        format!("Circular import detected: '{module}'")
-                    ));
+                    return Err(LatchError::GenericError(format!(
+                        "Circular import detected: '{module}'"
+                    )));
                 }
 
                 let source = std::fs::read_to_string(&path)
@@ -299,7 +339,11 @@ impl Interpreter {
 
                 for item in items {
                     let export_key = format!("__export_{}", item);
-                    if let Some(val) = mod_interp.env.get(&export_key).or_else(|| mod_interp.env.get(&item)) {
+                    if let Some(val) = mod_interp
+                        .env
+                        .get(&export_key)
+                        .or_else(|| mod_interp.env.get(&item))
+                    {
                         self.env.set(&item, val);
                     } else {
                         return Err(LatchError::ImportNotFound(format!("{item} from {module}")));
@@ -307,13 +351,21 @@ impl Interpreter {
                 }
             }
 
-            Stmt::FieldAssign { object, field, value } => {
+            Stmt::FieldAssign {
+                object,
+                field,
+                value,
+            } => {
                 let val = self.eval_expr(value)?;
                 let obj = self.eval_expr(object)?;
                 obj.set_field(&field, val)?;
             }
 
-            Stmt::Match { expr, cases, default } => {
+            Stmt::Match {
+                expr,
+                cases,
+                default,
+            } => {
                 let subject = self.eval_expr(expr)?;
                 let mut matched = false;
                 for (pattern, body) in cases {
@@ -377,7 +429,10 @@ pub(crate) fn values_equal(a: &Value, b: &Value) -> bool {
             if x_guard.len() != y_guard.len() {
                 return false;
             }
-            x_guard.iter().zip(y_guard.iter()).all(|(a, b)| values_equal(a, b))
+            x_guard
+                .iter()
+                .zip(y_guard.iter())
+                .all(|(a, b)| values_equal(a, b))
         }
         (Value::Map(x), Value::Map(y)) => {
             let x_guard = x.lock().unwrap();
@@ -386,14 +441,20 @@ pub(crate) fn values_equal(a: &Value, b: &Value) -> bool {
                 return false;
             }
             x_guard.iter().all(|(k, v)| {
-                y_guard.get(k).map(|yv| values_equal(v, yv)).unwrap_or(false)
+                y_guard
+                    .get(k)
+                    .map(|yv| values_equal(v, yv))
+                    .unwrap_or(false)
             })
         }
         (Value::Instance { fields: fx, .. }, Value::Instance { fields: fy, .. }) => {
             let gx = fx.lock().unwrap();
             let gy = fy.lock().unwrap();
-            if gx.len() != gy.len() { return false; }
-            gx.iter().all(|(k, v)| gy.get(k).map(|yv| values_equal(v, yv)).unwrap_or(false))
+            if gx.len() != gy.len() {
+                return false;
+            }
+            gx.iter()
+                .all(|(k, v)| gy.get(k).map(|yv| values_equal(v, yv)).unwrap_or(false))
         }
         _ => false,
     }

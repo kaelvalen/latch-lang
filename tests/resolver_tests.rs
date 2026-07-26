@@ -13,7 +13,9 @@ fn test_resolver_scope_shadowing_resolution() {
     let stmts = parser.parse_program().expect("Parser error");
 
     let mut resolver = Resolver::new();
-    let module = resolver.resolve_module("shadow_test", &stmts).expect("Resolver error");
+    let module = resolver
+        .resolve_module("shadow_test", &stmts)
+        .expect("Resolver error");
 
     // Verify HIR Verifier accepts the resolved module
     let verify_res = HirVerifier::verify(&module);
@@ -32,7 +34,9 @@ fn test_hir_lowering_phase() {
     let stmts = parser.parse_program().expect("Parser error");
 
     let mut lowering = HirLowering::new();
-    let module = lowering.lower_module("lowering_test", &stmts).expect("Lowering error");
+    let module = lowering
+        .lower_module("lowering_test", &stmts)
+        .expect("Lowering error");
 
     assert_eq!(module.name, "lowering_test");
     assert!(module.stmts.len() >= 3);

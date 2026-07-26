@@ -58,8 +58,13 @@ impl VmProfiler {
 
     /// Return a per-object-kind allocation summary: (kind, count, total_bytes).
     pub fn allocation_summary(&self) -> Vec<(ObjKind, usize, usize)> {
-        let map = self.allocations.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
-        map.iter().map(|(kind, (count, bytes))| (*kind, *count, *bytes)).collect()
+        let map = self
+            .allocations
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        map.iter()
+            .map(|(kind, (count, bytes))| (*kind, *count, *bytes))
+            .collect()
     }
 
     pub fn print_summary(&self) {

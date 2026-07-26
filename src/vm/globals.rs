@@ -6,6 +6,12 @@ pub struct GlobalFlags {
     pub is_exported: bool,
 }
 
+impl Default for GlobalFlags {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl GlobalFlags {
     pub fn new() -> Self {
         GlobalFlags {

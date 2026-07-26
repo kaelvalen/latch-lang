@@ -84,9 +84,9 @@ impl Optimizer {
                     }
                 }
 
-                let opt_else = else_.as_ref().map(|stmts| {
-                    stmts.iter().filter_map(|s| self.optimize_stmt(s)).collect()
-                });
+                let opt_else = else_
+                    .as_ref()
+                    .map(|stmts| stmts.iter().filter_map(|s| self.optimize_stmt(s)).collect());
 
                 Some(HirStmt::If {
                     cond: opt_cond,
@@ -127,7 +127,11 @@ impl Optimizer {
                 let r = self.optimize_expr(right);
 
                 // Constant Folding for Int BinOps
-                if let (HirExpr::Constant(HirLiteral::Int(a)), HirExpr::Constant(HirLiteral::Int(b))) = (&l, &r) {
+                if let (
+                    HirExpr::Constant(HirLiteral::Int(a)),
+                    HirExpr::Constant(HirLiteral::Int(b)),
+                ) = (&l, &r)
+                {
                     match op {
                         HirOp::Add => return HirExpr::Constant(HirLiteral::Int(a + b)),
                         HirOp::Sub => return HirExpr::Constant(HirLiteral::Int(a - b)),

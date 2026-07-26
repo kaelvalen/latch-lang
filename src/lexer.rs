@@ -1,3 +1,5 @@
+#![allow(clippy::unnecessary_map_or)]
+
 use crate::error::{LatchError, Result};
 
 // ── Token ────────────────────────────────────────────────────
@@ -14,36 +16,36 @@ pub enum Token {
     Ident(String),
 
     // Operators
-    ColonEq,  // :=
-    Eq,       // =
-    Plus,     // +
-    Minus,    // -
-    Star,     // *
-    Slash,    // /
-    Percent,  // %
-    EqEq,     // ==
-    NotEq,    // !=
-    Lt,       // <
-    Gt,       // >
-    LtEq,     // <=
-    GtEq,     // >=
-    And,      // &&
-    Or,       // ||
-    Bang,     // !
-    Arrow,    // ->
-    Dot,      // .
-    DotDot,   // ..
-    Comma,    // ,
-    Colon,    // :
-    PlusEq,   // +=
-    MinusEq,  // -=
-    StarEq,   // *=
-    SlashEq,  // /=
-    PercentEq,// %=
+    ColonEq,          // :=
+    Eq,               // =
+    Plus,             // +
+    Minus,            // -
+    Star,             // *
+    Slash,            // /
+    Percent,          // %
+    EqEq,             // ==
+    NotEq,            // !=
+    Lt,               // <
+    Gt,               // >
+    LtEq,             // <=
+    GtEq,             // >=
+    And,              // &&
+    Or,               // ||
+    Bang,             // !
+    Arrow,            // ->
+    Dot,              // .
+    DotDot,           // ..
+    Comma,            // ,
+    Colon,            // :
+    PlusEq,           // +=
+    MinusEq,          // -=
+    StarEq,           // *=
+    SlashEq,          // /=
+    PercentEq,        // %=
     QuestionQuestion, // ??
     QuestionDot,      // ?.
     Question,         // ? (for ternary)
-    PipeGt,   // |>
+    PipeGt,           // |>
 
     // Grouping
     LBrace,   // {
@@ -143,8 +145,15 @@ impl Lexer {
                         self.advance_newline();
                     }
                     // Only push if last token isn't already a newline
-                    if tokens.last().map_or(true, |t: &Spanned<Token>| t.node != Token::Newline) {
-                        tokens.push(Spanned { node: Token::Newline, line, col });
+                    if tokens
+                        .last()
+                        .map_or(true, |t: &Spanned<Token>| t.node != Token::Newline)
+                    {
+                        tokens.push(Spanned {
+                            node: Token::Newline,
+                            line,
+                            col,
+                        });
                     }
                 }
 
@@ -182,9 +191,17 @@ impl Lexer {
                     self.advance();
                     if !self.at_end() && self.peek() == '=' {
                         self.advance();
-                        tokens.push(Spanned { node: Token::ColonEq, line, col });
+                        tokens.push(Spanned {
+                            node: Token::ColonEq,
+                            line,
+                            col,
+                        });
                     } else {
-                        tokens.push(Spanned { node: Token::Colon, line, col });
+                        tokens.push(Spanned {
+                            node: Token::Colon,
+                            line,
+                            col,
+                        });
                     }
                 }
 
@@ -194,9 +211,17 @@ impl Lexer {
                     self.advance();
                     if !self.at_end() && self.peek() == '=' {
                         self.advance();
-                        tokens.push(Spanned { node: Token::EqEq, line, col });
+                        tokens.push(Spanned {
+                            node: Token::EqEq,
+                            line,
+                            col,
+                        });
                     } else {
-                        tokens.push(Spanned { node: Token::Eq, line, col });
+                        tokens.push(Spanned {
+                            node: Token::Eq,
+                            line,
+                            col,
+                        });
                     }
                 }
 
@@ -206,9 +231,17 @@ impl Lexer {
                     self.advance();
                     if !self.at_end() && self.peek() == '=' {
                         self.advance();
-                        tokens.push(Spanned { node: Token::NotEq, line, col });
+                        tokens.push(Spanned {
+                            node: Token::NotEq,
+                            line,
+                            col,
+                        });
                     } else {
-                        tokens.push(Spanned { node: Token::Bang, line, col });
+                        tokens.push(Spanned {
+                            node: Token::Bang,
+                            line,
+                            col,
+                        });
                     }
                 }
 
@@ -218,9 +251,17 @@ impl Lexer {
                     self.advance();
                     if !self.at_end() && self.peek() == '=' {
                         self.advance();
-                        tokens.push(Spanned { node: Token::LtEq, line, col });
+                        tokens.push(Spanned {
+                            node: Token::LtEq,
+                            line,
+                            col,
+                        });
                     } else {
-                        tokens.push(Spanned { node: Token::Lt, line, col });
+                        tokens.push(Spanned {
+                            node: Token::Lt,
+                            line,
+                            col,
+                        });
                     }
                 }
 
@@ -230,9 +271,17 @@ impl Lexer {
                     self.advance();
                     if !self.at_end() && self.peek() == '=' {
                         self.advance();
-                        tokens.push(Spanned { node: Token::GtEq, line, col });
+                        tokens.push(Spanned {
+                            node: Token::GtEq,
+                            line,
+                            col,
+                        });
                     } else {
-                        tokens.push(Spanned { node: Token::Gt, line, col });
+                        tokens.push(Spanned {
+                            node: Token::Gt,
+                            line,
+                            col,
+                        });
                     }
                 }
 
@@ -242,7 +291,11 @@ impl Lexer {
                     self.advance();
                     if !self.at_end() && self.peek() == '&' {
                         self.advance();
-                        tokens.push(Spanned { node: Token::And, line, col });
+                        tokens.push(Spanned {
+                            node: Token::And,
+                            line,
+                            col,
+                        });
                     } else {
                         return Err(LatchError::UnexpectedChar { ch: '&', line, col });
                     }
@@ -254,10 +307,18 @@ impl Lexer {
                     self.advance();
                     if !self.at_end() && self.peek() == '|' {
                         self.advance();
-                        tokens.push(Spanned { node: Token::Or, line, col });
+                        tokens.push(Spanned {
+                            node: Token::Or,
+                            line,
+                            col,
+                        });
                     } else if !self.at_end() && self.peek() == '>' {
                         self.advance();
-                        tokens.push(Spanned { node: Token::PipeGt, line, col });
+                        tokens.push(Spanned {
+                            node: Token::PipeGt,
+                            line,
+                            col,
+                        });
                     } else {
                         return Err(LatchError::UnexpectedChar { ch: '|', line, col });
                     }
@@ -269,12 +330,24 @@ impl Lexer {
                     self.advance();
                     if !self.at_end() && self.peek() == '>' {
                         self.advance();
-                        tokens.push(Spanned { node: Token::Arrow, line, col });
+                        tokens.push(Spanned {
+                            node: Token::Arrow,
+                            line,
+                            col,
+                        });
                     } else if !self.at_end() && self.peek() == '=' {
                         self.advance();
-                        tokens.push(Spanned { node: Token::MinusEq, line, col });
+                        tokens.push(Spanned {
+                            node: Token::MinusEq,
+                            line,
+                            col,
+                        });
                     } else {
-                        tokens.push(Spanned { node: Token::Minus, line, col });
+                        tokens.push(Spanned {
+                            node: Token::Minus,
+                            line,
+                            col,
+                        });
                     }
                 }
 
@@ -284,9 +357,17 @@ impl Lexer {
                     self.advance();
                     if !self.at_end() && self.peek() == '=' {
                         self.advance();
-                        tokens.push(Spanned { node: Token::PlusEq, line, col });
+                        tokens.push(Spanned {
+                            node: Token::PlusEq,
+                            line,
+                            col,
+                        });
                     } else {
-                        tokens.push(Spanned { node: Token::Plus, line, col });
+                        tokens.push(Spanned {
+                            node: Token::Plus,
+                            line,
+                            col,
+                        });
                     }
                 }
                 '*' => {
@@ -295,9 +376,17 @@ impl Lexer {
                     self.advance();
                     if !self.at_end() && self.peek() == '=' {
                         self.advance();
-                        tokens.push(Spanned { node: Token::StarEq, line, col });
+                        tokens.push(Spanned {
+                            node: Token::StarEq,
+                            line,
+                            col,
+                        });
                     } else {
-                        tokens.push(Spanned { node: Token::Star, line, col });
+                        tokens.push(Spanned {
+                            node: Token::Star,
+                            line,
+                            col,
+                        });
                     }
                 }
                 '/' => {
@@ -306,7 +395,11 @@ impl Lexer {
                     self.advance(); // consume first /
                     if !self.at_end() && self.peek() == '=' {
                         self.advance();
-                        tokens.push(Spanned { node: Token::SlashEq, line, col });
+                        tokens.push(Spanned {
+                            node: Token::SlashEq,
+                            line,
+                            col,
+                        });
                         continue;
                     }
                     if !self.at_end() && self.peek() == '/' {
@@ -316,7 +409,11 @@ impl Lexer {
                             self.advance();
                         }
                     } else {
-                        tokens.push(Spanned { node: Token::Slash, line, col });
+                        tokens.push(Spanned {
+                            node: Token::Slash,
+                            line,
+                            col,
+                        });
                     }
                 }
                 '.' => {
@@ -325,21 +422,40 @@ impl Lexer {
                     self.advance();
                     if !self.at_end() && self.peek() == '.' {
                         self.advance();
-                        tokens.push(Spanned { node: Token::DotDot, line, col });
+                        tokens.push(Spanned {
+                            node: Token::DotDot,
+                            line,
+                            col,
+                        });
                     } else {
-                        tokens.push(Spanned { node: Token::Dot, line, col });
+                        tokens.push(Spanned {
+                            node: Token::Dot,
+                            line,
+                            col,
+                        });
                     }
                 }
-                ',' => { let s = self.simple(Token::Comma); tokens.push(s); }
+                ',' => {
+                    let s = self.simple(Token::Comma);
+                    tokens.push(s);
+                }
                 '%' => {
                     let line = self.line;
                     let col = self.col;
                     self.advance();
                     if !self.at_end() && self.peek() == '=' {
                         self.advance();
-                        tokens.push(Spanned { node: Token::PercentEq, line, col });
+                        tokens.push(Spanned {
+                            node: Token::PercentEq,
+                            line,
+                            col,
+                        });
                     } else {
-                        tokens.push(Spanned { node: Token::Percent, line, col });
+                        tokens.push(Spanned {
+                            node: Token::Percent,
+                            line,
+                            col,
+                        });
                     }
                 }
                 '?' => {
@@ -348,20 +464,50 @@ impl Lexer {
                     self.advance();
                     if !self.at_end() && self.peek() == '?' {
                         self.advance();
-                        tokens.push(Spanned { node: Token::QuestionQuestion, line, col });
+                        tokens.push(Spanned {
+                            node: Token::QuestionQuestion,
+                            line,
+                            col,
+                        });
                     } else if !self.at_end() && self.peek() == '.' {
                         self.advance();
-                        tokens.push(Spanned { node: Token::QuestionDot, line, col });
+                        tokens.push(Spanned {
+                            node: Token::QuestionDot,
+                            line,
+                            col,
+                        });
                     } else {
-                        tokens.push(Spanned { node: Token::Question, line, col });
+                        tokens.push(Spanned {
+                            node: Token::Question,
+                            line,
+                            col,
+                        });
                     }
                 }
-                '{' => { let s = self.simple(Token::LBrace); tokens.push(s); }
-                '}' => { let s = self.simple(Token::RBrace); tokens.push(s); }
-                '[' => { let s = self.simple(Token::LBracket); tokens.push(s); }
-                ']' => { let s = self.simple(Token::RBracket); tokens.push(s); }
-                '(' => { let s = self.simple(Token::LParen); tokens.push(s); }
-                ')' => { let s = self.simple(Token::RParen); tokens.push(s); }
+                '{' => {
+                    let s = self.simple(Token::LBrace);
+                    tokens.push(s);
+                }
+                '}' => {
+                    let s = self.simple(Token::RBrace);
+                    tokens.push(s);
+                }
+                '[' => {
+                    let s = self.simple(Token::LBracket);
+                    tokens.push(s);
+                }
+                ']' => {
+                    let s = self.simple(Token::RBracket);
+                    tokens.push(s);
+                }
+                '(' => {
+                    let s = self.simple(Token::LParen);
+                    tokens.push(s);
+                }
+                ')' => {
+                    let s = self.simple(Token::RParen);
+                    tokens.push(s);
+                }
 
                 ';' => {
                     // Semicolon acts as a statement separator (same as newline)
@@ -369,8 +515,15 @@ impl Lexer {
                     let col = self.col;
                     self.advance();
                     // Collapse consecutive semicolons/newlines into one
-                    if tokens.last().map_or(true, |t: &Spanned<Token>| t.node != Token::Newline) {
-                        tokens.push(Spanned { node: Token::Newline, line, col });
+                    if tokens
+                        .last()
+                        .map_or(true, |t: &Spanned<Token>| t.node != Token::Newline)
+                    {
+                        tokens.push(Spanned {
+                            node: Token::Newline,
+                            line,
+                            col,
+                        });
                     }
                 }
 
@@ -390,7 +543,11 @@ impl Lexer {
             }
         }
 
-        tokens.push(Spanned { node: Token::EOF, line: self.line, col: self.col });
+        tokens.push(Spanned {
+            node: Token::EOF,
+            line: self.line,
+            col: self.col,
+        });
         Ok(tokens)
     }
 
@@ -421,7 +578,11 @@ impl Lexer {
         let line = self.line;
         let col = self.col;
         self.advance();
-        Spanned { node: tok, line, col }
+        Spanned {
+            node: tok,
+            line,
+            col,
+        }
     }
 
     fn lex_number(&mut self) -> Spanned<Token> {
@@ -446,11 +607,19 @@ impl Lexer {
 
         // OPTIMIZED: Parse directly from char slice without allocating String
         let num_str: String = self.chars[start..self.pos].iter().collect();
-        
+
         if is_float {
-            Spanned { node: Token::Float(num_str.parse().unwrap()), line, col }
+            Spanned {
+                node: Token::Float(num_str.parse().unwrap()),
+                line,
+                col,
+            }
         } else {
-            Spanned { node: Token::Int(num_str.parse().unwrap()), line, col }
+            Spanned {
+                node: Token::Int(num_str.parse().unwrap()),
+                line,
+                col,
+            }
         }
     }
 
@@ -467,40 +636,44 @@ impl Lexer {
         let s: String = self.chars[start..self.pos].iter().collect();
 
         let tok = match s.as_str() {
-            "if"       => Token::KwIf,
-            "else"     => Token::KwElse,
-            "elif"     => Token::KwElif,
-            "for"      => Token::KwFor,
-            "in"       => Token::KwIn,
+            "if" => Token::KwIf,
+            "else" => Token::KwElse,
+            "elif" => Token::KwElif,
+            "for" => Token::KwFor,
+            "in" => Token::KwIn,
             "parallel" => Token::KwParallel,
-            "workers"  => Token::KwWorkers,
-            "fn"       => Token::KwFn,
-            "return"   => Token::KwReturn,
-            "try"      => Token::KwTry,
-            "catch"    => Token::KwCatch,
-            "finally"  => Token::KwFinally,
-            "use"      => Token::KwUse,
-            "or"       => Token::Or,       // boolean OR, same as ||
-            "not"      => Token::KwNot,
-            "while"    => Token::KwWhile,
-            "break"    => Token::KwBreak,
+            "workers" => Token::KwWorkers,
+            "fn" => Token::KwFn,
+            "return" => Token::KwReturn,
+            "try" => Token::KwTry,
+            "catch" => Token::KwCatch,
+            "finally" => Token::KwFinally,
+            "use" => Token::KwUse,
+            "or" => Token::Or, // boolean OR, same as ||
+            "not" => Token::KwNot,
+            "while" => Token::KwWhile,
+            "break" => Token::KwBreak,
             "continue" => Token::KwContinue,
-            "const"    => Token::KwConst,
-            "class"    => Token::KwClass,
-            "export"   => Token::KwExport,
-            "import"   => Token::KwImport,
-            "match"    => Token::KwMatch,
-            "case"     => Token::KwCase,
-            "default"  => Token::KwDefault,
-            "as"       => Token::KwAs,
-            "stop"     => Token::KwStop,
-            "true"     => Token::Bool(true),
-            "false"    => Token::Bool(false),
-            "null"     => Token::KwNull,
-            _          => Token::Ident(s),
+            "const" => Token::KwConst,
+            "class" => Token::KwClass,
+            "export" => Token::KwExport,
+            "import" => Token::KwImport,
+            "match" => Token::KwMatch,
+            "case" => Token::KwCase,
+            "default" => Token::KwDefault,
+            "as" => Token::KwAs,
+            "stop" => Token::KwStop,
+            "true" => Token::Bool(true),
+            "false" => Token::Bool(false),
+            "null" => Token::KwNull,
+            _ => Token::Ident(s),
         };
 
-        Spanned { node: tok, line, col }
+        Spanned {
+            node: tok,
+            line,
+            col,
+        }
     }
 
     fn lex_string(&mut self) -> Result<Spanned<Token>> {
@@ -530,12 +703,12 @@ impl Lexer {
                 }
                 let escaped = self.advance();
                 match escaped {
-                    'n'  => current.push('\n'),
-                    't'  => current.push('\t'),
+                    'n' => current.push('\n'),
+                    't' => current.push('\t'),
                     '\\' => current.push('\\'),
-                    '"'  => current.push('"'),
-                    '$'  => current.push('$'),
-                    _    => {
+                    '"' => current.push('"'),
+                    '$' => current.push('$'),
+                    _ => {
                         current.push('\\');
                         current.push(escaped);
                     }
@@ -555,9 +728,15 @@ impl Lexer {
                 let mut depth = 1;
                 while !self.at_end() && depth > 0 {
                     let c = self.advance();
-                    if c == '{' { depth += 1; }
-                    if c == '}' { depth -= 1; }
-                    if depth > 0 { expr_src.push(c); }
+                    if c == '{' {
+                        depth += 1;
+                    }
+                    if c == '}' {
+                        depth -= 1;
+                    }
+                    if depth > 0 {
+                        expr_src.push(c);
+                    }
                 }
 
                 parts.push(StringPart::Expr(expr_src));
@@ -574,12 +753,20 @@ impl Lexer {
 
         // If no interpolation happened, produce a plain Str token
         if parts.is_empty() {
-            Ok(Spanned { node: Token::Str(current), line, col })
+            Ok(Spanned {
+                node: Token::Str(current),
+                line,
+                col,
+            })
         } else {
             if !current.is_empty() {
                 parts.push(StringPart::Literal(current));
             }
-            Ok(Spanned { node: Token::InterpolatedStr(parts), line, col })
+            Ok(Spanned {
+                node: Token::InterpolatedStr(parts),
+                line,
+                col,
+            })
         }
     }
 
@@ -589,7 +776,7 @@ impl Lexer {
         let line = self.line;
         let col = self.col;
         let open = self.advance(); // consume opening quote
-        // Determine closing quote: straight ' closes straight, curly ' closes curly '
+                                   // Determine closing quote: straight ' closes straight, curly ' closes curly '
         let close = match open {
             '\u{2018}' => '\u{2019}', // left curly → right curly
             _ => '\'',                // straight or right curly → straight '
@@ -612,6 +799,10 @@ impl Lexer {
                 s.push(self.advance());
             }
         }
-        Ok(Spanned { node: Token::Str(s), line, col })
+        Ok(Spanned {
+            node: Token::Str(s),
+            line,
+            col,
+        })
     }
 }

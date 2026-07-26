@@ -11,6 +11,12 @@ pub struct TypeChecker {
     globals: HashMap<GlobalId, Type>,
 }
 
+impl Default for TypeChecker {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TypeChecker {
     pub fn new() -> Self {
         TypeChecker {
@@ -177,9 +183,14 @@ impl TypeChecker {
                             Ok(Type::Int)
                         }
                     }
-                    HirOp::Equal | HirOp::NotEqual | HirOp::Less | HirOp::LessEqual | HirOp::Greater | HirOp::GreaterEqual | HirOp::Or | HirOp::And => {
-                        Ok(Type::Bool)
-                    }
+                    HirOp::Equal
+                    | HirOp::NotEqual
+                    | HirOp::Less
+                    | HirOp::LessEqual
+                    | HirOp::Greater
+                    | HirOp::GreaterEqual
+                    | HirOp::Or
+                    | HirOp::And => Ok(Type::Bool),
                 }
             }
 

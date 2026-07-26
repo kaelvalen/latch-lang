@@ -6,9 +6,12 @@ use crate::error::{LatchError, Result};
 pub fn call(method: &str, args: Vec<Value>) -> Result<Value> {
     match method {
         "get" => {
-            let key = args.first()
+            let key = args
+                .first()
                 .ok_or_else(|| LatchError::ArgCountMismatch {
-                    name: "env.get".into(), expected: 1, found: 0,
+                    name: "env.get".into(),
+                    expected: 1,
+                    found: 0,
                 })?
                 .as_str()?
                 .to_string();
@@ -21,7 +24,9 @@ pub fn call(method: &str, args: Vec<Value>) -> Result<Value> {
         "set" => {
             if args.len() < 2 {
                 return Err(LatchError::ArgCountMismatch {
-                    name: "env.set".into(), expected: 2, found: args.len(),
+                    name: "env.set".into(),
+                    expected: 2,
+                    found: args.len(),
                 });
             }
             let key = args[0].as_str()?.to_string();
@@ -29,29 +34,36 @@ pub fn call(method: &str, args: Vec<Value>) -> Result<Value> {
             // SAFETY: env.set() only affects the current Latch process and
             // child processes spawned via proc.exec(). It does NOT propagate
             // to the parent shell.
-            unsafe { std::env::set_var(&key, &val); }
+            unsafe {
+                std::env::set_var(&key, &val);
+            }
             Ok(Value::Bool(true))
         }
 
         "remove" => {
-            let key = args.first()
+            let key = args
+                .first()
                 .ok_or_else(|| LatchError::ArgCountMismatch {
-                    name: "env.remove".into(), expected: 1, found: 0,
+                    name: "env.remove".into(),
+                    expected: 1,
+                    found: 0,
                 })?
                 .as_str()?;
-            unsafe { std::env::remove_var(key); }
+            unsafe {
+                std::env::remove_var(key);
+            }
             Ok(Value::Bool(true))
         }
 
         "list" => {
-            let map: HashMap<String, Value> = std::env::vars()
-                .map(|(k, v)| (k, Value::Str(v)))
-                .collect();
+            let map: HashMap<String, Value> =
+                std::env::vars().map(|(k, v)| (k, Value::Str(v))).collect();
             Ok(Value::new_map(map))
         }
 
         _ => Err(LatchError::UnknownMethod {
-            module: "env".into(), method: method.into(),
+            module: "env".into(),
+            method: method.into(),
         }),
     }
 }

@@ -1,6 +1,6 @@
-use latch_lang::{ast, error, interpreter, lexer, lsp, parser, resolver, semantic, typechecker, vm};
-
-
+use latch_lang::{
+    ast, error, interpreter, lexer, lsp, parser, resolver, semantic, typechecker, vm,
+};
 
 use std::io::{self, BufRead, Write};
 
@@ -12,7 +12,11 @@ use crate::lexer::Lexer;
 use crate::semantic::SemanticAnalyzer;
 
 #[derive(Parser)]
-#[command(name = "latch", version = "0.5.0", about = "Latch — local automation scripting language")]
+#[command(
+    name = "latch",
+    version = "0.5.0",
+    about = "Latch — local automation scripting language"
+)]
 struct Cli {
     #[command(subcommand)]
     command: Command,
@@ -278,7 +282,9 @@ fn run_repl() {
         }
 
         let trimmed = line.trim();
-        if trimmed.is_empty() { continue; }
+        if trimmed.is_empty() {
+            continue;
+        }
         if trimmed == "exit" || trimmed == "quit" {
             println!("[latch] Bye!");
             break;
@@ -308,13 +314,11 @@ fn run_repl() {
         // Execute and print the result of the last expression
         for stmt in ast {
             match &stmt {
-                crate::ast::Stmt::Expr(_) => {
-                    match interp.eval_stmt_for_repl(stmt) {
-                        Ok(Some(val)) => println!("{val}"),
-                        Ok(None) => {}
-                        Err(e) => eprintln!("{e}"),
-                    }
-                }
+                crate::ast::Stmt::Expr(_) => match interp.eval_stmt_for_repl(stmt) {
+                    Ok(Some(val)) => println!("{val}"),
+                    Ok(None) => {}
+                    Err(e) => eprintln!("{e}"),
+                },
                 _ => {
                     if let Err(e) = interp.exec_stmt_public(stmt) {
                         eprintln!("{e}");

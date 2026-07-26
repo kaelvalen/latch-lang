@@ -4,8 +4,13 @@ use crate::error::{LatchError, Result};
 pub fn call(method: &str, args: Vec<Value>) -> Result<Value> {
     match method {
         "read" => {
-            let path = args.first()
-                .ok_or_else(|| LatchError::ArgCountMismatch { name: "fs.read".into(), expected: 1, found: 0 })?
+            let path = args
+                .first()
+                .ok_or_else(|| LatchError::ArgCountMismatch {
+                    name: "fs.read".into(),
+                    expected: 1,
+                    found: 0,
+                })?
                 .as_str()?;
             let content = std::fs::read_to_string(path)
                 .map_err(|e| LatchError::IoError(format!("fs.read(\"{}\"): {}", path, e)))?;
@@ -14,7 +19,11 @@ pub fn call(method: &str, args: Vec<Value>) -> Result<Value> {
 
         "write" => {
             if args.len() < 2 {
-                return Err(LatchError::ArgCountMismatch { name: "fs.write".into(), expected: 2, found: args.len() });
+                return Err(LatchError::ArgCountMismatch {
+                    name: "fs.write".into(),
+                    expected: 2,
+                    found: args.len(),
+                });
             }
             let path = args[0].as_str()?;
             let data = args[1].as_str()?;
@@ -24,15 +33,25 @@ pub fn call(method: &str, args: Vec<Value>) -> Result<Value> {
         }
 
         "exists" => {
-            let path = args.first()
-                .ok_or_else(|| LatchError::ArgCountMismatch { name: "fs.exists".into(), expected: 1, found: 0 })?
+            let path = args
+                .first()
+                .ok_or_else(|| LatchError::ArgCountMismatch {
+                    name: "fs.exists".into(),
+                    expected: 1,
+                    found: 0,
+                })?
                 .as_str()?;
             Ok(Value::Bool(std::path::Path::new(path).exists()))
         }
 
         "glob" => {
-            let pattern = args.first()
-                .ok_or_else(|| LatchError::ArgCountMismatch { name: "fs.glob".into(), expected: 1, found: 0 })?
+            let pattern = args
+                .first()
+                .ok_or_else(|| LatchError::ArgCountMismatch {
+                    name: "fs.glob".into(),
+                    expected: 1,
+                    found: 0,
+                })?
                 .as_str()?;
             let entries = glob::glob(pattern)
                 .map_err(|e| LatchError::IoError(format!("fs.glob(\"{}\"): {}", pattern, e)))?;
@@ -48,7 +67,11 @@ pub fn call(method: &str, args: Vec<Value>) -> Result<Value> {
 
         "append" => {
             if args.len() < 2 {
-                return Err(LatchError::ArgCountMismatch { name: "fs.append".into(), expected: 2, found: args.len() });
+                return Err(LatchError::ArgCountMismatch {
+                    name: "fs.append".into(),
+                    expected: 2,
+                    found: args.len(),
+                });
             }
             let path = args[0].as_str()?;
             let data = args[1].as_str()?;
@@ -64,20 +87,28 @@ pub fn call(method: &str, args: Vec<Value>) -> Result<Value> {
         }
 
         "readlines" => {
-            let path = args.first()
-                .ok_or_else(|| LatchError::ArgCountMismatch { name: "fs.readlines".into(), expected: 1, found: 0 })?
+            let path = args
+                .first()
+                .ok_or_else(|| LatchError::ArgCountMismatch {
+                    name: "fs.readlines".into(),
+                    expected: 1,
+                    found: 0,
+                })?
                 .as_str()?;
             let content = std::fs::read_to_string(path)
                 .map_err(|e| LatchError::IoError(format!("fs.readlines(\"{}\"): {}", path, e)))?;
-            let lines: Vec<Value> = content.lines()
-                .map(|l| Value::Str(l.to_string()))
-                .collect();
+            let lines: Vec<Value> = content.lines().map(|l| Value::Str(l.to_string())).collect();
             Ok(Value::new_list(lines))
         }
 
         "mkdir" => {
-            let path = args.first()
-                .ok_or_else(|| LatchError::ArgCountMismatch { name: "fs.mkdir".into(), expected: 1, found: 0 })?
+            let path = args
+                .first()
+                .ok_or_else(|| LatchError::ArgCountMismatch {
+                    name: "fs.mkdir".into(),
+                    expected: 1,
+                    found: 0,
+                })?
                 .as_str()?;
             // Always use create_dir_all: idempotent (no error if already exists)
             std::fs::create_dir_all(path)
@@ -86,8 +117,13 @@ pub fn call(method: &str, args: Vec<Value>) -> Result<Value> {
         }
 
         "remove" | "delete" => {
-            let path = args.first()
-                .ok_or_else(|| LatchError::ArgCountMismatch { name: "fs.remove".into(), expected: 1, found: 0 })?
+            let path = args
+                .first()
+                .ok_or_else(|| LatchError::ArgCountMismatch {
+                    name: "fs.remove".into(),
+                    expected: 1,
+                    found: 0,
+                })?
                 .as_str()?;
             let p = std::path::Path::new(path);
             if p.is_dir() {
@@ -101,8 +137,13 @@ pub fn call(method: &str, args: Vec<Value>) -> Result<Value> {
         }
 
         "rmdir" => {
-            let path = args.first()
-                .ok_or_else(|| LatchError::ArgCountMismatch { name: "fs.rmdir".into(), expected: 1, found: 0 })?
+            let path = args
+                .first()
+                .ok_or_else(|| LatchError::ArgCountMismatch {
+                    name: "fs.rmdir".into(),
+                    expected: 1,
+                    found: 0,
+                })?
                 .as_str()?;
             let recursive = args.get(1).map(|v| v.is_truthy()).unwrap_or(false);
             if recursive {
@@ -117,18 +158,28 @@ pub fn call(method: &str, args: Vec<Value>) -> Result<Value> {
 
         "rename" => {
             if args.len() < 2 {
-                return Err(LatchError::ArgCountMismatch { name: "fs.rename".into(), expected: 2, found: args.len() });
+                return Err(LatchError::ArgCountMismatch {
+                    name: "fs.rename".into(),
+                    expected: 2,
+                    found: args.len(),
+                });
             }
             let from = args[0].as_str()?;
             let to = args[1].as_str()?;
-            std::fs::rename(from, to)
-                .map_err(|e| LatchError::IoError(format!("fs.rename(\"{}\", \"{}\"): {}", from, to, e)))?;
+            std::fs::rename(from, to).map_err(|e| {
+                LatchError::IoError(format!("fs.rename(\"{}\", \"{}\"): {}", from, to, e))
+            })?;
             Ok(Value::Bool(true))
         }
 
         "stat" => {
-            let path = args.first()
-                .ok_or_else(|| LatchError::ArgCountMismatch { name: "fs.stat".into(), expected: 1, found: 0 })?
+            let path = args
+                .first()
+                .ok_or_else(|| LatchError::ArgCountMismatch {
+                    name: "fs.stat".into(),
+                    expected: 1,
+                    found: 0,
+                })?
                 .as_str()?;
             let meta = std::fs::metadata(path)
                 .map_err(|e| LatchError::IoError(format!("fs.stat(\"{}\"): {}", path, e)))?;
@@ -136,75 +187,106 @@ pub fn call(method: &str, args: Vec<Value>) -> Result<Value> {
             map.insert("size".to_string(), Value::Int(meta.len() as i64));
             map.insert("is_file".to_string(), Value::Bool(meta.is_file()));
             map.insert("is_dir".to_string(), Value::Bool(meta.is_dir()));
-            map.insert("readonly".to_string(), Value::Bool(meta.permissions().readonly()));
+            map.insert(
+                "readonly".to_string(),
+                Value::Bool(meta.permissions().readonly()),
+            );
             Ok(Value::new_map(map))
         }
 
         "copy" => {
             if args.len() < 2 {
-                return Err(LatchError::ArgCountMismatch { name: "fs.copy".into(), expected: 2, found: args.len() });
+                return Err(LatchError::ArgCountMismatch {
+                    name: "fs.copy".into(),
+                    expected: 2,
+                    found: args.len(),
+                });
             }
             let src = args[0].as_str()?;
             let dst = args[1].as_str()?;
-            std::fs::copy(src, dst)
-                .map_err(|e| LatchError::IoError(format!("fs.copy(\"{}\", \"{}\"): {}", src, dst, e)))?;
+            std::fs::copy(src, dst).map_err(|e| {
+                LatchError::IoError(format!("fs.copy(\"{}\", \"{}\"): {}", src, dst, e))
+            })?;
             Ok(Value::Bool(true))
         }
 
         "move" => {
             if args.len() < 2 {
-                return Err(LatchError::ArgCountMismatch { name: "fs.move".into(), expected: 2, found: args.len() });
+                return Err(LatchError::ArgCountMismatch {
+                    name: "fs.move".into(),
+                    expected: 2,
+                    found: args.len(),
+                });
             }
             let src = args[0].as_str()?;
             let dst = args[1].as_str()?;
-            std::fs::rename(src, dst)
-                .map_err(|e| LatchError::IoError(format!("fs.move(\"{}\", \"{}\"): {}", src, dst, e)))?;
+            std::fs::rename(src, dst).map_err(|e| {
+                LatchError::IoError(format!("fs.move(\"{}\", \"{}\"): {}", src, dst, e))
+            })?;
             Ok(Value::Bool(true))
         }
 
         "isfile" => {
-            let path = args.first()
-                .ok_or_else(|| LatchError::ArgCountMismatch { name: "fs.isfile".into(), expected: 1, found: 0 })?
+            let path = args
+                .first()
+                .ok_or_else(|| LatchError::ArgCountMismatch {
+                    name: "fs.isfile".into(),
+                    expected: 1,
+                    found: 0,
+                })?
                 .as_str()?;
             Ok(Value::Bool(std::path::Path::new(path).is_file()))
         }
 
         "isdir" => {
-            let path = args.first()
-                .ok_or_else(|| LatchError::ArgCountMismatch { name: "fs.isdir".into(), expected: 1, found: 0 })?
+            let path = args
+                .first()
+                .ok_or_else(|| LatchError::ArgCountMismatch {
+                    name: "fs.isdir".into(),
+                    expected: 1,
+                    found: 0,
+                })?
                 .as_str()?;
             Ok(Value::Bool(std::path::Path::new(path).is_dir()))
         }
 
         "listdir" => {
-            let path = args.first()
-                .ok_or_else(|| LatchError::ArgCountMismatch { name: "fs.listdir".into(), expected: 1, found: 0 })?
+            let path = args
+                .first()
+                .ok_or_else(|| LatchError::ArgCountMismatch {
+                    name: "fs.listdir".into(),
+                    expected: 1,
+                    found: 0,
+                })?
                 .as_str()?;
             let entries = std::fs::read_dir(path)
                 .map_err(|e| LatchError::IoError(format!("fs.listdir(\"{}\"): {}", path, e)))?;
             let mut list = Vec::new();
-            for entry in entries {
-                if let Ok(entry) = entry {
-                    list.push(Value::Str(entry.path().display().to_string()));
-                }
+            for entry in entries.flatten() {
+                list.push(Value::Str(entry.path().display().to_string()));
             }
             Ok(Value::new_list(list))
         }
 
         "walk" => {
-            let path = args.first()
-                .ok_or_else(|| LatchError::ArgCountMismatch { name: "fs.walk".into(), expected: 1, found: 0 })?
+            let path = args
+                .first()
+                .ok_or_else(|| LatchError::ArgCountMismatch {
+                    name: "fs.walk".into(),
+                    expected: 1,
+                    found: 0,
+                })?
                 .as_str()?;
             let mut result = Vec::new();
             fn walk_dir(dir: &str, result: &mut Vec<Value>) -> Result<()> {
                 for entry in std::fs::read_dir(dir)
-                    .map_err(|e| LatchError::IoError(format!("fs.walk(\"{}\"): {}", dir, e)))? {
-                    if let Ok(entry) = entry {
-                        let path = entry.path();
-                        result.push(Value::Str(path.display().to_string()));
-                        if path.is_dir() {
-                            walk_dir(&path.display().to_string(), result)?;
-                        }
+                    .map_err(|e| LatchError::IoError(format!("fs.walk(\"{}\"): {}", dir, e)))?
+                    .flatten()
+                {
+                    let path = entry.path();
+                    result.push(Value::Str(path.display().to_string()));
+                    if path.is_dir() {
+                        walk_dir(&path.display().to_string(), result)?;
                     }
                 }
                 Ok(())
@@ -213,6 +295,9 @@ pub fn call(method: &str, args: Vec<Value>) -> Result<Value> {
             Ok(Value::new_list(result))
         }
 
-        _ => Err(LatchError::UnknownMethod { module: "fs".into(), method: method.into() }),
+        _ => Err(LatchError::UnknownMethod {
+            module: "fs".into(),
+            method: method.into(),
+        }),
     }
 }

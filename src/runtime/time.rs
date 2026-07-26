@@ -4,8 +4,13 @@ use crate::error::{LatchError, Result};
 pub fn call(method: &str, args: Vec<Value>) -> Result<Value> {
     match method {
         "sleep" => {
-            let ms = args.first()
-                .ok_or_else(|| LatchError::ArgCountMismatch { name: "time.sleep".into(), expected: 1, found: 0 })?
+            let ms = args
+                .first()
+                .ok_or_else(|| LatchError::ArgCountMismatch {
+                    name: "time.sleep".into(),
+                    expected: 1,
+                    found: 0,
+                })?
                 .as_int()?;
             std::thread::sleep(std::time::Duration::from_millis(ms as u64));
             Ok(Value::Null)
@@ -22,6 +27,9 @@ pub fn call(method: &str, args: Vec<Value>) -> Result<Value> {
             Ok(Value::Int(ms))
         }
 
-        _ => Err(LatchError::UnknownMethod { module: "time".into(), method: method.into() }),
+        _ => Err(LatchError::UnknownMethod {
+            module: "time".into(),
+            method: method.into(),
+        }),
     }
 }

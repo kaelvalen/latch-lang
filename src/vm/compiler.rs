@@ -1,13 +1,19 @@
+use super::chunk::{ChunkBuilder, Constant, OpCode};
+use super::peephole::BytecodePeephole;
 use crate::env::{ObjFunction, ObjFunctionBuilder, ObjRef};
 use crate::error::Result;
 use crate::hir::*;
-use super::chunk::{ChunkBuilder, Constant, OpCode};
-use super::peephole::BytecodePeephole;
 
 /// Dumb Bytecode Emitter — transforms resolved HirModule directly into a compiled Chunk.
 /// Contains zero AST imports, Value runtime dependencies, scope maps, or semantic checking logic.
 pub struct Compiler {
     chunk: ChunkBuilder,
+}
+
+impl Default for Compiler {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Compiler {
@@ -212,57 +218,71 @@ impl Compiler {
                 self.emit_u16(const_idx as u16, 0);
             }
 
-            HirExpr::BinOp { op, left, right } => {
-                match op {
-                    HirOp::Or => {
-                        self.compile_expr(left)?;
-                        self.emit_opcode(OpCode::OpDup, 0);
-                        let jump_false = self.emit_jump(OpCode::OpJumpIfFalse, 0);
-                        let jump_end = self.emit_jump(OpCode::OpJump, 0);
-                        self.patch_jump(jump_false);
-                        self.emit_pop(0);
-                        self.compile_expr(right)?;
-                        self.patch_jump(jump_end);
-                    }
-                    HirOp::And => {
-                        self.compile_expr(left)?;
-                        self.emit_opcode(OpCode::OpDup, 0);
-                        let jump_false = self.emit_jump(OpCode::OpJumpIfFalse, 0);
-                        self.emit_pop(0);
-                        self.compile_expr(right)?;
-                        let jump_end = self.emit_jump(OpCode::OpJump, 0);
-                        self.patch_jump(jump_false);
-                        self.patch_jump(jump_end);
-                    }
-                    _ => {
-                        self.compile_expr(left)?;
-                        self.compile_expr(right)?;
-                        match op {
-                            HirOp::Add => { self.emit_opcode(OpCode::OpAdd, 0); }
-                            HirOp::Sub => { self.emit_opcode(OpCode::OpSub, 0); }
-                            HirOp::Mul => { self.emit_opcode(OpCode::OpMul, 0); }
-                            HirOp::Div => { self.emit_opcode(OpCode::OpDiv, 0); }
-                            HirOp::Mod => { self.emit_opcode(OpCode::OpMod, 0); }
-                            HirOp::Equal => { self.emit_opcode(OpCode::OpEqual, 0); }
-                            HirOp::NotEqual => {
-                                self.emit_opcode(OpCode::OpEqual, 0);
-                                self.emit_opcode(OpCode::OpNot, 0);
-                            }
-                            HirOp::Less => { self.emit_opcode(OpCode::OpLess, 0); }
-                            HirOp::LessEqual => {
-                                self.emit_opcode(OpCode::OpGreater, 0);
-                                self.emit_opcode(OpCode::OpNot, 0);
-                            }
-                            HirOp::Greater => { self.emit_opcode(OpCode::OpGreater, 0); }
-                            HirOp::GreaterEqual => {
-                                self.emit_opcode(OpCode::OpLess, 0);
-                                self.emit_opcode(OpCode::OpNot, 0);
-                            }
-                            _ => {}
+            HirExpr::BinOp { op, left, right } => match op {
+                HirOp::Or => {
+                    self.compile_expr(left)?;
+                    self.emit_opcode(OpCode::OpDup, 0);
+                    let jump_false = self.emit_jump(OpCode::OpJumpIfFalse, 0);
+                    let jump_end = self.emit_jump(OpCode::OpJump, 0);
+                    self.patch_jump(jump_false);
+                    self.emit_pop(0);
+                    self.compile_expr(right)?;
+                    self.patch_jump(jump_end);
+                }
+                HirOp::And => {
+                    self.compile_expr(left)?;
+                    self.emit_opcode(OpCode::OpDup, 0);
+                    let jump_false = self.emit_jump(OpCode::OpJumpIfFalse, 0);
+                    self.emit_pop(0);
+                    self.compile_expr(right)?;
+                    let jump_end = self.emit_jump(OpCode::OpJump, 0);
+                    self.patch_jump(jump_false);
+                    self.patch_jump(jump_end);
+                }
+                _ => {
+                    self.compile_expr(left)?;
+                    self.compile_expr(right)?;
+                    match op {
+                        HirOp::Add => {
+                            self.emit_opcode(OpCode::OpAdd, 0);
                         }
+                        HirOp::Sub => {
+                            self.emit_opcode(OpCode::OpSub, 0);
+                        }
+                        HirOp::Mul => {
+                            self.emit_opcode(OpCode::OpMul, 0);
+                        }
+                        HirOp::Div => {
+                            self.emit_opcode(OpCode::OpDiv, 0);
+                        }
+                        HirOp::Mod => {
+                            self.emit_opcode(OpCode::OpMod, 0);
+                        }
+                        HirOp::Equal => {
+                            self.emit_opcode(OpCode::OpEqual, 0);
+                        }
+                        HirOp::NotEqual => {
+                            self.emit_opcode(OpCode::OpEqual, 0);
+                            self.emit_opcode(OpCode::OpNot, 0);
+                        }
+                        HirOp::Less => {
+                            self.emit_opcode(OpCode::OpLess, 0);
+                        }
+                        HirOp::LessEqual => {
+                            self.emit_opcode(OpCode::OpGreater, 0);
+                            self.emit_opcode(OpCode::OpNot, 0);
+                        }
+                        HirOp::Greater => {
+                            self.emit_opcode(OpCode::OpGreater, 0);
+                        }
+                        HirOp::GreaterEqual => {
+                            self.emit_opcode(OpCode::OpLess, 0);
+                            self.emit_opcode(OpCode::OpNot, 0);
+                        }
+                        _ => {}
                     }
                 }
-            }
+            },
 
             HirExpr::Call { func_id, args } => {
                 self.emit_opcode(OpCode::OpGetGlobal, 0);

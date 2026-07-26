@@ -13,24 +13,33 @@ pub struct ErrorContext {
 }
 
 impl ErrorContext {
-    pub fn new() -> Self { Self::default() }
+    pub fn new() -> Self {
+        Self::default()
+    }
 
     #[allow(dead_code)]
     pub fn at(line: usize, col: usize) -> Self {
-        Self { line: Some(line), col: Some(col), ..Default::default() }
+        Self {
+            line: Some(line),
+            col: Some(col),
+            ..Default::default()
+        }
     }
 
     pub fn with_file(mut self, file: &str) -> Self {
-        self.file = Some(file.to_string()); self
+        self.file = Some(file.to_string());
+        self
     }
 
     #[allow(dead_code)]
     pub fn with_hint(mut self, hint: &str) -> Self {
-        self.hint = Some(hint.to_string()); self
+        self.hint = Some(hint.to_string());
+        self
     }
 
     pub fn with_source(mut self, src: &str) -> Self {
-        self.source_line = Some(src.to_string()); self
+        self.source_line = Some(src.to_string());
+        self
     }
 }
 
@@ -39,11 +48,22 @@ impl ErrorContext {
 #[allow(dead_code)]
 pub enum LatchError {
     // ── Lexer ────────────────────────────────────────────────
-    UnexpectedChar { ch: char, line: usize, col: usize },
-    UnterminatedString { line: usize, col: usize },
+    UnexpectedChar {
+        ch: char,
+        line: usize,
+        col: usize,
+    },
+    UnterminatedString {
+        line: usize,
+        col: usize,
+    },
 
     // ── Parser ───────────────────────────────────────────────
-    UnexpectedToken { expected: String, found: String, line: usize },
+    UnexpectedToken {
+        expected: String,
+        found: String,
+        line: usize,
+    },
     UnexpectedEOF,
 
     // ── Semantic ─────────────────────────────────────────────
@@ -52,14 +72,28 @@ pub enum LatchError {
     UndeclaredAssign(String),
     ReturnOutsideFn,
     DuplicateFn(String),
-    ArgCountMismatch { name: String, expected: usize, found: usize },
-    TypeAnnotationMismatch { name: String, expected: Type, found: Type },
+    ArgCountMismatch {
+        name: String,
+        expected: usize,
+        found: usize,
+    },
+    TypeAnnotationMismatch {
+        name: String,
+        expected: Type,
+        found: Type,
+    },
     ImportNotFound(String),
 
     // ── Runtime ──────────────────────────────────────────────
-    TypeMismatch { expected: String, found: String },
+    TypeMismatch {
+        expected: String,
+        found: String,
+    },
     UnknownModule(String),
-    UnknownMethod { module: String, method: String },
+    UnknownMethod {
+        module: String,
+        method: String,
+    },
     IoError(String),
     FileError(String),
     NetworkError(String),
@@ -67,9 +101,15 @@ pub enum LatchError {
     ValueError(String),
     HttpError(String),
     AiError(String),
-    ProcessFailed { code: i32, stderr: String },
+    ProcessFailed {
+        code: i32,
+        stderr: String,
+    },
     DivisionByZero,
-    IndexOutOfBounds { index: i64, len: usize },
+    IndexOutOfBounds {
+        index: i64,
+        len: usize,
+    },
     KeyNotFound(String),
 
     // ── Internal signals (not user-facing) ───────────────────
@@ -84,7 +124,10 @@ pub enum LatchError {
 
 /// Resolve the source line from source text, given a 1-based line number.
 pub fn get_source_line(source: &str, line: usize) -> Option<String> {
-    source.lines().nth(line.saturating_sub(1)).map(|s| s.to_string())
+    source
+        .lines()
+        .nth(line.saturating_sub(1))
+        .map(|s| s.to_string())
 }
 
 /// Format a LatchError with full context into the standard format:
@@ -111,7 +154,7 @@ pub fn format_error(err: &LatchError, ctx: &ErrorContext) -> String {
     // Line / Col
     match (err.line_number().or(ctx.line), err.col_number().or(ctx.col)) {
         (Some(line), Some(col)) => out.push_str(&format!("  line: {line}  col: {col}\n")),
-        (Some(line), None)      => out.push_str(&format!("  line: {line}\n")),
+        (Some(line), None) => out.push_str(&format!("  line: {line}\n")),
         _ => {}
     }
 
@@ -137,10 +180,14 @@ impl LatchError {
         match self {
             Self::UnexpectedChar { .. } | Self::UnterminatedString { .. } => "Lexer Error",
             Self::UnexpectedToken { .. } | Self::UnexpectedEOF => "Parser Error",
-            Self::UndefinedVariable(_) | Self::UndefinedFunction(_) |
-            Self::UndeclaredAssign(_) | Self::ReturnOutsideFn |
-            Self::DuplicateFn(_) | Self::ArgCountMismatch { .. } |
-            Self::TypeAnnotationMismatch { .. } | Self::ImportNotFound(_) => "Semantic Error",
+            Self::UndefinedVariable(_)
+            | Self::UndefinedFunction(_)
+            | Self::UndeclaredAssign(_)
+            | Self::ReturnOutsideFn
+            | Self::DuplicateFn(_)
+            | Self::ArgCountMismatch { .. }
+            | Self::TypeAnnotationMismatch { .. }
+            | Self::ImportNotFound(_) => "Semantic Error",
             Self::IoError(_) => "IO Error",
             Self::HttpError(_) => "HTTP Error",
             Self::AiError(_) => "AI Error",
@@ -170,19 +217,29 @@ impl LatchError {
         match self {
             Self::UnexpectedChar { ch, .. } => format!("Unexpected character '{ch}'"),
             Self::UnterminatedString { .. } => "Unterminated string literal".into(),
-            Self::UnexpectedToken { expected, found, .. } => format!("Expected {expected}, found {found}"),
+            Self::UnexpectedToken {
+                expected, found, ..
+            } => format!("Expected {expected}, found {found}"),
             Self::UnexpectedEOF => "Unexpected end of file".into(),
             Self::UndefinedVariable(n) => format!("Undefined variable '{n}'"),
             Self::UndefinedFunction(n) => format!("Undefined function '{n}'"),
             Self::UndeclaredAssign(n) => format!("Assignment to undeclared variable '{n}'"),
             Self::ReturnOutsideFn => "'return' used outside of a function".into(),
             Self::DuplicateFn(n) => format!("Duplicate function definition '{n}'"),
-            Self::ArgCountMismatch { name, expected, found } =>
-                format!("Function '{name}' expects {expected} argument(s), got {found}"),
-            Self::TypeAnnotationMismatch { name, expected, found } =>
-                format!("Variable '{name}' declared as {expected:?} but assigned {found:?}"),
+            Self::ArgCountMismatch {
+                name,
+                expected,
+                found,
+            } => format!("Function '{name}' expects {expected} argument(s), got {found}"),
+            Self::TypeAnnotationMismatch {
+                name,
+                expected,
+                found,
+            } => format!("Variable '{name}' declared as {expected:?} but assigned {found:?}"),
             Self::ImportNotFound(p) => format!("Import not found: '{p}'"),
-            Self::TypeMismatch { expected, found } => format!("Type mismatch: expected {expected}, found {found}"),
+            Self::TypeMismatch { expected, found } => {
+                format!("Type mismatch: expected {expected}, found {found}")
+            }
             Self::UnknownModule(m) => format!("Unknown module '{m}'"),
             Self::UnknownMethod { module, method } => format!("Unknown method '{module}.{method}'"),
             Self::IoError(msg) => msg.clone(),
@@ -192,9 +249,13 @@ impl LatchError {
             Self::ValueError(msg) => msg.clone(),
             Self::HttpError(msg) => msg.clone(),
             Self::AiError(msg) => msg.clone(),
-            Self::ProcessFailed { code, stderr } => format!("Process exited with code {code}: {stderr}"),
+            Self::ProcessFailed { code, stderr } => {
+                format!("Process exited with code {code}: {stderr}")
+            }
             Self::DivisionByZero => "Division by zero".into(),
-            Self::IndexOutOfBounds { index, len } => format!("Index {index} out of bounds (length {len})"),
+            Self::IndexOutOfBounds { index, len } => {
+                format!("Index {index} out of bounds (length {len})")
+            }
             Self::KeyNotFound(k) => format!("Key '{k}' not found in dict"),
             Self::ReturnSignal(_) => "internal return signal".into(),
             Self::BreakSignal => "internal break signal".into(),
@@ -210,14 +271,18 @@ impl LatchError {
             Self::UnexpectedToken { .. } => "Check the syntax around this token",
             Self::UnexpectedEOF => "You may have an unclosed block or missing expression",
             Self::UndefinedVariable(_) => "Declare the variable first with ':='",
-            Self::UndefinedFunction(_) => "Define the function with 'fn name(...)' before calling it",
+            Self::UndefinedFunction(_) => {
+                "Define the function with 'fn name(...)' before calling it"
+            }
             Self::UndeclaredAssign(_) => "Declare the variable first with ':='",
             Self::ReturnOutsideFn => "'return' can only appear inside a 'fn' block",
             Self::DuplicateFn(_) => "Each function name must be unique in its scope",
             Self::ArgCountMismatch { .. } => "Check the function signature",
             Self::TypeAnnotationMismatch { .. } => "Change the annotation or the value",
             Self::ImportNotFound(_) => "Check that the file exists and the path is correct",
-            Self::UnknownModule(_) => "Available modules: fs, proc, http, time, ai, json, env, path",
+            Self::UnknownModule(_) => {
+                "Available modules: fs, proc, http, time, ai, json, env, path"
+            }
             Self::IoError(_) => "Use 'or' to provide a fallback: fs.read(\"file\") or \"\"",
             Self::AiError(_) => "Set LATCH_AI_KEY environment variable",
             Self::DivisionByZero => "Check the divisor is not zero",

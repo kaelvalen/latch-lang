@@ -1,5 +1,5 @@
-use latch_lang::vm::{OpCode, LBC_MAGIC, LBC_VERSION, LBC_ISA_VERSION, LBC_FLAGS};
 use latch_lang::hir::{HirLiteral, HirOp};
+use latch_lang::vm::{OpCode, LBC_FLAGS, LBC_ISA_VERSION, LBC_MAGIC, LBC_VERSION};
 
 #[test]
 fn spec_vm_opcode_descriptors_match_isa_specification() {
@@ -57,7 +57,9 @@ fn spec_gc_api_stubs_exist() {
 
 #[test]
 fn spec_native_object_trait_exists() {
-    use latch_lang::env::{NativeObject, NativeCallable, HeapObject, GcTrace, ObjHeader, ObjKind, Value};
+    use latch_lang::env::{
+        GcTrace, HeapObject, NativeCallable, NativeObject, ObjHeader, ObjKind, Value,
+    };
     use latch_lang::error::Result;
 
     struct TestNative;
@@ -76,7 +78,9 @@ fn spec_native_object_trait_exists() {
         }
     }
     impl NativeObject for TestNative {
-        fn type_name(&self) -> &'static str { "TestNative" }
+        fn type_name(&self) -> &'static str {
+            "TestNative"
+        }
     }
 
     let native = TestNative;
@@ -94,7 +98,10 @@ fn spec_allocation_profiler_records_allocations() {
     profiler.record_allocation(ObjKind::Class, 32);
 
     let summary = profiler.allocation_summary();
-    let func_entry = summary.iter().find(|(k, _, _)| *k == ObjKind::Function).unwrap();
+    let func_entry = summary
+        .iter()
+        .find(|(k, _, _)| *k == ObjKind::Function)
+        .unwrap();
     assert_eq!(func_entry.1, 2); // count
     assert_eq!(func_entry.2, 128); // bytes
 }
@@ -110,7 +117,7 @@ fn spec_hir_literals_and_ops_match_specification() {
 
 #[test]
 fn spec_obj_header_has_gc_color() {
-    use latch_lang::env::{ObjHeader, ObjKind, GcColor};
+    use latch_lang::env::{GcColor, ObjHeader, ObjKind};
     let mut header = ObjHeader::new(ObjKind::Function);
     assert_eq!(header.color(), GcColor::White);
     header.set_color(GcColor::Gray);

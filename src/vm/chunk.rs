@@ -5,53 +5,53 @@ use crate::env::Value;
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OpCode {
-    OpConstant     = 1,
-    OpAdd          = 2,
-    OpSub          = 3,
-    OpMul          = 4,
-    OpDiv          = 5,
-    OpMod          = 6,
-    OpNeg          = 7,
-    OpNot          = 8,
-    OpEqual        = 9,
-    OpLess         = 10,
-    OpGreater      = 11,
-    OpGetLocal     = 12,
-    OpSetLocal     = 13,
-    OpGetGlobal    = 14,
+    OpConstant = 1,
+    OpAdd = 2,
+    OpSub = 3,
+    OpMul = 4,
+    OpDiv = 5,
+    OpMod = 6,
+    OpNeg = 7,
+    OpNot = 8,
+    OpEqual = 9,
+    OpLess = 10,
+    OpGreater = 11,
+    OpGetLocal = 12,
+    OpSetLocal = 13,
+    OpGetGlobal = 14,
     OpDefineGlobal = 15,
-    OpSetGlobal    = 16,
-    OpJump         = 17,
-    OpJumpIfFalse  = 18,
-    OpLoop         = 19,
-    OpCall         = 20,
-    OpReturn       = 21,
-    OpPop          = 22,
-    OpList         = 23,
-    OpMap          = 24,
-    OpIndex        = 25,
-    OpIndexAssign  = 26,
-    OpPrint        = 27,
-    OpIn           = 28,
-    OpGetUpvalue   = 29,
-    OpSetUpvalue   = 30,
-    OpClosure      = 31,
-    OpDup          = 32,
+    OpSetGlobal = 16,
+    OpJump = 17,
+    OpJumpIfFalse = 18,
+    OpLoop = 19,
+    OpCall = 20,
+    OpReturn = 21,
+    OpPop = 22,
+    OpList = 23,
+    OpMap = 24,
+    OpIndex = 25,
+    OpIndexAssign = 26,
+    OpPrint = 27,
+    OpIn = 28,
+    OpGetUpvalue = 29,
+    OpSetUpvalue = 30,
+    OpClosure = 31,
+    OpDup = 32,
 }
 
 impl OpCode {
     #[inline(always)]
     pub fn from_u8(b: u8) -> Option<Self> {
         match b {
-            1  => Some(OpCode::OpConstant),
-            2  => Some(OpCode::OpAdd),
-            3  => Some(OpCode::OpSub),
-            4  => Some(OpCode::OpMul),
-            5  => Some(OpCode::OpDiv),
-            6  => Some(OpCode::OpMod),
-            7  => Some(OpCode::OpNeg),
-            8  => Some(OpCode::OpNot),
-            9  => Some(OpCode::OpEqual),
+            1 => Some(OpCode::OpConstant),
+            2 => Some(OpCode::OpAdd),
+            3 => Some(OpCode::OpSub),
+            4 => Some(OpCode::OpMul),
+            5 => Some(OpCode::OpDiv),
+            6 => Some(OpCode::OpMod),
+            7 => Some(OpCode::OpNeg),
+            8 => Some(OpCode::OpNot),
+            9 => Some(OpCode::OpEqual),
             10 => Some(OpCode::OpLess),
             11 => Some(OpCode::OpGreater),
             12 => Some(OpCode::OpGetLocal),
@@ -75,7 +75,7 @@ impl OpCode {
             30 => Some(OpCode::OpSetUpvalue),
             31 => Some(OpCode::OpClosure),
             32 => Some(OpCode::OpDup),
-            _  => None,
+            _ => None,
         }
     }
 
@@ -88,39 +88,369 @@ impl OpCode {
 /// Compile-time opcode metadata table. Indexed by `OpCode as usize`.
 /// Index 0 is a placeholder for the reserved `0x00` opcode.
 pub const OPCODE_TABLE: [InstructionDescriptor; 33] = [
-    InstructionDescriptor { opcode: OpCode::OpConstant, name: "<reserved>", operand_count: 0, operand_width: 0, stack_in: 0, stack_out: 0, is_jump: false, may_allocate: false, gc_safe: false }, // 0x00 placeholder
-    InstructionDescriptor { opcode: OpCode::OpConstant, name: "OP_CONSTANT", operand_count: 1, operand_width: 2, stack_in: 0, stack_out: 1, is_jump: false, may_allocate: true, gc_safe: false },
-    InstructionDescriptor { opcode: OpCode::OpAdd, name: "OP_ADD", operand_count: 0, operand_width: 0, stack_in: 2, stack_out: 1, is_jump: false, may_allocate: false, gc_safe: true },
-    InstructionDescriptor { opcode: OpCode::OpSub, name: "OP_SUB", operand_count: 0, operand_width: 0, stack_in: 2, stack_out: 1, is_jump: false, may_allocate: false, gc_safe: false },
-    InstructionDescriptor { opcode: OpCode::OpMul, name: "OP_MUL", operand_count: 0, operand_width: 0, stack_in: 2, stack_out: 1, is_jump: false, may_allocate: false, gc_safe: false },
-    InstructionDescriptor { opcode: OpCode::OpDiv, name: "OP_DIV", operand_count: 0, operand_width: 0, stack_in: 2, stack_out: 1, is_jump: false, may_allocate: false, gc_safe: false },
-    InstructionDescriptor { opcode: OpCode::OpMod, name: "OP_MOD", operand_count: 0, operand_width: 0, stack_in: 2, stack_out: 1, is_jump: false, may_allocate: false, gc_safe: false },
-    InstructionDescriptor { opcode: OpCode::OpNeg, name: "OP_NEG", operand_count: 0, operand_width: 0, stack_in: 1, stack_out: 1, is_jump: false, may_allocate: false, gc_safe: false },
-    InstructionDescriptor { opcode: OpCode::OpNot, name: "OP_NOT", operand_count: 0, operand_width: 0, stack_in: 1, stack_out: 1, is_jump: false, may_allocate: false, gc_safe: false },
-    InstructionDescriptor { opcode: OpCode::OpEqual, name: "OP_EQUAL", operand_count: 0, operand_width: 0, stack_in: 2, stack_out: 1, is_jump: false, may_allocate: false, gc_safe: false },
-    InstructionDescriptor { opcode: OpCode::OpLess, name: "OP_LESS", operand_count: 0, operand_width: 0, stack_in: 2, stack_out: 1, is_jump: false, may_allocate: false, gc_safe: false },
-    InstructionDescriptor { opcode: OpCode::OpGreater, name: "OP_GREATER", operand_count: 0, operand_width: 0, stack_in: 2, stack_out: 1, is_jump: false, may_allocate: false, gc_safe: false },
-    InstructionDescriptor { opcode: OpCode::OpGetLocal, name: "OP_GET_LOCAL", operand_count: 1, operand_width: 2, stack_in: 0, stack_out: 1, is_jump: false, may_allocate: false, gc_safe: false },
-    InstructionDescriptor { opcode: OpCode::OpSetLocal, name: "OP_SET_LOCAL", operand_count: 1, operand_width: 2, stack_in: 1, stack_out: 1, is_jump: false, may_allocate: false, gc_safe: false },
-    InstructionDescriptor { opcode: OpCode::OpGetGlobal, name: "OP_GET_GLOBAL", operand_count: 1, operand_width: 2, stack_in: 0, stack_out: 1, is_jump: false, may_allocate: false, gc_safe: false },
-    InstructionDescriptor { opcode: OpCode::OpDefineGlobal, name: "OP_DEF_GLOBAL", operand_count: 1, operand_width: 2, stack_in: 1, stack_out: 0, is_jump: false, may_allocate: true, gc_safe: true },
-    InstructionDescriptor { opcode: OpCode::OpSetGlobal, name: "OP_SET_GLOBAL", operand_count: 1, operand_width: 2, stack_in: 1, stack_out: 1, is_jump: false, may_allocate: false, gc_safe: false },
-    InstructionDescriptor { opcode: OpCode::OpJump, name: "OP_JUMP", operand_count: 1, operand_width: 2, stack_in: 0, stack_out: 0, is_jump: true, may_allocate: false, gc_safe: false },
-    InstructionDescriptor { opcode: OpCode::OpJumpIfFalse, name: "OP_JUMP_FALSE", operand_count: 1, operand_width: 2, stack_in: 1, stack_out: 0, is_jump: true, may_allocate: false, gc_safe: false },
-    InstructionDescriptor { opcode: OpCode::OpLoop, name: "OP_LOOP", operand_count: 1, operand_width: 2, stack_in: 0, stack_out: 0, is_jump: true, may_allocate: false, gc_safe: true },
-    InstructionDescriptor { opcode: OpCode::OpCall, name: "OP_CALL", operand_count: 1, operand_width: 2, stack_in: 1, stack_out: 1, is_jump: false, may_allocate: true, gc_safe: true },
-    InstructionDescriptor { opcode: OpCode::OpReturn, name: "OP_RETURN", operand_count: 0, operand_width: 0, stack_in: 1, stack_out: 0, is_jump: false, may_allocate: false, gc_safe: false },
-    InstructionDescriptor { opcode: OpCode::OpPop, name: "OP_POP", operand_count: 0, operand_width: 0, stack_in: 1, stack_out: 0, is_jump: false, may_allocate: false, gc_safe: false },
-    InstructionDescriptor { opcode: OpCode::OpList, name: "OP_LIST", operand_count: 1, operand_width: 2, stack_in: 1, stack_out: 1, is_jump: false, may_allocate: true, gc_safe: true },
-    InstructionDescriptor { opcode: OpCode::OpMap, name: "OP_MAP", operand_count: 1, operand_width: 2, stack_in: 2, stack_out: 1, is_jump: false, may_allocate: true, gc_safe: true },
-    InstructionDescriptor { opcode: OpCode::OpIndex, name: "OP_INDEX", operand_count: 0, operand_width: 0, stack_in: 2, stack_out: 1, is_jump: false, may_allocate: false, gc_safe: false },
-    InstructionDescriptor { opcode: OpCode::OpIndexAssign, name: "OP_INDEX_ASSIGN", operand_count: 0, operand_width: 0, stack_in: 3, stack_out: 1, is_jump: false, may_allocate: false, gc_safe: false },
-    InstructionDescriptor { opcode: OpCode::OpPrint, name: "OP_PRINT", operand_count: 0, operand_width: 0, stack_in: 1, stack_out: 1, is_jump: false, may_allocate: false, gc_safe: true },
-    InstructionDescriptor { opcode: OpCode::OpIn, name: "OP_IN", operand_count: 0, operand_width: 0, stack_in: 2, stack_out: 1, is_jump: false, may_allocate: false, gc_safe: false },
-    InstructionDescriptor { opcode: OpCode::OpGetUpvalue, name: "OP_GET_UPVAL", operand_count: 1, operand_width: 2, stack_in: 0, stack_out: 1, is_jump: false, may_allocate: false, gc_safe: false },
-    InstructionDescriptor { opcode: OpCode::OpSetUpvalue, name: "OP_SET_UPVAL", operand_count: 1, operand_width: 2, stack_in: 1, stack_out: 1, is_jump: false, may_allocate: false, gc_safe: false },
-    InstructionDescriptor { opcode: OpCode::OpClosure, name: "OP_CLOSURE", operand_count: 1, operand_width: 2, stack_in: 0, stack_out: 1, is_jump: false, may_allocate: true, gc_safe: true },
-    InstructionDescriptor { opcode: OpCode::OpDup, name: "OP_DUP", operand_count: 0, operand_width: 0, stack_in: 1, stack_out: 2, is_jump: false, may_allocate: false, gc_safe: false },
+    InstructionDescriptor {
+        opcode: OpCode::OpConstant,
+        name: "<reserved>",
+        operand_count: 0,
+        operand_width: 0,
+        stack_in: 0,
+        stack_out: 0,
+        is_jump: false,
+        may_allocate: false,
+        gc_safe: false,
+    }, // 0x00 placeholder
+    InstructionDescriptor {
+        opcode: OpCode::OpConstant,
+        name: "OP_CONSTANT",
+        operand_count: 1,
+        operand_width: 2,
+        stack_in: 0,
+        stack_out: 1,
+        is_jump: false,
+        may_allocate: true,
+        gc_safe: false,
+    },
+    InstructionDescriptor {
+        opcode: OpCode::OpAdd,
+        name: "OP_ADD",
+        operand_count: 0,
+        operand_width: 0,
+        stack_in: 2,
+        stack_out: 1,
+        is_jump: false,
+        may_allocate: false,
+        gc_safe: true,
+    },
+    InstructionDescriptor {
+        opcode: OpCode::OpSub,
+        name: "OP_SUB",
+        operand_count: 0,
+        operand_width: 0,
+        stack_in: 2,
+        stack_out: 1,
+        is_jump: false,
+        may_allocate: false,
+        gc_safe: false,
+    },
+    InstructionDescriptor {
+        opcode: OpCode::OpMul,
+        name: "OP_MUL",
+        operand_count: 0,
+        operand_width: 0,
+        stack_in: 2,
+        stack_out: 1,
+        is_jump: false,
+        may_allocate: false,
+        gc_safe: false,
+    },
+    InstructionDescriptor {
+        opcode: OpCode::OpDiv,
+        name: "OP_DIV",
+        operand_count: 0,
+        operand_width: 0,
+        stack_in: 2,
+        stack_out: 1,
+        is_jump: false,
+        may_allocate: false,
+        gc_safe: false,
+    },
+    InstructionDescriptor {
+        opcode: OpCode::OpMod,
+        name: "OP_MOD",
+        operand_count: 0,
+        operand_width: 0,
+        stack_in: 2,
+        stack_out: 1,
+        is_jump: false,
+        may_allocate: false,
+        gc_safe: false,
+    },
+    InstructionDescriptor {
+        opcode: OpCode::OpNeg,
+        name: "OP_NEG",
+        operand_count: 0,
+        operand_width: 0,
+        stack_in: 1,
+        stack_out: 1,
+        is_jump: false,
+        may_allocate: false,
+        gc_safe: false,
+    },
+    InstructionDescriptor {
+        opcode: OpCode::OpNot,
+        name: "OP_NOT",
+        operand_count: 0,
+        operand_width: 0,
+        stack_in: 1,
+        stack_out: 1,
+        is_jump: false,
+        may_allocate: false,
+        gc_safe: false,
+    },
+    InstructionDescriptor {
+        opcode: OpCode::OpEqual,
+        name: "OP_EQUAL",
+        operand_count: 0,
+        operand_width: 0,
+        stack_in: 2,
+        stack_out: 1,
+        is_jump: false,
+        may_allocate: false,
+        gc_safe: false,
+    },
+    InstructionDescriptor {
+        opcode: OpCode::OpLess,
+        name: "OP_LESS",
+        operand_count: 0,
+        operand_width: 0,
+        stack_in: 2,
+        stack_out: 1,
+        is_jump: false,
+        may_allocate: false,
+        gc_safe: false,
+    },
+    InstructionDescriptor {
+        opcode: OpCode::OpGreater,
+        name: "OP_GREATER",
+        operand_count: 0,
+        operand_width: 0,
+        stack_in: 2,
+        stack_out: 1,
+        is_jump: false,
+        may_allocate: false,
+        gc_safe: false,
+    },
+    InstructionDescriptor {
+        opcode: OpCode::OpGetLocal,
+        name: "OP_GET_LOCAL",
+        operand_count: 1,
+        operand_width: 2,
+        stack_in: 0,
+        stack_out: 1,
+        is_jump: false,
+        may_allocate: false,
+        gc_safe: false,
+    },
+    InstructionDescriptor {
+        opcode: OpCode::OpSetLocal,
+        name: "OP_SET_LOCAL",
+        operand_count: 1,
+        operand_width: 2,
+        stack_in: 1,
+        stack_out: 1,
+        is_jump: false,
+        may_allocate: false,
+        gc_safe: false,
+    },
+    InstructionDescriptor {
+        opcode: OpCode::OpGetGlobal,
+        name: "OP_GET_GLOBAL",
+        operand_count: 1,
+        operand_width: 2,
+        stack_in: 0,
+        stack_out: 1,
+        is_jump: false,
+        may_allocate: false,
+        gc_safe: false,
+    },
+    InstructionDescriptor {
+        opcode: OpCode::OpDefineGlobal,
+        name: "OP_DEF_GLOBAL",
+        operand_count: 1,
+        operand_width: 2,
+        stack_in: 1,
+        stack_out: 0,
+        is_jump: false,
+        may_allocate: true,
+        gc_safe: true,
+    },
+    InstructionDescriptor {
+        opcode: OpCode::OpSetGlobal,
+        name: "OP_SET_GLOBAL",
+        operand_count: 1,
+        operand_width: 2,
+        stack_in: 1,
+        stack_out: 1,
+        is_jump: false,
+        may_allocate: false,
+        gc_safe: false,
+    },
+    InstructionDescriptor {
+        opcode: OpCode::OpJump,
+        name: "OP_JUMP",
+        operand_count: 1,
+        operand_width: 2,
+        stack_in: 0,
+        stack_out: 0,
+        is_jump: true,
+        may_allocate: false,
+        gc_safe: false,
+    },
+    InstructionDescriptor {
+        opcode: OpCode::OpJumpIfFalse,
+        name: "OP_JUMP_FALSE",
+        operand_count: 1,
+        operand_width: 2,
+        stack_in: 1,
+        stack_out: 0,
+        is_jump: true,
+        may_allocate: false,
+        gc_safe: false,
+    },
+    InstructionDescriptor {
+        opcode: OpCode::OpLoop,
+        name: "OP_LOOP",
+        operand_count: 1,
+        operand_width: 2,
+        stack_in: 0,
+        stack_out: 0,
+        is_jump: true,
+        may_allocate: false,
+        gc_safe: true,
+    },
+    InstructionDescriptor {
+        opcode: OpCode::OpCall,
+        name: "OP_CALL",
+        operand_count: 1,
+        operand_width: 2,
+        stack_in: 1,
+        stack_out: 1,
+        is_jump: false,
+        may_allocate: true,
+        gc_safe: true,
+    },
+    InstructionDescriptor {
+        opcode: OpCode::OpReturn,
+        name: "OP_RETURN",
+        operand_count: 0,
+        operand_width: 0,
+        stack_in: 1,
+        stack_out: 0,
+        is_jump: false,
+        may_allocate: false,
+        gc_safe: false,
+    },
+    InstructionDescriptor {
+        opcode: OpCode::OpPop,
+        name: "OP_POP",
+        operand_count: 0,
+        operand_width: 0,
+        stack_in: 1,
+        stack_out: 0,
+        is_jump: false,
+        may_allocate: false,
+        gc_safe: false,
+    },
+    InstructionDescriptor {
+        opcode: OpCode::OpList,
+        name: "OP_LIST",
+        operand_count: 1,
+        operand_width: 2,
+        stack_in: 1,
+        stack_out: 1,
+        is_jump: false,
+        may_allocate: true,
+        gc_safe: true,
+    },
+    InstructionDescriptor {
+        opcode: OpCode::OpMap,
+        name: "OP_MAP",
+        operand_count: 1,
+        operand_width: 2,
+        stack_in: 2,
+        stack_out: 1,
+        is_jump: false,
+        may_allocate: true,
+        gc_safe: true,
+    },
+    InstructionDescriptor {
+        opcode: OpCode::OpIndex,
+        name: "OP_INDEX",
+        operand_count: 0,
+        operand_width: 0,
+        stack_in: 2,
+        stack_out: 1,
+        is_jump: false,
+        may_allocate: false,
+        gc_safe: false,
+    },
+    InstructionDescriptor {
+        opcode: OpCode::OpIndexAssign,
+        name: "OP_INDEX_ASSIGN",
+        operand_count: 0,
+        operand_width: 0,
+        stack_in: 3,
+        stack_out: 1,
+        is_jump: false,
+        may_allocate: false,
+        gc_safe: false,
+    },
+    InstructionDescriptor {
+        opcode: OpCode::OpPrint,
+        name: "OP_PRINT",
+        operand_count: 0,
+        operand_width: 0,
+        stack_in: 1,
+        stack_out: 1,
+        is_jump: false,
+        may_allocate: false,
+        gc_safe: true,
+    },
+    InstructionDescriptor {
+        opcode: OpCode::OpIn,
+        name: "OP_IN",
+        operand_count: 0,
+        operand_width: 0,
+        stack_in: 2,
+        stack_out: 1,
+        is_jump: false,
+        may_allocate: false,
+        gc_safe: false,
+    },
+    InstructionDescriptor {
+        opcode: OpCode::OpGetUpvalue,
+        name: "OP_GET_UPVAL",
+        operand_count: 1,
+        operand_width: 2,
+        stack_in: 0,
+        stack_out: 1,
+        is_jump: false,
+        may_allocate: false,
+        gc_safe: false,
+    },
+    InstructionDescriptor {
+        opcode: OpCode::OpSetUpvalue,
+        name: "OP_SET_UPVAL",
+        operand_count: 1,
+        operand_width: 2,
+        stack_in: 1,
+        stack_out: 1,
+        is_jump: false,
+        may_allocate: false,
+        gc_safe: false,
+    },
+    InstructionDescriptor {
+        opcode: OpCode::OpClosure,
+        name: "OP_CLOSURE",
+        operand_count: 1,
+        operand_width: 2,
+        stack_in: 0,
+        stack_out: 1,
+        is_jump: false,
+        may_allocate: true,
+        gc_safe: true,
+    },
+    InstructionDescriptor {
+        opcode: OpCode::OpDup,
+        name: "OP_DUP",
+        operand_count: 0,
+        operand_width: 0,
+        stack_in: 1,
+        stack_out: 2,
+        is_jump: false,
+        may_allocate: false,
+        gc_safe: false,
+    },
 ];
 
 /// Centralized Instruction Descriptor metadata table for Disassembler, Verifier, Debugger, & Optimizer.
@@ -155,7 +485,11 @@ impl PartialEq for Constant {
             (Constant::Int(a), Constant::Int(b)) => a == b,
             (Constant::Float(a), Constant::Float(b)) => {
                 // Canonicalize NaN: all NaN bit patterns compare equal.
-                if a.is_nan() && b.is_nan() { true } else { a == b }
+                if a.is_nan() && b.is_nan() {
+                    true
+                } else {
+                    a == b
+                }
             }
             (Constant::Bool(a), Constant::Bool(b)) => a == b,
             (Constant::Str(a), Constant::Str(b)) => a == b,
@@ -203,18 +537,38 @@ pub struct Chunk {
     lines: Vec<u32>,
 }
 
+impl Default for Chunk {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Chunk {
     pub fn new() -> Self {
-        Self { code: Vec::new(), constants: Vec::new(), lines: Vec::new() }
+        Self {
+            code: Vec::new(),
+            constants: Vec::new(),
+            lines: Vec::new(),
+        }
     }
 
     pub(crate) fn from_parts(code: Vec<u8>, constants: Vec<Constant>, lines: Vec<u32>) -> Self {
-        Self { code, constants, lines }
+        Self {
+            code,
+            constants,
+            lines,
+        }
     }
 
-    pub fn code(&self) -> &[u8] { &self.code }
-    pub fn constants(&self) -> &[Constant] { &self.constants }
-    pub fn lines(&self) -> &[u32] { &self.lines }
+    pub fn code(&self) -> &[u8] {
+        &self.code
+    }
+    pub fn constants(&self) -> &[Constant] {
+        &self.constants
+    }
+    pub fn lines(&self) -> &[u32] {
+        &self.lines
+    }
 
     pub fn disassemble(&self, name: &str) {
         let mut buf = String::new();
@@ -255,7 +609,14 @@ impl Chunk {
                 writeln!(out, "{op_name:<16} {idx:4} '{val}'").unwrap();
                 offset + 3
             }
-            OpCode::OpGetLocal | OpCode::OpSetLocal | OpCode::OpDefineGlobal | OpCode::OpGetGlobal | OpCode::OpSetGlobal | OpCode::OpCall | OpCode::OpList | OpCode::OpMap => {
+            OpCode::OpGetLocal
+            | OpCode::OpSetLocal
+            | OpCode::OpDefineGlobal
+            | OpCode::OpGetGlobal
+            | OpCode::OpSetGlobal
+            | OpCode::OpCall
+            | OpCode::OpList
+            | OpCode::OpMap => {
                 let idx = self.read_u16_at(offset + 1);
                 writeln!(out, "{op_name:<16} {idx:4}").unwrap();
                 offset + 3
@@ -297,7 +658,14 @@ impl Chunk {
                 println!("{op_name:<16} {idx:4} '{val}'");
                 offset + 3
             }
-            OpCode::OpGetLocal | OpCode::OpSetLocal | OpCode::OpDefineGlobal | OpCode::OpGetGlobal | OpCode::OpSetGlobal | OpCode::OpCall | OpCode::OpList | OpCode::OpMap => {
+            OpCode::OpGetLocal
+            | OpCode::OpSetLocal
+            | OpCode::OpDefineGlobal
+            | OpCode::OpGetGlobal
+            | OpCode::OpSetGlobal
+            | OpCode::OpCall
+            | OpCode::OpList
+            | OpCode::OpMap => {
                 let idx = self.read_u16_at(offset + 1);
                 println!("{op_name:<16} {idx:4}");
                 offset + 3
@@ -329,6 +697,12 @@ pub struct ChunkBuilder {
     constants: Vec<Constant>,
     lines: Vec<u32>,
     string_table: HashMap<String, usize>,
+}
+
+impl Default for ChunkBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl ChunkBuilder {
@@ -402,7 +776,9 @@ impl ChunkBuilder {
         self.write_u8(bytes[3], line);
     }
 
-    pub fn code_len(&self) -> usize { self.code.len() }
+    pub fn code_len(&self) -> usize {
+        self.code.len()
+    }
 
     pub fn patch_u16(&mut self, offset: usize, val: u16) {
         let bytes = val.to_be_bytes();
@@ -410,7 +786,9 @@ impl ChunkBuilder {
         self.code[offset + 1] = bytes[1];
     }
 
-    pub(crate) fn code_mut(&mut self) -> &mut Vec<u8> { &mut self.code }
+    pub(crate) fn code_mut(&mut self) -> &mut Vec<u8> {
+        &mut self.code
+    }
     pub(crate) fn parts_mut(&mut self) -> (&mut Vec<u8>, &mut Vec<Constant>) {
         (&mut self.code, &mut self.constants)
     }

@@ -20,7 +20,9 @@ impl ValueStack {
 
     #[inline(always)]
     pub fn pop(&mut self) -> Result<Value> {
-        self.stack.pop().ok_or_else(|| LatchError::GenericError("Stack underflow".into()))
+        self.stack
+            .pop()
+            .ok_or_else(|| LatchError::GenericError("Stack underflow".into()))
     }
 
     #[inline(always)]

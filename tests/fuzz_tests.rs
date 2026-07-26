@@ -21,7 +21,10 @@ fn test_bytecode_verifier_rejects_invalid_opcodes() {
     };
 
     let verify_res = BytecodeVerifier::verify(&func);
-    assert!(verify_res.is_err(), "Verifier should reject invalid opcode 0xFF");
+    assert!(
+        verify_res.is_err(),
+        "Verifier should reject invalid opcode 0xFF"
+    );
 }
 
 #[test]
@@ -54,11 +57,17 @@ fn test_bytecode_fuzzer_resilience() {
         };
 
         let verify_res = BytecodeVerifier::verify(&func);
-        assert!(verify_res.is_ok(), "Generated fuzzing bytecode failed verifier!");
+        assert!(
+            verify_res.is_ok(),
+            "Generated fuzzing bytecode failed verifier!"
+        );
 
         let mut vm = VM::new(ObjRef::new(func)).expect("VM construction error");
         let run_res = vm.run();
-        assert!(run_res.is_ok(), "VM crashed executing verified fuzzing bytecode!");
+        assert!(
+            run_res.is_ok(),
+            "VM crashed executing verified fuzzing bytecode!"
+        );
         assert_eq!(run_res.unwrap().as_int().unwrap(), seed as i64);
     }
 }

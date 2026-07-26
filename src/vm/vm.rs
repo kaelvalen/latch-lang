@@ -1,8 +1,6 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-use crate::env::{ObjClosure, ObjFunction, ObjFunctionBuilder, ObjRef, Value};
-use crate::error::{LatchError, Result};
 use super::chunk::{Chunk, OpCode};
 use super::decoder::InstructionCursor;
 use super::frame::CallFrame;
@@ -12,6 +10,8 @@ pub use super::ic::InlineCache;
 use super::profiler::VmProfiler;
 use super::stack::ValueStack;
 use super::verifier::BytecodeVerifier;
+use crate::env::{ObjClosure, ObjFunction, ObjFunctionBuilder, ObjRef, Value};
+use crate::error::{LatchError, Result};
 
 /// A type-state wrapper proving a program has passed BytecodeVerifier.
 /// VM only accepts VerifiedProgram — never raw ObjFunction.
@@ -37,14 +37,20 @@ impl VmBuilder {
     /// Verification failure is a hard error — not a warning. (Finding #026)
     pub fn verify(self) -> Result<VerifiedProgram> {
         BytecodeVerifier::verify(&self.script_fn)?;
-        Ok(VerifiedProgram { script_fn: self.script_fn })
+        Ok(VerifiedProgram {
+            script_fn: self.script_fn,
+        })
     }
 
     /// Instantiate VM directly from a chunk without a verifier pass.
     /// Only use in tests where the chunk is trivially known-valid.
     #[cfg(test)]
     pub fn from_chunk(chunk: Chunk) -> Result<VM> {
-        let script_fn = ObjRef::new(ObjFunctionBuilder::new("<script>", 0).with_chunk(chunk).build());
+        let script_fn = ObjRef::new(
+            ObjFunctionBuilder::new("<script>", 0)
+                .with_chunk(chunk)
+                .build(),
+        );
         VmBuilder::new(script_fn).verify()?.instantiate()
     }
 
@@ -52,7 +58,9 @@ impl VmBuilder {
     /// been verified externally. Never call from production paths.
     pub fn instantiate_unchecked(self) -> VM {
         let gc = GcState::new();
-        let closure = gc.allocate_closure(self.script_fn.clone(), Vec::new()).into_arc();
+        let closure = gc
+            .allocate_closure(self.script_fn.clone(), Vec::new())
+            .into_arc();
         let frame = CallFrame::new(crate::env::ObjRef(closure), 0, 0);
         VM {
             frames: vec![frame],
@@ -70,7 +78,9 @@ impl VerifiedProgram {
     /// This is the only public VM construction path in production code.
     pub fn instantiate(self) -> Result<VM> {
         let gc = GcState::new();
-        let closure = gc.allocate_closure(self.script_fn.clone(), Vec::new()).into_arc();
+        let closure = gc
+            .allocate_closure(self.script_fn.clone(), Vec::new())
+            .into_arc();
         let frame = CallFrame::new(crate::env::ObjRef(closure), 0, 0);
         Ok(VM {
             frames: vec![frame],
@@ -98,10 +108,18 @@ pub struct VM {
 impl VM {
     // ── Controlled Accessors (Finding #030) ─────────────────────────────
 
-    pub fn stack(&self) -> &ValueStack { &self.stack }
-    pub fn gc(&self) -> &GcState { &self.gc }
-    pub fn profiler(&self) -> &VmProfiler { &self.profiler }
-    pub fn inline_caches(&self) -> &HashMap<usize, InlineCache> { &self.inline_caches }
+    pub fn stack(&self) -> &ValueStack {
+        &self.stack
+    }
+    pub fn gc(&self) -> &GcState {
+        &self.gc
+    }
+    pub fn profiler(&self) -> &VmProfiler {
+        &self.profiler
+    }
+    pub fn inline_caches(&self) -> &HashMap<usize, InlineCache> {
+        &self.inline_caches
+    }
 
     // ── Legacy compatibility entry point (deprecated — prefer VmBuilder) ─
 
@@ -114,7 +132,11 @@ impl VM {
 
     /// Build and run from a Chunk directly; primarily used in integration tests.
     pub fn new_with_chunk(chunk: Chunk) -> Result<Self> {
-        let script_fn = ObjRef::new(ObjFunctionBuilder::new("<script>", 0).with_chunk(chunk).build());
+        let script_fn = ObjRef::new(
+            ObjFunctionBuilder::new("<script>", 0)
+                .with_chunk(chunk)
+                .build(),
+        );
         VmBuilder::new(script_fn).verify()?.instantiate()
     }
 
@@ -128,11 +150,21 @@ impl VM {
         Ok(())
     }
 
-    pub fn alloc_function(&self, arity: usize, chunk: Chunk, name: String) -> crate::env::ObjRef<ObjFunction> {
-        self.gc.allocate_function(ObjFunctionBuilder::new(name, arity).with_chunk(chunk))
+    pub fn alloc_function(
+        &self,
+        arity: usize,
+        chunk: Chunk,
+        name: String,
+    ) -> crate::env::ObjRef<ObjFunction> {
+        self.gc
+            .allocate_function(ObjFunctionBuilder::new(name, arity).with_chunk(chunk))
     }
 
-    pub fn alloc_closure(&self, function: crate::env::ObjRef<ObjFunction>, upvalues: Vec<Arc<Mutex<Value>>>) -> crate::env::ObjRef<ObjClosure> {
+    pub fn alloc_closure(
+        &self,
+        function: crate::env::ObjRef<ObjFunction>,
+        upvalues: Vec<Arc<Mutex<Value>>>,
+    ) -> crate::env::ObjRef<ObjClosure> {
         self.gc.allocate_closure(function, upvalues)
     }
 
@@ -165,7 +197,8 @@ impl VM {
             // Decode next instruction via InstructionCursor
             let (op, operand, next_ip) = {
                 let frame = &self.frames[frame_idx];
-                let mut cursor = InstructionCursor::new(frame.closure.function().chunk.code(), frame.ip);
+                let mut cursor =
+                    InstructionCursor::new(frame.closure.function().chunk.code(), frame.ip);
                 let instr = cursor.decode_next()?;
                 (instr.opcode, instr.operand, cursor.ip)
             };
@@ -176,7 +209,9 @@ impl VM {
             match op {
                 OpCode::OpConstant => {
                     let idx = operand.unwrap_or(0);
-                    let val = self.current_frame().closure.function().chunk.constants()[idx as usize].to_value();
+                    let val = self.current_frame().closure.function().chunk.constants()
+                        [idx as usize]
+                        .to_value();
                     self.push(val);
                 }
 
@@ -215,7 +250,12 @@ impl VM {
                     match val {
                         Value::Int(n) => self.push(Value::Int(-n)),
                         Value::Float(f) => self.push(Value::Float(-f)),
-                        _ => return Err(LatchError::TypeMismatch { expected: "number".into(), found: format!("{val:?}") }),
+                        _ => {
+                            return Err(LatchError::TypeMismatch {
+                                expected: "number".into(),
+                                found: format!("{val:?}"),
+                            })
+                        }
                     }
                 }
 
@@ -269,9 +309,18 @@ impl VM {
                     let global_id = operand.unwrap_or(0) as usize;
                     let val = self.pop()?;
                     if global_id >= self.globals.len() {
-                        self.globals.resize(global_id + 1, Global { value: Value::Null, flags: GlobalFlags::new() });
+                        self.globals.resize(
+                            global_id + 1,
+                            Global {
+                                value: Value::Null,
+                                flags: GlobalFlags::new(),
+                            },
+                        );
                     }
-                    self.globals[global_id] = Global { value: val, flags: GlobalFlags::new() };
+                    self.globals[global_id] = Global {
+                        value: val,
+                        flags: GlobalFlags::new(),
+                    };
                 }
 
                 OpCode::OpSetGlobal => {
@@ -294,7 +343,9 @@ impl VM {
                             .clone();
                         self.push(val);
                     } else {
-                        return Err(LatchError::GenericError(format!("Invalid upvalue index {slot_idx}")));
+                        return Err(LatchError::GenericError(format!(
+                            "Invalid upvalue index {slot_idx}"
+                        )));
                     }
                 }
 
@@ -303,17 +354,21 @@ impl VM {
                     let val = self.peek(0)?.clone();
                     let closure = self.current_frame().closure.clone();
                     if slot_idx < closure.upvalues().len() {
-                        *closure.upvalues()[slot_idx]
-                            .lock()
-                            .map_err(|_| LatchError::GenericError("Upvalue lock poisoned".into()))? = val;
+                        *closure.upvalues()[slot_idx].lock().map_err(|_| {
+                            LatchError::GenericError("Upvalue lock poisoned".into())
+                        })? = val;
                     } else {
-                        return Err(LatchError::GenericError(format!("Invalid upvalue index {slot_idx}")));
+                        return Err(LatchError::GenericError(format!(
+                            "Invalid upvalue index {slot_idx}"
+                        )));
                     }
                 }
 
                 OpCode::OpClosure => {
                     let func_idx = operand.unwrap_or(0) as usize;
-                    let func_val = self.current_frame().closure.function().chunk.constants()[func_idx].to_value();
+                    let func_val = self.current_frame().closure.function().chunk.constants()
+                        [func_idx]
+                        .to_value();
                     if let Value::Function(func) = func_val {
                         let frame_offset = self.current_frame().slots;
                         let frame_len = self.stack.len().saturating_sub(frame_offset);
@@ -322,7 +377,10 @@ impl VM {
                             let val = self.stack.get(frame_offset + i).clone();
                             upvalues.push(std::sync::Arc::new(std::sync::Mutex::new(val)));
                         }
-                        let closure = self.gc.allocate_closure(crate::env::ObjRef(func), upvalues).into_arc();
+                        let closure = self
+                            .gc
+                            .allocate_closure(crate::env::ObjRef(func), upvalues)
+                            .into_arc();
                         self.push(Value::Closure(closure));
                     }
                 }
@@ -357,24 +415,32 @@ impl VM {
                         Value::Closure(closure) => {
                             if arg_count != closure.function().arity {
                                 return Err(LatchError::GenericError(format!(
-                                    "Expected {} arguments but got {}.", closure.function().arity, arg_count
+                                    "Expected {} arguments but got {}.",
+                                    closure.function().arity,
+                                    arg_count
                                 )));
                             }
                             let arg_base = self.stack.len() - arg_count;
                             let return_slot = arg_base - 1;
-                            let frame = CallFrame::new(crate::env::ObjRef(closure), arg_base, return_slot);
+                            let frame =
+                                CallFrame::new(crate::env::ObjRef(closure), arg_base, return_slot);
                             self.frames.push(frame);
                         }
                         Value::Function(func) => {
                             if arg_count != func.arity {
                                 return Err(LatchError::GenericError(format!(
-                                    "Expected {} arguments but got {}.", func.arity, arg_count
+                                    "Expected {} arguments but got {}.",
+                                    func.arity, arg_count
                                 )));
                             }
-                            let closure = self.gc.allocate_closure(crate::env::ObjRef(func), Vec::new()).into_arc();
+                            let closure = self
+                                .gc
+                                .allocate_closure(crate::env::ObjRef(func), Vec::new())
+                                .into_arc();
                             let arg_base = self.stack.len() - arg_count;
                             let return_slot = arg_base - 1;
-                            let frame = CallFrame::new(crate::env::ObjRef(closure), arg_base, return_slot);
+                            let frame =
+                                CallFrame::new(crate::env::ObjRef(closure), arg_base, return_slot);
                             self.frames.push(frame);
                         }
                         Value::Native(native) => {
@@ -387,7 +453,11 @@ impl VM {
                             let result = (native.function)(&args)?;
                             self.push(result);
                         }
-                        _ => return Err(LatchError::GenericError(format!("Not callable: {callee:?}"))),
+                        _ => {
+                            return Err(LatchError::GenericError(format!(
+                                "Not callable: {callee:?}"
+                            )))
+                        }
                     }
                 }
 
@@ -434,8 +504,9 @@ impl VM {
                     let container = self.pop()?;
                     match (&container, &index) {
                         (Value::List(l), Value::Int(i)) => {
-                            let list = l.lock()
-                                .map_err(|_| LatchError::GenericError("List lock poisoned".into()))?;
+                            let list = l.lock().map_err(|_| {
+                                LatchError::GenericError("List lock poisoned".into())
+                            })?;
                             let idx = if *i < 0 { list.len() as i64 + i } else { *i } as usize;
                             if idx < list.len() {
                                 self.push(list[idx].clone());
@@ -444,8 +515,9 @@ impl VM {
                             }
                         }
                         (Value::Map(m), Value::Str(k)) => {
-                            let map = m.lock()
-                                .map_err(|_| LatchError::GenericError("Map lock poisoned".into()))?;
+                            let map = m.lock().map_err(|_| {
+                                LatchError::GenericError("Map lock poisoned".into())
+                            })?;
                             if let Some(val) = map.get(k) {
                                 self.push(val.clone());
                             } else {
@@ -462,16 +534,18 @@ impl VM {
                     let container = self.pop()?;
                     match (&container, &index) {
                         (Value::List(l), Value::Int(i)) => {
-                            let mut list = l.lock()
-                                .map_err(|_| LatchError::GenericError("List lock poisoned".into()))?;
+                            let mut list = l.lock().map_err(|_| {
+                                LatchError::GenericError("List lock poisoned".into())
+                            })?;
                             let idx = if *i < 0 { list.len() as i64 + i } else { *i } as usize;
                             if idx < list.len() {
                                 list[idx] = val.clone();
                             }
                         }
                         (Value::Map(m), Value::Str(k)) => {
-                            let mut map = m.lock()
-                                .map_err(|_| LatchError::GenericError("Map lock poisoned".into()))?;
+                            let mut map = m.lock().map_err(|_| {
+                                LatchError::GenericError("Map lock poisoned".into())
+                            })?;
                             map.insert(k.clone(), val.clone());
                         }
                         _ => {}
@@ -490,13 +564,15 @@ impl VM {
                     let item = self.pop()?;
                     match (&container, &item) {
                         (Value::List(l), _) => {
-                            let list = l.lock()
-                                .map_err(|_| LatchError::GenericError("List lock poisoned".into()))?;
+                            let list = l.lock().map_err(|_| {
+                                LatchError::GenericError("List lock poisoned".into())
+                            })?;
                             self.push(Value::Bool(list.contains(&item)));
                         }
                         (Value::Map(m), Value::Str(k)) => {
-                            let map = m.lock()
-                                .map_err(|_| LatchError::GenericError("Map lock poisoned".into()))?;
+                            let map = m.lock().map_err(|_| {
+                                LatchError::GenericError("Map lock poisoned".into())
+                            })?;
                             self.push(Value::Bool(map.contains_key(k)));
                         }
                         _ => self.push(Value::Bool(false)),
@@ -513,12 +589,16 @@ impl VM {
     #[inline(always)]
     fn current_frame(&self) -> &CallFrame {
         // Internal invariant: run() always checks frames.is_empty() before calling this.
-        self.frames.last().expect("VM invariant violated: no active frame")
+        self.frames
+            .last()
+            .expect("VM invariant violated: no active frame")
     }
 
     #[inline(always)]
     fn current_frame_mut(&mut self) -> &mut CallFrame {
-        self.frames.last_mut().expect("VM invariant violated: no active frame")
+        self.frames
+            .last_mut()
+            .expect("VM invariant violated: no active frame")
     }
 
     #[inline(always)]
@@ -543,7 +623,10 @@ impl VM {
             (Value::Int(x), Value::Float(y)) => Ok(Value::Float(x as f64 + y)),
             (Value::Float(x), Value::Int(y)) => Ok(Value::Float(x + y as f64)),
             (Value::Str(x), Value::Str(y)) => Ok(Value::Str(format!("{x}{y}"))),
-            _ => Err(LatchError::TypeMismatch { expected: "addable".into(), found: "types".into() }),
+            _ => Err(LatchError::TypeMismatch {
+                expected: "addable".into(),
+                found: "types".into(),
+            }),
         }
     }
 
@@ -553,7 +636,10 @@ impl VM {
             (Value::Float(x), Value::Float(y)) => Ok(Value::Float(x - y)),
             (Value::Int(x), Value::Float(y)) => Ok(Value::Float(x as f64 - y)),
             (Value::Float(x), Value::Int(y)) => Ok(Value::Float(x - y as f64)),
-            _ => Err(LatchError::TypeMismatch { expected: "numbers".into(), found: "types".into() }),
+            _ => Err(LatchError::TypeMismatch {
+                expected: "numbers".into(),
+                found: "types".into(),
+            }),
         }
     }
 
@@ -563,31 +649,46 @@ impl VM {
             (Value::Float(x), Value::Float(y)) => Ok(Value::Float(x * y)),
             (Value::Int(x), Value::Float(y)) => Ok(Value::Float(x as f64 * y)),
             (Value::Float(x), Value::Int(y)) => Ok(Value::Float(x * y as f64)),
-            _ => Err(LatchError::TypeMismatch { expected: "numbers".into(), found: "types".into() }),
+            _ => Err(LatchError::TypeMismatch {
+                expected: "numbers".into(),
+                found: "types".into(),
+            }),
         }
     }
 
     fn div_values(&self, a: Value, b: Value) -> Result<Value> {
         match (a, b) {
             (Value::Int(x), Value::Int(y)) => {
-                if y == 0 { return Err(LatchError::DivisionByZero); }
+                if y == 0 {
+                    return Err(LatchError::DivisionByZero);
+                }
                 Ok(Value::Int(x / y))
             }
             (Value::Float(x), Value::Float(y)) => {
-                if y == 0.0 { return Err(LatchError::DivisionByZero); }
+                if y == 0.0 {
+                    return Err(LatchError::DivisionByZero);
+                }
                 Ok(Value::Float(x / y))
             }
-            _ => Err(LatchError::TypeMismatch { expected: "numbers".into(), found: "types".into() }),
+            _ => Err(LatchError::TypeMismatch {
+                expected: "numbers".into(),
+                found: "types".into(),
+            }),
         }
     }
 
     fn mod_values(&self, a: Value, b: Value) -> Result<Value> {
         match (a, b) {
             (Value::Int(x), Value::Int(y)) => {
-                if y == 0 { return Err(LatchError::DivisionByZero); }
+                if y == 0 {
+                    return Err(LatchError::DivisionByZero);
+                }
                 Ok(Value::Int(x % y))
             }
-            _ => Err(LatchError::TypeMismatch { expected: "integers".into(), found: "types".into() }),
+            _ => Err(LatchError::TypeMismatch {
+                expected: "integers".into(),
+                found: "types".into(),
+            }),
         }
     }
 
@@ -597,7 +698,10 @@ impl VM {
             (Value::Float(x), Value::Float(y)) => Ok(x < y),
             (Value::Int(x), Value::Float(y)) => Ok((x as f64) < y),
             (Value::Float(x), Value::Int(y)) => Ok(x < (y as f64)),
-            _ => Err(LatchError::TypeMismatch { expected: "comparable".into(), found: "types".into() }),
+            _ => Err(LatchError::TypeMismatch {
+                expected: "comparable".into(),
+                found: "types".into(),
+            }),
         }
     }
 
@@ -607,7 +711,10 @@ impl VM {
             (Value::Float(x), Value::Float(y)) => Ok(x > y),
             (Value::Int(x), Value::Float(y)) => Ok((x as f64) > y),
             (Value::Float(x), Value::Int(y)) => Ok(x > (y as f64)),
-            _ => Err(LatchError::TypeMismatch { expected: "comparable".into(), found: "types".into() }),
+            _ => Err(LatchError::TypeMismatch {
+                expected: "comparable".into(),
+                found: "types".into(),
+            }),
         }
     }
 }

@@ -32,5 +32,7 @@ fn test_roundtrip_program(source: &str) {
 #[test]
 fn test_lbc_roundtrip_property() {
     test_roundtrip_program("x := 40; y := 20; return x + y;");
-    test_roundtrip_program("count := 0; i := 0; while i < 5 { count = count + i; i = i + 1; } return count;");
+    test_roundtrip_program(
+        "count := 0; i := 0; while i < 5 { count = count + i; i = i + 1; } return count;",
+    );
 }

@@ -6,7 +6,11 @@ pub fn call(method: &str, args: Vec<Value>) -> Result<Value> {
     match method {
         "match" => {
             if args.len() < 2 {
-                return Err(LatchError::ArgCountMismatch { name: "regex.match".into(), expected: 2, found: args.len() });
+                return Err(LatchError::ArgCountMismatch {
+                    name: "regex.match".into(),
+                    expected: 2,
+                    found: args.len(),
+                });
             }
             let pattern = args[0].as_str()?;
             let text = args[1].as_str()?;
@@ -17,7 +21,11 @@ pub fn call(method: &str, args: Vec<Value>) -> Result<Value> {
 
         "search" => {
             if args.len() < 2 {
-                return Err(LatchError::ArgCountMismatch { name: "regex.search".into(), expected: 2, found: args.len() });
+                return Err(LatchError::ArgCountMismatch {
+                    name: "regex.search".into(),
+                    expected: 2,
+                    found: args.len(),
+                });
             }
             let pattern = args[0].as_str()?;
             let text = args[1].as_str()?;
@@ -36,13 +44,18 @@ pub fn call(method: &str, args: Vec<Value>) -> Result<Value> {
 
         "findall" => {
             if args.len() < 2 {
-                return Err(LatchError::ArgCountMismatch { name: "regex.findall".into(), expected: 2, found: args.len() });
+                return Err(LatchError::ArgCountMismatch {
+                    name: "regex.findall".into(),
+                    expected: 2,
+                    found: args.len(),
+                });
             }
             let pattern = args[0].as_str()?;
             let text = args[1].as_str()?;
             let re = Regex::new(pattern)
                 .map_err(|e| LatchError::GenericError(format!("Invalid regex pattern: {}", e)))?;
-            let matches: Vec<Value> = re.find_iter(text)
+            let matches: Vec<Value> = re
+                .find_iter(text)
                 .map(|m| Value::Str(m.as_str().to_string()))
                 .collect();
             Ok(Value::new_list(matches))
@@ -50,21 +63,27 @@ pub fn call(method: &str, args: Vec<Value>) -> Result<Value> {
 
         "split" => {
             if args.len() < 2 {
-                return Err(LatchError::ArgCountMismatch { name: "regex.split".into(), expected: 2, found: args.len() });
+                return Err(LatchError::ArgCountMismatch {
+                    name: "regex.split".into(),
+                    expected: 2,
+                    found: args.len(),
+                });
             }
             let pattern = args[0].as_str()?;
             let text = args[1].as_str()?;
             let re = Regex::new(pattern)
                 .map_err(|e| LatchError::GenericError(format!("Invalid regex pattern: {}", e)))?;
-            let parts: Vec<Value> = re.split(text)
-                .map(|s| Value::Str(s.to_string()))
-                .collect();
+            let parts: Vec<Value> = re.split(text).map(|s| Value::Str(s.to_string())).collect();
             Ok(Value::new_list(parts))
         }
 
         "replace" => {
             if args.len() < 3 {
-                return Err(LatchError::ArgCountMismatch { name: "regex.replace".into(), expected: 3, found: args.len() });
+                return Err(LatchError::ArgCountMismatch {
+                    name: "regex.replace".into(),
+                    expected: 3,
+                    found: args.len(),
+                });
             }
             let pattern = args[0].as_str()?;
             let replacement = args[1].as_str()?;
@@ -74,6 +93,9 @@ pub fn call(method: &str, args: Vec<Value>) -> Result<Value> {
             Ok(Value::Str(re.replace_all(text, replacement).to_string()))
         }
 
-        _ => Err(LatchError::UnknownMethod { module: "regex".into(), method: method.into() }),
+        _ => Err(LatchError::UnknownMethod {
+            module: "regex".into(),
+            method: method.into(),
+        }),
     }
 }

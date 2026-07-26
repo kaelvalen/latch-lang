@@ -1,3 +1,5 @@
+#![allow(clippy::mem_replace_with_default)]
+
 use std::collections::HashMap;
 
 use crate::ast::*;
@@ -12,14 +14,15 @@ use super::Interpreter;
 impl Interpreter {
     pub fn eval_expr(&mut self, expr: Expr) -> Result<Value> {
         match expr {
-            Expr::Int(n)   => Ok(Value::Int(n)),
+            Expr::Int(n) => Ok(Value::Int(n)),
             Expr::Float(n) => Ok(Value::Float(n)),
-            Expr::Bool(b)  => Ok(Value::Bool(b)),
-            Expr::Str(s)   => Ok(Value::Str(s)),
-            Expr::Null     => Ok(Value::Null),
+            Expr::Bool(b) => Ok(Value::Bool(b)),
+            Expr::Str(s) => Ok(Value::Str(s)),
+            Expr::Null => Ok(Value::Null),
 
             Expr::List(items) => {
-                let vals: Vec<Value> = items.into_iter()
+                let vals: Vec<Value> = items
+                    .into_iter()
                     .map(|e| self.eval_expr(e))
                     .collect::<Result<_>>()?;
                 Ok(Value::new_list(vals))
@@ -35,13 +38,17 @@ impl Interpreter {
 
             Expr::Fn { params, body } => {
                 let captured = self.env.clone();
-                Ok(Value::Fn { params, body, captured_env: Some(Box::new(captured)) })
+                Ok(Value::Fn {
+                    params,
+                    body,
+                    captured_env: Some(Box::new(captured)),
+                })
             }
 
-            Expr::Ident(name) => {
-                self.env.get(&name)
-                    .ok_or(LatchError::UndefinedVariable(name))
-            }
+            Expr::Ident(name) => self
+                .env
+                .get(&name)
+                .ok_or(LatchError::UndefinedVariable(name)),
 
             Expr::Interpolated(parts) => {
                 let mut result = String::new();
@@ -61,35 +68,31 @@ impl Interpreter {
                 Ok(Value::Str(result))
             }
 
-            Expr::BinOp { op, left, right } => {
-                match op {
-                    BinOp::Or => {
-                        match self.eval_expr(*left) {
-                            Ok(val) if val.is_truthy() => Ok(val),
-                            _ => self.eval_expr(*right),
-                        }
-                    }
-                    BinOp::And => {
-                        let l = self.eval_expr(*left)?;
-                        if !l.is_truthy() {
-                            Ok(l)
-                        } else {
-                            self.eval_expr(*right)
-                        }
-                    }
-                    _ => {
-                        let l = self.eval_expr(*left)?;
-                        let r = self.eval_expr(*right)?;
-                        self.eval_binop(op, l, r)
+            Expr::BinOp { op, left, right } => match op {
+                BinOp::Or => match self.eval_expr(*left) {
+                    Ok(val) if val.is_truthy() => Ok(val),
+                    _ => self.eval_expr(*right),
+                },
+                BinOp::And => {
+                    let l = self.eval_expr(*left)?;
+                    if !l.is_truthy() {
+                        Ok(l)
+                    } else {
+                        self.eval_expr(*right)
                     }
                 }
-            }
+                _ => {
+                    let l = self.eval_expr(*left)?;
+                    let r = self.eval_expr(*right)?;
+                    self.eval_binop(op, l, r)
+                }
+            },
 
             Expr::UnaryOp { op, expr } => {
                 let val = self.eval_expr(*expr)?;
                 match op {
                     UnaryOp::Neg => match val {
-                        Value::Int(n)   => Ok(Value::Int(-n)),
+                        Value::Int(n) => Ok(Value::Int(-n)),
                         Value::Float(n) => Ok(Value::Float(-n)),
                         _ => Err(LatchError::TypeMismatch {
                             expected: "number".into(),
@@ -100,40 +103,55 @@ impl Interpreter {
                 }
             }
 
-            Expr::Call { name, args, kwargs: _ } => {
-                let evaluated: Vec<Value> = args.into_iter()
+            Expr::Call {
+                name,
+                args,
+                kwargs: _,
+            } => {
+                let evaluated: Vec<Value> = args
+                    .into_iter()
                     .map(|a| self.eval_expr(a))
                     .collect::<Result<_>>()?;
                 self.call_function(&name, evaluated)
             }
 
-            Expr::ModuleCall { module, method, args } => {
-                let evaluated: Vec<Value> = args.into_iter()
+            Expr::ModuleCall {
+                module,
+                method,
+                args,
+            } => {
+                let evaluated: Vec<Value> = args
+                    .into_iter()
                     .map(|a| self.eval_expr(a))
                     .collect::<Result<_>>()?;
 
                 match module.as_str() {
-                    "fs"     => runtime::fs::call(&method, evaluated),
-                    "proc"   => runtime::proc::call(&method, evaluated),
-                    "http"   => runtime::http::call(&method, evaluated),
-                    "time"   => runtime::time::call(&method, evaluated),
-                    "ai"     => runtime::ai::call(&method, evaluated),
-                    "json"   => runtime::json::call(&method, evaluated),
-                    "env"    => runtime::env::call(&method, evaluated),
-                    "path"   => runtime::path::call(&method, evaluated),
-                    "math"   => runtime::math::call(&method, evaluated),
-                    "regex"  => runtime::regex::call(&method, evaluated),
-                    "hash"   => runtime::hash::call(&method, evaluated),
-                    "set"    => runtime::set::call(&method, evaluated),
-                    "csv"    => runtime::csv::call(&method, evaluated),
+                    "fs" => runtime::fs::call(&method, evaluated),
+                    "proc" => runtime::proc::call(&method, evaluated),
+                    "http" => runtime::http::call(&method, evaluated),
+                    "time" => runtime::time::call(&method, evaluated),
+                    "ai" => runtime::ai::call(&method, evaluated),
+                    "json" => runtime::json::call(&method, evaluated),
+                    "env" => runtime::env::call(&method, evaluated),
+                    "path" => runtime::path::call(&method, evaluated),
+                    "math" => runtime::math::call(&method, evaluated),
+                    "regex" => runtime::regex::call(&method, evaluated),
+                    "hash" => runtime::hash::call(&method, evaluated),
+                    "set" => runtime::set::call(&method, evaluated),
+                    "csv" => runtime::csv::call(&method, evaluated),
                     "base64" => runtime::base64::call(&method, evaluated),
                     _ => Err(LatchError::UnknownModule(module)),
                 }
             }
 
-            Expr::MethodCall { receiver, method, args } => {
+            Expr::MethodCall {
+                receiver,
+                method,
+                args,
+            } => {
                 let recv = self.eval_expr(*receiver)?;
-                let evaluated: Vec<Value> = args.into_iter()
+                let evaluated: Vec<Value> = args
+                    .into_iter()
                     .map(|a| self.eval_expr(a))
                     .collect::<Result<_>>()?;
                 self.call_method(recv, &method, evaluated)
@@ -148,14 +166,18 @@ impl Interpreter {
                         let i = *i;
                         let guard = list.lock().unwrap();
                         if i < 0 || i as usize >= guard.len() {
-                            Err(LatchError::IndexOutOfBounds { index: i, len: guard.len() })
+                            Err(LatchError::IndexOutOfBounds {
+                                index: i,
+                                len: guard.len(),
+                            })
                         } else {
                             Ok(guard[i as usize].clone())
                         }
                     }
                     (Value::Map(map), Value::Str(key)) => {
                         let guard = map.lock().unwrap();
-                        guard.get(key)
+                        guard
+                            .get(key)
                             .cloned()
                             .ok_or(LatchError::KeyNotFound(key.clone()))
                     }
@@ -169,36 +191,43 @@ impl Interpreter {
             Expr::FieldAccess { expr, field } => {
                 let val = self.eval_expr(*expr)?;
                 match val {
-                    Value::ProcessResult { stdout, stderr, code } => {
-                        match field.as_str() {
-                            "stdout" => Ok(Value::Str(stdout)),
-                            "stderr" => Ok(Value::Str(stderr)),
-                            "code" | "exit_code" => Ok(Value::Int(code as i64)),
-                            _ => Err(LatchError::KeyNotFound(field)),
+                    Value::ProcessResult {
+                        stdout,
+                        stderr,
+                        code,
+                    } => match field.as_str() {
+                        "stdout" => Ok(Value::Str(stdout)),
+                        "stderr" => Ok(Value::Str(stderr)),
+                        "code" | "exit_code" => Ok(Value::Int(code as i64)),
+                        _ => Err(LatchError::KeyNotFound(field)),
+                    },
+                    Value::HttpResponse {
+                        status,
+                        body,
+                        headers,
+                    } => match field.as_str() {
+                        "status" => Ok(Value::Int(status)),
+                        "body" => Ok(Value::Str(body)),
+                        "headers" => {
+                            let map: HashMap<String, Value> = headers
+                                .into_iter()
+                                .map(|(k, v)| (k, Value::Str(v)))
+                                .collect();
+                            Ok(Value::new_map(map))
                         }
-                    }
-                    Value::HttpResponse { status, body, headers } => {
-                        match field.as_str() {
-                            "status"  => Ok(Value::Int(status)),
-                            "body"    => Ok(Value::Str(body)),
-                            "headers" => {
-                                let map: HashMap<String, Value> = headers.into_iter()
-                                    .map(|(k, v)| (k, Value::Str(v)))
-                                    .collect();
-                                Ok(Value::new_map(map))
-                            }
-                            _ => Err(LatchError::KeyNotFound(field)),
-                        }
-                    }
+                        _ => Err(LatchError::KeyNotFound(field)),
+                    },
                     Value::Instance { fields, .. } => {
                         let guard = fields.lock().unwrap();
-                        guard.get(&field)
+                        guard
+                            .get(&field)
                             .cloned()
                             .ok_or(LatchError::KeyNotFound(field))
                     }
                     Value::Map(map) => {
                         let guard = map.lock().unwrap();
-                        guard.get(&field)
+                        guard
+                            .get(&field)
                             .cloned()
                             .ok_or(LatchError::KeyNotFound(field))
                     }
@@ -228,42 +257,53 @@ impl Interpreter {
             Expr::Pipe { expr, func } => {
                 let val = self.eval_expr(*expr)?;
                 match *func {
-                    Expr::Call { name, mut args, kwargs: _ } => {
+                    Expr::Call {
+                        name,
+                        mut args,
+                        kwargs: _,
+                    } => {
                         let mut evaluated = vec![val];
                         for a in args.drain(..) {
                             evaluated.push(self.eval_expr(a)?);
                         }
                         self.call_function(&name, evaluated)
                     }
-                    Expr::ModuleCall { module, method, mut args } => {
+                    Expr::ModuleCall {
+                        module,
+                        method,
+                        mut args,
+                    } => {
                         let mut evaluated = vec![val];
                         for a in args.drain(..) {
                             evaluated.push(self.eval_expr(a)?);
                         }
                         match module.as_str() {
-                            "fs"     => runtime::fs::call(&method, evaluated),
-                            "proc"   => runtime::proc::call(&method, evaluated),
-                            "http"   => runtime::http::call(&method, evaluated),
-                            "time"   => runtime::time::call(&method, evaluated),
-                            "ai"     => runtime::ai::call(&method, evaluated),
-                            "json"   => runtime::json::call(&method, evaluated),
-                            "env"    => runtime::env::call(&method, evaluated),
-                            "path"   => runtime::path::call(&method, evaluated),
-                            "math"   => runtime::math::call(&method, evaluated),
-                            "regex"  => runtime::regex::call(&method, evaluated),
-                            "hash"   => runtime::hash::call(&method, evaluated),
-                            "set"    => runtime::set::call(&method, evaluated),
-                            "csv"    => runtime::csv::call(&method, evaluated),
+                            "fs" => runtime::fs::call(&method, evaluated),
+                            "proc" => runtime::proc::call(&method, evaluated),
+                            "http" => runtime::http::call(&method, evaluated),
+                            "time" => runtime::time::call(&method, evaluated),
+                            "ai" => runtime::ai::call(&method, evaluated),
+                            "json" => runtime::json::call(&method, evaluated),
+                            "env" => runtime::env::call(&method, evaluated),
+                            "path" => runtime::path::call(&method, evaluated),
+                            "math" => runtime::math::call(&method, evaluated),
+                            "regex" => runtime::regex::call(&method, evaluated),
+                            "hash" => runtime::hash::call(&method, evaluated),
+                            "set" => runtime::set::call(&method, evaluated),
+                            "csv" => runtime::csv::call(&method, evaluated),
                             "base64" => runtime::base64::call(&method, evaluated),
                             _ => Err(LatchError::UnknownModule(module)),
                         }
                     }
-                    Expr::Fn { params, body } => {
-                        self.call_closure(&params, &body, vec![val], None)
-                    }
+                    Expr::Fn { params, body } => self.call_closure(&params, &body, vec![val], None),
                     other => {
                         let func_val = self.eval_expr(other)?;
-                        if let Value::Fn { params, body, captured_env } = func_val {
+                        if let Value::Fn {
+                            params,
+                            body,
+                            captured_env,
+                        } = func_val
+                        {
                             self.call_closure(&params, &body, vec![val], captured_env.map(|e| *e))
                         } else {
                             Err(LatchError::TypeMismatch {
@@ -287,32 +327,41 @@ impl Interpreter {
                         let guard = map.lock().unwrap();
                         Ok(guard.get(&field).cloned().unwrap_or(Value::Null))
                     }
-                    Value::HttpResponse { status, body, headers } => {
-                        match field.as_str() {
-                            "status"  => Ok(Value::Int(status)),
-                            "body"    => Ok(Value::Str(body)),
-                            "headers" => {
-                                let map: HashMap<String, Value> = headers.into_iter()
-                                    .map(|(k, v)| (k, Value::Str(v)))
-                                    .collect();
-                                Ok(Value::new_map(map))
-                            }
-                            _ => Ok(Value::Null),
+                    Value::HttpResponse {
+                        status,
+                        body,
+                        headers,
+                    } => match field.as_str() {
+                        "status" => Ok(Value::Int(status)),
+                        "body" => Ok(Value::Str(body)),
+                        "headers" => {
+                            let map: HashMap<String, Value> = headers
+                                .into_iter()
+                                .map(|(k, v)| (k, Value::Str(v)))
+                                .collect();
+                            Ok(Value::new_map(map))
                         }
-                    }
-                    Value::ProcessResult { stdout, stderr, code } => {
-                        match field.as_str() {
-                            "stdout" => Ok(Value::Str(stdout)),
-                            "stderr" => Ok(Value::Str(stderr)),
-                            "code" | "exit_code" => Ok(Value::Int(code as i64)),
-                            _ => Ok(Value::Null),
-                        }
-                    }
+                        _ => Ok(Value::Null),
+                    },
+                    Value::ProcessResult {
+                        stdout,
+                        stderr,
+                        code,
+                    } => match field.as_str() {
+                        "stdout" => Ok(Value::Str(stdout)),
+                        "stderr" => Ok(Value::Str(stderr)),
+                        "code" | "exit_code" => Ok(Value::Int(code as i64)),
+                        _ => Ok(Value::Null),
+                    },
                     _ => Ok(Value::Null),
                 }
             }
 
-            Expr::Ternary { cond, true_branch, false_branch } => {
+            Expr::Ternary {
+                cond,
+                true_branch,
+                false_branch,
+            } => {
                 let condition = self.eval_expr(*cond)?;
                 if condition.is_truthy() {
                     self.eval_expr(*true_branch)
@@ -321,31 +370,36 @@ impl Interpreter {
                 }
             }
 
-            Expr::ListComp { body, var, iter, cond } => {
+            Expr::ListComp {
+                body,
+                var,
+                iter,
+                cond,
+            } => {
                 let iterable = self.eval_expr(*iter)?;
                 let items = iterable.into_list()?;
                 let mut result = Vec::new();
-                
+
                 for item in items {
                     let parent = std::mem::replace(&mut self.env, crate::env::Env::new());
                     self.env = parent.child();
                     self.env.set(&var, item);
-                    
+
                     let include = if let Some(ref c) = cond {
                         self.eval_expr(*c.clone())?.is_truthy()
                     } else {
                         true
                     };
-                    
+
                     if include {
                         let val = self.eval_expr(*body.clone())?;
                         result.push(val);
                     }
-                    
+
                     let child = std::mem::replace(&mut self.env, crate::env::Env::new());
                     self.env = child.into_parent().unwrap();
                 }
-                
+
                 Ok(Value::new_list(result))
             }
 
@@ -355,28 +409,36 @@ impl Interpreter {
                     Value::List(list) => {
                         let guard = list.lock().unwrap();
                         let len = guard.len() as i64;
-                        
+
                         let start_idx = match start {
                             Some(s) => {
                                 let s_val = self.eval_expr(*s)?;
                                 let s_int = s_val.as_int()?;
-                                if s_int < 0 { len + s_int } else { s_int }
+                                if s_int < 0 {
+                                    len + s_int
+                                } else {
+                                    s_int
+                                }
                             }
                             None => 0,
                         };
-                        
+
                         let end_idx = match end {
                             Some(e) => {
                                 let e_val = self.eval_expr(*e)?;
                                 let e_int = e_val.as_int()?;
-                                if e_int < 0 { len + e_int } else { e_int }
+                                if e_int < 0 {
+                                    len + e_int
+                                } else {
+                                    e_int
+                                }
                             }
                             None => len,
                         };
-                        
+
                         let start_idx = start_idx.max(0).min(len) as usize;
                         let end_idx = end_idx.max(0).min(len) as usize;
-                        
+
                         let sliced: Vec<Value> = guard[start_idx..end_idx].to_vec();
                         Ok(Value::new_list(sliced))
                     }
@@ -439,8 +501,8 @@ impl Interpreter {
 
             (Value::Bool(a), Value::Bool(b)) => match op {
                 BinOp::And => Ok(Value::Bool(*a && *b)),
-                BinOp::Or  => Ok(Value::Bool(*a || *b)),
-                BinOp::Eq  => Ok(Value::Bool(a == b)),
+                BinOp::Or => Ok(Value::Bool(*a || *b)),
+                BinOp::Eq => Ok(Value::Bool(a == b)),
                 BinOp::NotEq => Ok(Value::Bool(a != b)),
                 _ => Err(LatchError::TypeMismatch {
                     expected: "numeric".into(),
@@ -449,7 +511,7 @@ impl Interpreter {
             },
 
             (Value::Str(a), Value::Str(b)) => match op {
-                BinOp::Eq    => Ok(Value::Bool(a == b)),
+                BinOp::Eq => Ok(Value::Bool(a == b)),
                 BinOp::NotEq => Ok(Value::Bool(a != b)),
                 _ => Err(LatchError::TypeMismatch {
                     expected: "numeric".into(),
@@ -458,7 +520,7 @@ impl Interpreter {
             },
 
             (Value::List(_), Value::List(_)) => match op {
-                BinOp::Eq    => Ok(Value::Bool(values_equal(&l, &r))),
+                BinOp::Eq => Ok(Value::Bool(values_equal(&l, &r))),
                 BinOp::NotEq => Ok(Value::Bool(!values_equal(&l, &r))),
                 _ => Err(LatchError::TypeMismatch {
                     expected: "numeric".into(),
@@ -469,7 +531,9 @@ impl Interpreter {
             (Value::List(list), Value::Int(n)) | (Value::Int(n), Value::List(list)) => {
                 if op == BinOp::Mul {
                     if *n < 0 {
-                        return Err(LatchError::GenericError("cannot multiply list by negative number".into()));
+                        return Err(LatchError::GenericError(
+                            "cannot multiply list by negative number".into(),
+                        ));
                     }
                     let guard = list.lock().unwrap();
                     let mut result = Vec::new();
@@ -482,10 +546,10 @@ impl Interpreter {
                     expected: "numeric".into(),
                     found: "list and int".into(),
                 })
-            },
+            }
 
             (Value::Map(_), Value::Map(_)) => match op {
-                BinOp::Eq    => Ok(Value::Bool(values_equal(&l, &r))),
+                BinOp::Eq => Ok(Value::Bool(values_equal(&l, &r))),
                 BinOp::NotEq => Ok(Value::Bool(!values_equal(&l, &r))),
                 _ => Err(LatchError::TypeMismatch {
                     expected: "numeric".into(),
@@ -502,56 +566,69 @@ impl Interpreter {
 
     fn int_binop(&self, op: BinOp, a: i64, b: i64) -> Result<Value> {
         match op {
-            BinOp::Add   => a.checked_add(b)
+            BinOp::Add => a
+                .checked_add(b)
                 .map(Value::Int)
                 .ok_or(LatchError::GenericError("integer overflow".into())),
-            BinOp::Sub   => a.checked_sub(b)
+            BinOp::Sub => a
+                .checked_sub(b)
                 .map(Value::Int)
                 .ok_or(LatchError::GenericError("integer overflow".into())),
-            BinOp::Mul   => a.checked_mul(b)
+            BinOp::Mul => a
+                .checked_mul(b)
                 .map(Value::Int)
                 .ok_or(LatchError::GenericError("integer overflow".into())),
-            BinOp::Div   => {
-                if b == 0 { return Err(LatchError::DivisionByZero); }
+            BinOp::Div => {
+                if b == 0 {
+                    return Err(LatchError::DivisionByZero);
+                }
                 Ok(Value::Int(a / b))
             }
-            BinOp::Mod   => {
-                if b == 0 { return Err(LatchError::DivisionByZero); }
+            BinOp::Mod => {
+                if b == 0 {
+                    return Err(LatchError::DivisionByZero);
+                }
                 Ok(Value::Int(a % b))
             }
-            BinOp::Eq    => Ok(Value::Bool(a == b)),
+            BinOp::Eq => Ok(Value::Bool(a == b)),
             BinOp::NotEq => Ok(Value::Bool(a != b)),
-            BinOp::Lt    => Ok(Value::Bool(a < b)),
-            BinOp::Gt    => Ok(Value::Bool(a > b)),
-            BinOp::LtEq  => Ok(Value::Bool(a <= b)),
-            BinOp::GtEq  => Ok(Value::Bool(a >= b)),
+            BinOp::Lt => Ok(Value::Bool(a < b)),
+            BinOp::Gt => Ok(Value::Bool(a > b)),
+            BinOp::LtEq => Ok(Value::Bool(a <= b)),
+            BinOp::GtEq => Ok(Value::Bool(a >= b)),
             BinOp::And | BinOp::Or | BinOp::In => Err(LatchError::TypeMismatch {
-                expected: "bool".into(), found: "int".into(),
+                expected: "bool".into(),
+                found: "int".into(),
             }),
         }
     }
 
     fn float_binop(&self, op: BinOp, a: f64, b: f64) -> Result<Value> {
         match op {
-            BinOp::Add   => Ok(Value::Float(a + b)),
-            BinOp::Sub   => Ok(Value::Float(a - b)),
-            BinOp::Mul   => Ok(Value::Float(a * b)),
-            BinOp::Div   => {
-                if b == 0.0 { return Err(LatchError::DivisionByZero); }
+            BinOp::Add => Ok(Value::Float(a + b)),
+            BinOp::Sub => Ok(Value::Float(a - b)),
+            BinOp::Mul => Ok(Value::Float(a * b)),
+            BinOp::Div => {
+                if b == 0.0 {
+                    return Err(LatchError::DivisionByZero);
+                }
                 Ok(Value::Float(a / b))
             }
-            BinOp::Mod   => {
-                if b == 0.0 { return Err(LatchError::DivisionByZero); }
+            BinOp::Mod => {
+                if b == 0.0 {
+                    return Err(LatchError::DivisionByZero);
+                }
                 Ok(Value::Float(a % b))
             }
-            BinOp::Eq    => Ok(Value::Bool(a == b)),
+            BinOp::Eq => Ok(Value::Bool(a == b)),
             BinOp::NotEq => Ok(Value::Bool(a != b)),
-            BinOp::Lt    => Ok(Value::Bool(a < b)),
-            BinOp::Gt    => Ok(Value::Bool(a > b)),
-            BinOp::LtEq  => Ok(Value::Bool(a <= b)),
-            BinOp::GtEq  => Ok(Value::Bool(a >= b)),
+            BinOp::Lt => Ok(Value::Bool(a < b)),
+            BinOp::Gt => Ok(Value::Bool(a > b)),
+            BinOp::LtEq => Ok(Value::Bool(a <= b)),
+            BinOp::GtEq => Ok(Value::Bool(a >= b)),
             BinOp::And | BinOp::Or | BinOp::In => Err(LatchError::TypeMismatch {
-                expected: "bool".into(), found: "float".into(),
+                expected: "bool".into(),
+                found: "float".into(),
             }),
         }
     }

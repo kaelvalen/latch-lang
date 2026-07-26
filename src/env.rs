@@ -257,7 +257,7 @@ impl GcTrace for ObjClosure {
     fn trace(&self, visitor: &mut dyn FnMut(&Value)) {
         for upvalue in &self.upvalues {
             if let Ok(val) = upvalue.lock() {
-                visitor(&*val);
+                visitor(&val);
             }
         }
     }
@@ -401,22 +401,50 @@ pub enum Value {
 
 impl Value {
     // ── Constructors ─────────────────────────────────────────
-    pub fn int(n: i64) -> Value { Value::Int(n) }
-    pub fn float(n: f64) -> Value { Value::Float(n) }
-    pub fn bool(b: bool) -> Value { Value::Bool(b) }
-    pub fn str(s: impl Into<String>) -> Value { Value::Str(s.into()) }
-    pub fn null() -> Value { Value::Null }
+    pub fn int(n: i64) -> Value {
+        Value::Int(n)
+    }
+    pub fn float(n: f64) -> Value {
+        Value::Float(n)
+    }
+    pub fn bool(b: bool) -> Value {
+        Value::Bool(b)
+    }
+    pub fn str(s: impl Into<String>) -> Value {
+        Value::Str(s.into())
+    }
+    pub fn null() -> Value {
+        Value::Null
+    }
 
     // ── Type Predicates ──────────────────────────────────────
-    pub fn is_int(&self) -> bool { matches!(self, Value::Int(_)) }
-    pub fn is_float(&self) -> bool { matches!(self, Value::Float(_)) }
-    pub fn is_number(&self) -> bool { matches!(self, Value::Int(_) | Value::Float(_)) }
-    pub fn is_bool(&self) -> bool { matches!(self, Value::Bool(_)) }
-    pub fn is_str(&self) -> bool { matches!(self, Value::Str(_)) }
-    pub fn is_null(&self) -> bool { matches!(self, Value::Null) }
-    pub fn is_list(&self) -> bool { matches!(self, Value::List(_)) }
-    pub fn is_map(&self) -> bool { matches!(self, Value::Map(_)) }
-    pub fn is_fn(&self) -> bool { matches!(self, Value::Fn { .. }) }
+    pub fn is_int(&self) -> bool {
+        matches!(self, Value::Int(_))
+    }
+    pub fn is_float(&self) -> bool {
+        matches!(self, Value::Float(_))
+    }
+    pub fn is_number(&self) -> bool {
+        matches!(self, Value::Int(_) | Value::Float(_))
+    }
+    pub fn is_bool(&self) -> bool {
+        matches!(self, Value::Bool(_))
+    }
+    pub fn is_str(&self) -> bool {
+        matches!(self, Value::Str(_))
+    }
+    pub fn is_null(&self) -> bool {
+        matches!(self, Value::Null)
+    }
+    pub fn is_list(&self) -> bool {
+        matches!(self, Value::List(_))
+    }
+    pub fn is_map(&self) -> bool {
+        matches!(self, Value::Map(_))
+    }
+    pub fn is_fn(&self) -> bool {
+        matches!(self, Value::Fn { .. })
+    }
 
     // ── Encapsulated Operations ──────────────────────────────
     pub fn add(&self, rhs: &Value) -> Result<Value> {
@@ -462,19 +490,27 @@ impl Value {
     pub fn div(&self, rhs: &Value) -> Result<Value> {
         match (self, rhs) {
             (Value::Int(a), Value::Int(b)) => {
-                if *b == 0 { return Err(LatchError::DivisionByZero); }
+                if *b == 0 {
+                    return Err(LatchError::DivisionByZero);
+                }
                 Ok(Value::Int(a / b))
             }
             (Value::Float(a), Value::Float(b)) => {
-                if *b == 0.0 { return Err(LatchError::DivisionByZero); }
+                if *b == 0.0 {
+                    return Err(LatchError::DivisionByZero);
+                }
                 Ok(Value::Float(a / b))
             }
             (Value::Int(a), Value::Float(b)) => {
-                if *b == 0.0 { return Err(LatchError::DivisionByZero); }
+                if *b == 0.0 {
+                    return Err(LatchError::DivisionByZero);
+                }
                 Ok(Value::Float(*a as f64 / b))
             }
             (Value::Float(a), Value::Int(b)) => {
-                if *b == 0 { return Err(LatchError::DivisionByZero); }
+                if *b == 0 {
+                    return Err(LatchError::DivisionByZero);
+                }
                 Ok(Value::Float(a / *b as f64))
             }
             _ => Err(LatchError::TypeMismatch {
@@ -497,21 +533,21 @@ impl Value {
 
     pub fn type_name(&self) -> &str {
         match self {
-            Value::Int(_)            => "int",
-            Value::Float(_)          => "float",
-            Value::Bool(_)           => "bool",
-            Value::Str(_)            => "string",
-            Value::List(_)           => "list",
-            Value::Map(_)            => "dict",
-            Value::Fn { .. }         => "fn",
-            Value::Function(_)       => "fn",
-            Value::Closure(_)        => "fn",
-            Value::Native(_)         => "native_fn",
+            Value::Int(_) => "int",
+            Value::Float(_) => "float",
+            Value::Bool(_) => "bool",
+            Value::Str(_) => "string",
+            Value::List(_) => "list",
+            Value::Map(_) => "dict",
+            Value::Fn { .. } => "fn",
+            Value::Function(_) => "fn",
+            Value::Closure(_) => "fn",
+            Value::Native(_) => "native_fn",
             Value::ProcessResult { .. } => "process",
-            Value::HttpResponse { .. }  => "response",
-            Value::Class { .. }      => "class",
+            Value::HttpResponse { .. } => "response",
+            Value::Class { .. } => "class",
             Value::Instance { class_name, .. } => class_name.as_str(),
-            Value::Null              => "null",
+            Value::Null => "null",
         }
     }
 
@@ -539,7 +575,7 @@ impl Value {
     pub fn as_float(&self) -> Result<f64> {
         match self {
             Value::Float(n) => Ok(*n),
-            Value::Int(n)   => Ok(*n as f64),
+            Value::Int(n) => Ok(*n as f64),
             _ => Err(LatchError::TypeMismatch {
                 expected: "float".into(),
                 found: self.type_name().into(),
@@ -588,7 +624,6 @@ impl Value {
         }
     }
 
-
     /// Truthiness: false and null are falsy, everything else is truthy.
     pub fn is_truthy(&self) -> bool {
         match self {
@@ -602,18 +637,18 @@ impl Value {
     /// Get a field from an instance (for `instance.field`).
     pub fn get_field(&self, field: &str) -> Option<Value> {
         match self {
-            Value::Instance { fields, .. } => {
-                fields.lock().unwrap().get(field).cloned()
-            }
-            Value::ProcessResult { stdout, stderr, code } => match field {
+            Value::Instance { fields, .. } => fields.lock().unwrap().get(field).cloned(),
+            Value::ProcessResult {
+                stdout,
+                stderr,
+                code,
+            } => match field {
                 "stdout" => Some(Value::Str(stdout.clone())),
                 "stderr" => Some(Value::Str(stderr.clone())),
                 "code" | "exit_code" => Some(Value::Int(*code as i64)),
                 _ => None,
             },
-            Value::Map(map) => {
-                map.lock().unwrap().get(field).cloned()
-            }
+            Value::Map(map) => map.lock().unwrap().get(field).cloned(),
             _ => None,
         }
     }
@@ -661,8 +696,21 @@ impl PartialEq for Value {
             (Value::Closure(a), Value::Closure(b)) => Arc::ptr_eq(a, b) || a == b,
             (Value::Native(a), Value::Native(b)) => Arc::ptr_eq(a, b) || a == b,
             (Value::Class { name: na, .. }, Value::Class { name: nb, .. }) => na == nb,
-            (Value::Instance { class_name: ca, fields: fa, .. }, Value::Instance { class_name: cb, fields: fb, .. }) => {
-                if ca != cb { return false; }
+            (
+                Value::Instance {
+                    class_name: ca,
+                    fields: fa,
+                    ..
+                },
+                Value::Instance {
+                    class_name: cb,
+                    fields: fb,
+                    ..
+                },
+            ) => {
+                if ca != cb {
+                    return false;
+                }
                 let ga = fa.lock().unwrap();
                 let gb = fb.lock().unwrap();
                 *ga == *gb
@@ -684,7 +732,9 @@ impl fmt::Display for Value {
                 let items = items.lock().unwrap();
                 write!(f, "[")?;
                 for (i, v) in items.iter().enumerate() {
-                    if i > 0 { write!(f, ", ")?; }
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
                     write!(f, "{v}")?;
                 }
                 write!(f, "]")
@@ -695,7 +745,9 @@ impl fmt::Display for Value {
                 sorted_entries.sort_by_key(|(k, _)| (*k).clone());
                 write!(f, "{{")?;
                 for (i, (k, v)) in sorted_entries.iter().enumerate() {
-                    if i > 0 { write!(f, ", ")?; }
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
                     write!(f, "{k}: {v}")?;
                 }
                 write!(f, "}}")
@@ -705,22 +757,37 @@ impl fmt::Display for Value {
             Value::Closure(c) => write!(f, "<fn {}>", c.function.name),
             Value::Native(n) => write!(f, "<native fn {}>", n.name),
             Value::Class { name, .. } => write!(f, "<class {name}>"),
-            Value::Instance { class_name, fields, .. } => {
+            Value::Instance {
+                class_name, fields, ..
+            } => {
                 let guard = fields.lock().unwrap();
                 let mut sorted: Vec<_> = guard.iter().collect();
                 sorted.sort_by_key(|(k, _)| (*k).clone());
                 write!(f, "{class_name} {{")?;
                 for (i, (k, v)) in sorted.iter().enumerate() {
-                    if i > 0 { write!(f, ", ")?; }
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
                     write!(f, "{k}: {v}")?;
                 }
                 write!(f, "}}")
             }
-            Value::ProcessResult { stdout, stderr, code } => {
-                write!(f, "ProcessResult(code={code}, stdout={stdout:?}, stderr={stderr:?})")
+            Value::ProcessResult {
+                stdout,
+                stderr,
+                code,
+            } => {
+                write!(
+                    f,
+                    "ProcessResult(code={code}, stdout={stdout:?}, stderr={stderr:?})"
+                )
             }
             Value::HttpResponse { status, body, .. } => {
-                let preview = if body.len() > 80 { &body[..80] } else { body.as_str() };
+                let preview = if body.len() > 80 {
+                    &body[..80]
+                } else {
+                    body.as_str()
+                };
                 write!(f, "HttpResponse(status={status}, body={preview:?}...)")
             }
         }
@@ -739,6 +806,12 @@ pub struct EnvInner {
     pub vars: HashMap<String, Value>,
     pub consts: HashSet<String>,
     pub parent: Option<Env>,
+}
+
+impl Default for Env {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Env {
@@ -804,9 +877,9 @@ impl Env {
     /// otherwise declares in the current scope (Python-style).
     pub fn assign(&self, name: &str, val: Value) -> Result<()> {
         if self.is_const(name) {
-            return Err(LatchError::GenericError(
-                format!("Cannot reassign constant '{name}'")
-            ));
+            return Err(LatchError::GenericError(format!(
+                "Cannot reassign constant '{name}'"
+            )));
         }
         let mut inner = self.inner.lock().unwrap();
         if inner.vars.contains_key(name) {
@@ -837,7 +910,10 @@ impl Env {
                     let i = *i as usize;
                     let mut guard = list.lock().unwrap();
                     if i >= guard.len() {
-                        return Err(LatchError::IndexOutOfBounds { index: i as i64, len: guard.len() });
+                        return Err(LatchError::IndexOutOfBounds {
+                            index: i as i64,
+                            len: guard.len(),
+                        });
                     }
                     guard[i] = val;
                     Ok(())

@@ -1,7 +1,7 @@
+use super::chunk::OpCode;
+use super::decoder::InstructionCursor;
 use crate::env::ObjFunction;
 use crate::error::{LatchError, Result};
-use super::decoder::InstructionCursor;
-use super::chunk::OpCode;
 
 /// Enhanced Static Bytecode Verifier (CFG, Stack Depth Simulation, Bound Checks)
 pub struct BytecodeVerifier;
@@ -46,7 +46,11 @@ impl BytecodeVerifier {
             match instr.opcode {
                 OpCode::OpList | OpCode::OpMap => {
                     let count = instr.operand.unwrap_or(0) as isize;
-                    let consumed = if instr.opcode == OpCode::OpList { count } else { count * 2 };
+                    let consumed = if instr.opcode == OpCode::OpList {
+                        count
+                    } else {
+                        count * 2
+                    };
                     simulated_stack_depth -= consumed;
                     if simulated_stack_depth < 0 {
                         return Err(LatchError::GenericError(format!(

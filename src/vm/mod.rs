@@ -12,8 +12,10 @@ pub mod peephole;
 pub mod profiler;
 pub mod stack;
 pub mod verifier;
+#[allow(clippy::module_inception)]
 pub mod vm;
 
+pub use chunk::OPCODE_TABLE;
 #[allow(unused_imports)]
 pub use chunk::{Chunk, ChunkBuilder, Constant, InstructionDescriptor, OpCode};
 pub use compiler::Compiler;
@@ -23,11 +25,10 @@ pub use gc::GcState;
 pub use globals::{Global, GlobalFlags};
 pub use ic::{IcState, InlineCache};
 pub use lbc::{LbcSerializer, LBC_FLAGS, LBC_ISA_VERSION, LBC_MAGIC, LBC_VERSION};
-pub use chunk::OPCODE_TABLE;
 pub use memory::NativeModule;
 pub use optimizer::Optimizer;
 pub use peephole::BytecodePeephole;
 pub use profiler::VmProfiler;
 pub use stack::ValueStack;
 pub use verifier::BytecodeVerifier;
-pub use vm::{VM, VmBuilder, VerifiedProgram};
+pub use vm::{VerifiedProgram, VmBuilder, VM};

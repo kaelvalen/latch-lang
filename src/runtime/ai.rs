@@ -2,24 +2,40 @@ use crate::env::Value;
 use crate::error::{LatchError, Result};
 
 pub fn call(method: &str, args: Vec<Value>) -> Result<Value> {
-    let key = std::env::var("LATCH_AI_KEY")
-        .map_err(|_| LatchError::AiError("LATCH_AI_KEY not set. Set it with: export LATCH_AI_KEY=your_key".into()))?;
+    let key = std::env::var("LATCH_AI_KEY").map_err(|_| {
+        LatchError::AiError(
+            "LATCH_AI_KEY not set. Set it with: export LATCH_AI_KEY=your_key".into(),
+        )
+    })?;
 
     let prompt = match method {
-        "ask" => {
-            args.first()
-                .ok_or_else(|| LatchError::ArgCountMismatch { name: "ai.ask".into(), expected: 1, found: 0 })?
-                .as_str()?
-                .to_string()
-        }
+        "ask" => args
+            .first()
+            .ok_or_else(|| LatchError::ArgCountMismatch {
+                name: "ai.ask".into(),
+                expected: 1,
+                found: 0,
+            })?
+            .as_str()?
+            .to_string(),
         "summarize" => {
-            let text = args.first()
-                .ok_or_else(|| LatchError::ArgCountMismatch { name: "ai.summarize".into(), expected: 1, found: 0 })?
+            let text = args
+                .first()
+                .ok_or_else(|| LatchError::ArgCountMismatch {
+                    name: "ai.summarize".into(),
+                    expected: 1,
+                    found: 0,
+                })?
                 .as_str()?
                 .to_string();
             format!("Summarize the following:\n\n{text}")
         }
-        _ => return Err(LatchError::UnknownMethod { module: "ai".into(), method: method.into() }),
+        _ => {
+            return Err(LatchError::UnknownMethod {
+                module: "ai".into(),
+                method: method.into(),
+            })
+        }
     };
 
     let response = reqwest::blocking::Client::new()

@@ -30,9 +30,9 @@ fn test_bytecode_vm() {
 
 #[test]
 fn test_closure_mutation_upvalue() {
+    use latch_lang::interpreter::Interpreter;
     use latch_lang::lexer::Lexer;
     use latch_lang::parser::Parser;
-    use latch_lang::interpreter::Interpreter;
 
     let src = r#"
         counter := fn() {
@@ -58,9 +58,9 @@ fn test_closure_mutation_upvalue() {
 
 #[test]
 fn test_or_error_fallback() {
+    use latch_lang::interpreter::Interpreter;
     use latch_lang::lexer::Lexer;
     use latch_lang::parser::Parser;
-    use latch_lang::interpreter::Interpreter;
 
     let src = r#"
         data := json.parse("{invalid json") or {"fallback": 42}
@@ -77,9 +77,9 @@ fn test_or_error_fallback() {
 
 #[test]
 fn test_standalone_trim_upper_and_exit_code() {
+    use latch_lang::interpreter::Interpreter;
     use latch_lang::lexer::Lexer;
     use latch_lang::parser::Parser;
-    use latch_lang::interpreter::Interpreter;
 
     let src = r#"
         t := trim("  hello  ")
@@ -128,7 +128,7 @@ fn test_vm_disassembler() {
 
 #[test]
 fn test_optimizer_constant_folding() {
-    use latch_lang::ast::{Expr, Stmt, BinOp};
+    use latch_lang::ast::{BinOp, Expr, Stmt};
     use latch_lang::hir::{HirExpr, HirLiteral, HirStmt};
     use latch_lang::resolver::Resolver;
     use latch_lang::vm::Optimizer;
@@ -147,11 +147,17 @@ fn test_optimizer_constant_folding() {
     };
 
     let mut resolver = Resolver::new();
-    let module = resolver.resolve_module("test", &[stmt]).expect("Resolver error");
+    let module = resolver
+        .resolve_module("test", &[stmt])
+        .expect("Resolver error");
 
     let optimizer = Optimizer::new();
     let opt_module = optimizer.optimize_module(&module);
-    if let HirStmt::LetGlobal { value: HirExpr::Constant(HirLiteral::Int(val)), .. } = &opt_module.stmts[0] {
+    if let HirStmt::LetGlobal {
+        value: HirExpr::Constant(HirLiteral::Int(val)),
+        ..
+    } = &opt_module.stmts[0]
+    {
         assert_eq!(*val, 50);
     } else {
         panic!("HIR Constant folding failed!");
@@ -160,7 +166,7 @@ fn test_optimizer_constant_folding() {
 
 #[test]
 fn test_execution_abi_contract() {
-    use latch_lang::ast::{Expr, Stmt, BinOp};
+    use latch_lang::ast::{BinOp, Expr, Stmt};
     use latch_lang::resolver::Resolver;
     use latch_lang::vm::{Compiler, VM};
 
@@ -184,7 +190,9 @@ fn test_execution_abi_contract() {
     ];
 
     let mut resolver = Resolver::new();
-    let module = resolver.resolve_module("test", &stmts).expect("Resolver error");
+    let module = resolver
+        .resolve_module("test", &stmts)
+        .expect("Resolver error");
 
     let compiler = Compiler::new();
     let func = compiler.compile_module(&module).expect("Compile error");
@@ -196,11 +204,14 @@ fn test_execution_abi_contract() {
 #[test]
 fn test_obj_ref_is_used_for_function_and_closure() {
     use latch_lang::ast::{Expr, Stmt};
+    use latch_lang::env::ObjRef;
     use latch_lang::resolver::Resolver;
     use latch_lang::vm::{Compiler, VM};
-    use latch_lang::env::ObjRef;
 
-    let stmts = vec![Stmt::Assign { name: "a".into(), value: Expr::Int(1) }];
+    let stmts = vec![Stmt::Assign {
+        name: "a".into(),
+        value: Expr::Int(1),
+    }];
     let mut resolver = Resolver::new();
     let module = resolver.resolve_module("test", &stmts).expect("resolve");
     let compiler = Compiler::new();
@@ -233,9 +244,7 @@ fn test_gc_state_allocation_api() {
     use latch_lang::vm::gc::GcState;
 
     let gc = GcState::new();
-    let func = gc.allocate_function(
-        ObjFunctionBuilder::new("api_test", 0)
-    );
+    let func = gc.allocate_function(ObjFunctionBuilder::new("api_test", 0));
     assert_eq!(func.name, "api_test");
 
     let closure = gc.allocate_closure(func.clone(), Vec::new());

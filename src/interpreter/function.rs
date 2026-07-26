@@ -1,3 +1,5 @@
+#![allow(clippy::mem_replace_with_default)]
+
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
@@ -16,8 +18,12 @@ impl Interpreter {
                 if let Some(val) = args.first() {
                     if let Value::Instance { .. } = val {
                         match self.call_method(val.clone(), "to_str", vec![]) {
-                            Ok(Value::Str(s)) => { println!("{s}"); }
-                            _ => { println!("{val}"); }
+                            Ok(Value::Str(s)) => {
+                                println!("{s}");
+                            }
+                            _ => {
+                                println!("{val}");
+                            }
                         }
                     } else {
                         println!("{val}");
@@ -29,16 +35,14 @@ impl Interpreter {
             }
 
             "exit" => {
-                let code = args.first()
-                    .and_then(|v| v.as_int().ok())
-                    .unwrap_or(0) as i32;
+                let code = args.first().and_then(|v| v.as_int().ok()).unwrap_or(0) as i32;
                 std::process::exit(code);
             }
             "len" => {
                 return match args.first() {
                     Some(Value::List(l)) => Ok(Value::Int(l.lock().unwrap().len() as i64)),
-                    Some(Value::Str(s))  => Ok(Value::Int(s.len() as i64)),
-                    Some(Value::Map(m))  => Ok(Value::Int(m.lock().unwrap().len() as i64)),
+                    Some(Value::Str(s)) => Ok(Value::Int(s.len() as i64)),
+                    Some(Value::Map(m)) => Ok(Value::Int(m.lock().unwrap().len() as i64)),
                     _ => Err(LatchError::TypeMismatch {
                         expected: "list, string, or dict".into(),
                         found: args.first().map(|v| v.type_name()).unwrap_or("none").into(),
@@ -53,11 +57,12 @@ impl Interpreter {
             }
             "int" => {
                 return match args.first() {
-                    Some(Value::Str(s)) => s.trim().parse::<i64>()
-                        .map(Value::Int)
-                        .map_err(|_| LatchError::TypeMismatch {
-                            expected: "parseable int".into(), found: format!("\"{s}\""),
-                        }),
+                    Some(Value::Str(s)) => s.trim().parse::<i64>().map(Value::Int).map_err(|_| {
+                        LatchError::TypeMismatch {
+                            expected: "parseable int".into(),
+                            found: format!("\"{s}\""),
+                        }
+                    }),
                     Some(Value::Float(f)) => Ok(Value::Int(*f as i64)),
                     Some(Value::Int(n)) => Ok(Value::Int(*n)),
                     _ => Err(LatchError::TypeMismatch {
@@ -68,11 +73,14 @@ impl Interpreter {
             }
             "float" => {
                 return match args.first() {
-                    Some(Value::Str(s)) => s.trim().parse::<f64>()
-                        .map(Value::Float)
-                        .map_err(|_| LatchError::TypeMismatch {
-                            expected: "parseable float".into(), found: format!("\"{s}\""),
-                        }),
+                    Some(Value::Str(s)) => {
+                        s.trim().parse::<f64>().map(Value::Float).map_err(|_| {
+                            LatchError::TypeMismatch {
+                                expected: "parseable float".into(),
+                                found: format!("\"{s}\""),
+                            }
+                        })
+                    }
                     Some(Value::Int(n)) => Ok(Value::Float(*n as f64)),
                     Some(Value::Float(f)) => Ok(Value::Float(*f)),
                     _ => Err(LatchError::TypeMismatch {
@@ -156,7 +164,7 @@ impl Interpreter {
             }
 
             "pop" => {
-                if args.len() >= 1 {
+                if !args.is_empty() {
                     if let Value::List(ref list) = args[0] {
                         let mut guard = list.lock().unwrap();
                         if guard.is_empty() {
@@ -177,7 +185,7 @@ impl Interpreter {
                         }
                         return Ok(guard.remove(index));
                     }
-                    
+
                     if let Value::Map(ref m) = args[0] {
                         if args.len() >= 2 {
                             let mut guard = m.lock().unwrap();
@@ -188,7 +196,10 @@ impl Interpreter {
                             if args.len() >= 3 {
                                 return Ok(args[2].clone());
                             }
-                            return Err(LatchError::GenericError(format!("key not found: {}", key)));
+                            return Err(LatchError::GenericError(format!(
+                                "key not found: {}",
+                                key
+                            )));
                         }
                     }
                 }
@@ -264,8 +275,14 @@ impl Interpreter {
                     let mut float_sum = 0.0f64;
                     for item in guard.iter() {
                         match item {
-                            Value::Int(n) => { int_sum += n; float_sum += *n as f64; }
-                            Value::Float(f) => { is_float = true; float_sum += f; }
+                            Value::Int(n) => {
+                                int_sum += n;
+                                float_sum += *n as f64;
+                            }
+                            Value::Float(f) => {
+                                is_float = true;
+                                float_sum += f;
+                            }
                             _ => {}
                         }
                     }
@@ -275,53 +292,71 @@ impl Interpreter {
                         return Ok(Value::Int(int_sum));
                     }
                 }
-                return Err(LatchError::TypeMismatch { expected: "list".into(), found: "invalid args".into() });
+                return Err(LatchError::TypeMismatch {
+                    expected: "list".into(),
+                    found: "invalid args".into(),
+                });
             }
 
             "max" => {
                 if let Some(Value::List(ref list)) = args.first() {
                     let guard = list.lock().unwrap();
-                    if let Some(m) = guard.iter().max_by(|a, b| {
-                        match (a, b) {
-                            (Value::Int(x), Value::Int(y)) => x.cmp(y),
-                            (Value::Float(x), Value::Float(y)) => x.partial_cmp(y).unwrap_or(std::cmp::Ordering::Equal),
-                            (Value::Str(x), Value::Str(y)) => x.cmp(y),
-                            _ => std::cmp::Ordering::Equal,
+                    if let Some(m) = guard.iter().max_by(|a, b| match (a, b) {
+                        (Value::Int(x), Value::Int(y)) => x.cmp(y),
+                        (Value::Float(x), Value::Float(y)) => {
+                            x.partial_cmp(y).unwrap_or(std::cmp::Ordering::Equal)
                         }
+                        (Value::Str(x), Value::Str(y)) => x.cmp(y),
+                        _ => std::cmp::Ordering::Equal,
                     }) {
                         return Ok(m.clone());
                     }
                     return Ok(Value::Null);
                 }
-                return Err(LatchError::TypeMismatch { expected: "list".into(), found: "invalid args".into() });
+                return Err(LatchError::TypeMismatch {
+                    expected: "list".into(),
+                    found: "invalid args".into(),
+                });
             }
 
             "min" => {
                 if let Some(Value::List(ref list)) = args.first() {
                     let guard = list.lock().unwrap();
-                    if let Some(m) = guard.iter().min_by(|a, b| {
-                        match (a, b) {
-                            (Value::Int(x), Value::Int(y)) => x.cmp(y),
-                            (Value::Float(x), Value::Float(y)) => x.partial_cmp(y).unwrap_or(std::cmp::Ordering::Equal),
-                            (Value::Str(x), Value::Str(y)) => x.cmp(y),
-                            _ => std::cmp::Ordering::Equal,
+                    if let Some(m) = guard.iter().min_by(|a, b| match (a, b) {
+                        (Value::Int(x), Value::Int(y)) => x.cmp(y),
+                        (Value::Float(x), Value::Float(y)) => {
+                            x.partial_cmp(y).unwrap_or(std::cmp::Ordering::Equal)
                         }
+                        (Value::Str(x), Value::Str(y)) => x.cmp(y),
+                        _ => std::cmp::Ordering::Equal,
                     }) {
                         return Ok(m.clone());
                     }
                     return Ok(Value::Null);
                 }
-                return Err(LatchError::TypeMismatch { expected: "list".into(), found: "invalid args".into() });
+                return Err(LatchError::TypeMismatch {
+                    expected: "list".into(),
+                    found: "invalid args".into(),
+                });
             }
 
             "filter" => {
                 if args.len() == 2 {
-                    if let (Value::List(ref list), Value::Fn { params, body, captured_env }) = (&args[0], &args[1]) {
+                    if let (
+                        Value::List(ref list),
+                        Value::Fn {
+                            params,
+                            body,
+                            captured_env,
+                        },
+                    ) = (&args[0], &args[1])
+                    {
                         let guard = list.lock().unwrap();
                         let mut filtered = Vec::new();
                         let cap = captured_env.as_ref().map(|b| (**b).clone());
                         for item in guard.iter() {
-                            let res = self.call_closure(params, body, vec![item.clone()], cap.clone())?;
+                            let res =
+                                self.call_closure(params, body, vec![item.clone()], cap.clone())?;
                             if res.is_truthy() {
                                 filtered.push(item.clone());
                             }
@@ -329,28 +364,51 @@ impl Interpreter {
                         return Ok(Value::new_list(filtered));
                     }
                 }
-                return Err(LatchError::TypeMismatch { expected: "list, fn".into(), found: "invalid args".into() });
+                return Err(LatchError::TypeMismatch {
+                    expected: "list, fn".into(),
+                    found: "invalid args".into(),
+                });
             }
 
             "map" => {
                 if args.len() == 2 {
-                    if let (Value::List(ref list), Value::Fn { params, body, captured_env }) = (&args[0], &args[1]) {
+                    if let (
+                        Value::List(ref list),
+                        Value::Fn {
+                            params,
+                            body,
+                            captured_env,
+                        },
+                    ) = (&args[0], &args[1])
+                    {
                         let guard = list.lock().unwrap();
                         let mut mapped = Vec::new();
                         let cap = captured_env.as_ref().map(|b| (**b).clone());
                         for item in guard.iter() {
-                            let res = self.call_closure(params, body, vec![item.clone()], cap.clone())?;
+                            let res =
+                                self.call_closure(params, body, vec![item.clone()], cap.clone())?;
                             mapped.push(res);
                         }
                         return Ok(Value::new_list(mapped));
                     }
                 }
-                return Err(LatchError::TypeMismatch { expected: "list, fn".into(), found: "invalid args".into() });
+                return Err(LatchError::TypeMismatch {
+                    expected: "list, fn".into(),
+                    found: "invalid args".into(),
+                });
             }
 
             "each" => {
                 if args.len() == 2 {
-                    if let (Value::List(ref list), Value::Fn { params, body, captured_env }) = (&args[0], &args[1]) {
+                    if let (
+                        Value::List(ref list),
+                        Value::Fn {
+                            params,
+                            body,
+                            captured_env,
+                        },
+                    ) = (&args[0], &args[1])
+                    {
                         let guard = list.lock().unwrap();
                         let cap = captured_env.as_ref().map(|b| (**b).clone());
                         for item in guard.iter() {
@@ -359,20 +417,23 @@ impl Interpreter {
                         return Ok(Value::Null);
                     }
                 }
-                return Err(LatchError::TypeMismatch { expected: "list, fn".into(), found: "invalid args".into() });
+                return Err(LatchError::TypeMismatch {
+                    expected: "list, fn".into(),
+                    found: "invalid args".into(),
+                });
             }
 
             "sort" => {
                 if args.len() == 1 {
                     if let Value::List(ref list) = args[0] {
                         let mut guard = list.lock().unwrap();
-                        guard.sort_by(|a, b| {
-                            match (a, b) {
-                                (Value::Int(x), Value::Int(y)) => x.cmp(y),
-                                (Value::Float(x), Value::Float(y)) => x.partial_cmp(y).unwrap_or(std::cmp::Ordering::Equal),
-                                (Value::Str(x), Value::Str(y)) => x.cmp(y),
-                                _ => std::cmp::Ordering::Equal,
+                        guard.sort_by(|a, b| match (a, b) {
+                            (Value::Int(x), Value::Int(y)) => x.cmp(y),
+                            (Value::Float(x), Value::Float(y)) => {
+                                x.partial_cmp(y).unwrap_or(std::cmp::Ordering::Equal)
                             }
+                            (Value::Str(x), Value::Str(y)) => x.cmp(y),
+                            _ => std::cmp::Ordering::Equal,
                         });
                         return Ok(Value::new_list(guard.clone()));
                     }
@@ -399,10 +460,14 @@ impl Interpreter {
                 if args.len() >= 2 {
                     let s = args[0].as_str()?;
                     let delim = args[1].as_str()?;
-                    let parts: Vec<Value> = s.split(delim).map(|p| Value::Str(p.to_string())).collect();
+                    let parts: Vec<Value> =
+                        s.split(delim).map(|p| Value::Str(p.to_string())).collect();
                     return Ok(Value::new_list(parts));
                 }
-                return Err(LatchError::TypeMismatch { expected: "string, string".into(), found: "invalid args".into() });
+                return Err(LatchError::TypeMismatch {
+                    expected: "string, string".into(),
+                    found: "invalid args".into(),
+                });
             }
 
             "starts_with" => {
@@ -411,7 +476,10 @@ impl Interpreter {
                     let pat = args[1].as_str()?;
                     return Ok(Value::Bool(s.starts_with(pat)));
                 }
-                return Err(LatchError::TypeMismatch { expected: "string, string".into(), found: "invalid args".into() });
+                return Err(LatchError::TypeMismatch {
+                    expected: "string, string".into(),
+                    found: "invalid args".into(),
+                });
             }
             "ends_with" => {
                 if args.len() >= 2 {
@@ -419,7 +487,10 @@ impl Interpreter {
                     let pat = args[1].as_str()?;
                     return Ok(Value::Bool(s.ends_with(pat)));
                 }
-                return Err(LatchError::TypeMismatch { expected: "string, string".into(), found: "invalid args".into() });
+                return Err(LatchError::TypeMismatch {
+                    expected: "string, string".into(),
+                    found: "invalid args".into(),
+                });
             }
             "contains" => {
                 if args.len() >= 2 {
@@ -427,7 +498,10 @@ impl Interpreter {
                     let pat = args[1].as_str()?;
                     return Ok(Value::Bool(s.contains(pat)));
                 }
-                return Err(LatchError::TypeMismatch { expected: "string, string".into(), found: "invalid args".into() });
+                return Err(LatchError::TypeMismatch {
+                    expected: "string, string".into(),
+                    found: "invalid args".into(),
+                });
             }
             "replace" => {
                 if args.len() >= 3 {
@@ -436,19 +510,43 @@ impl Interpreter {
                     let to = args[2].as_str()?;
                     return Ok(Value::Str(s.replace(from, to)));
                 }
-                return Err(LatchError::TypeMismatch { expected: "string, string, string".into(), found: "invalid args".into() });
+                return Err(LatchError::TypeMismatch {
+                    expected: "string, string, string".into(),
+                    found: "invalid args".into(),
+                });
             }
 
             "trim" => {
-                let s = args.first().ok_or_else(|| LatchError::ArgCountMismatch { name: "trim".into(), expected: 1, found: 0 })?.as_str()?;
+                let s = args
+                    .first()
+                    .ok_or_else(|| LatchError::ArgCountMismatch {
+                        name: "trim".into(),
+                        expected: 1,
+                        found: 0,
+                    })?
+                    .as_str()?;
                 return Ok(Value::Str(s.trim().to_string()));
             }
             "upper" => {
-                let s = args.first().ok_or_else(|| LatchError::ArgCountMismatch { name: "upper".into(), expected: 1, found: 0 })?.as_str()?;
+                let s = args
+                    .first()
+                    .ok_or_else(|| LatchError::ArgCountMismatch {
+                        name: "upper".into(),
+                        expected: 1,
+                        found: 0,
+                    })?
+                    .as_str()?;
                 return Ok(Value::Str(s.to_uppercase()));
             }
             "lower" => {
-                let s = args.first().ok_or_else(|| LatchError::ArgCountMismatch { name: "lower".into(), expected: 1, found: 0 })?.as_str()?;
+                let s = args
+                    .first()
+                    .ok_or_else(|| LatchError::ArgCountMismatch {
+                        name: "lower".into(),
+                        expected: 1,
+                        found: 0,
+                    })?
+                    .as_str()?;
                 return Ok(Value::Str(s.to_lowercase()));
             }
             "keys" => {
@@ -594,7 +692,10 @@ impl Interpreter {
                         let guard = m.lock().unwrap();
                         let mut sorted_keys: Vec<String> = guard.keys().cloned().collect();
                         sorted_keys.sort();
-                        let vals: Vec<Value> = sorted_keys.iter().filter_map(|k| guard.get(k).cloned()).collect();
+                        let vals: Vec<Value> = sorted_keys
+                            .iter()
+                            .filter_map(|k| guard.get(k).cloned())
+                            .collect();
                         return Ok(Value::new_list(vals));
                     }
                 }
@@ -608,16 +709,22 @@ impl Interpreter {
         }
 
         // Look up in environment
-        let val = self.env.get(name)
+        let val = self
+            .env
+            .get(name)
             .ok_or_else(|| LatchError::UndefinedFunction(name.to_string()))?;
 
         match val {
-            Value::Fn { params, body, captured_env } => {
-                self.call_closure(&params, &body, args, captured_env.map(|e| *e))
-            }
-            Value::Class { name: class_name, fields, methods } => {
-                self.instantiate_class(&class_name, &fields, &methods, args)
-            }
+            Value::Fn {
+                params,
+                body,
+                captured_env,
+            } => self.call_closure(&params, &body, args, captured_env.map(|e| *e)),
+            Value::Class {
+                name: class_name,
+                fields,
+                methods,
+            } => self.instantiate_class(&class_name, &fields, &methods, args),
             _ => Err(LatchError::TypeMismatch {
                 expected: "function or class".into(),
                 found: val.type_name().into(),
@@ -658,9 +765,18 @@ impl Interpreter {
         Ok(instance)
     }
 
-    pub(crate) fn call_method(&mut self, recv: Value, method: &str, args: Vec<Value>) -> Result<Value> {
+    pub(crate) fn call_method(
+        &mut self,
+        recv: Value,
+        method: &str,
+        args: Vec<Value>,
+    ) -> Result<Value> {
         match &recv {
-            Value::Instance { class_name, methods, .. } => {
+            Value::Instance {
+                class_name,
+                methods,
+                ..
+            } => {
                 let methods_snap = methods.clone();
                 if let Some((_, params, body)) = methods_snap.iter().find(|(n, _, _)| n == method) {
                     let mut call_args = vec![recv.clone()];
@@ -676,44 +792,75 @@ impl Interpreter {
             Value::Str(s) => {
                 let s = s.clone();
                 match method {
-                    "upper"      => Ok(Value::Str(s.to_uppercase())),
-                    "lower"      => Ok(Value::Str(s.to_lowercase())),
-                    "trim"       => Ok(Value::Str(s.trim().to_string())),
-                    "len"        => Ok(Value::Int(s.len() as i64)),
-                    "split"      => {
-                        let delim = args.first().map(|v| v.as_str().unwrap_or("")).unwrap_or("").to_string();
-                        Ok(Value::new_list(s.split(&delim).map(|p| Value::Str(p.to_string())).collect()))
+                    "upper" => Ok(Value::Str(s.to_uppercase())),
+                    "lower" => Ok(Value::Str(s.to_lowercase())),
+                    "trim" => Ok(Value::Str(s.trim().to_string())),
+                    "len" => Ok(Value::Int(s.len() as i64)),
+                    "split" => {
+                        let delim = args
+                            .first()
+                            .map(|v| v.as_str().unwrap_or(""))
+                            .unwrap_or("")
+                            .to_string();
+                        Ok(Value::new_list(
+                            s.split(&delim).map(|p| Value::Str(p.to_string())).collect(),
+                        ))
                     }
-                    "starts_with" => Ok(Value::Bool(s.starts_with(args.first().and_then(|v| v.as_str().ok()).unwrap_or("")))),
-                    "ends_with"   => Ok(Value::Bool(s.ends_with(args.first().and_then(|v| v.as_str().ok()).unwrap_or("")))),
-                    "contains"    => Ok(Value::Bool(s.contains(args.first().and_then(|v| v.as_str().ok()).unwrap_or("")))),
-                    "replace"     => {
+                    "starts_with" => Ok(Value::Bool(
+                        s.starts_with(args.first().and_then(|v| v.as_str().ok()).unwrap_or("")),
+                    )),
+                    "ends_with" => Ok(Value::Bool(
+                        s.ends_with(args.first().and_then(|v| v.as_str().ok()).unwrap_or("")),
+                    )),
+                    "contains" => Ok(Value::Bool(
+                        s.contains(args.first().and_then(|v| v.as_str().ok()).unwrap_or("")),
+                    )),
+                    "replace" => {
                         if args.len() >= 2 {
                             let from = args[0].as_str()?;
                             let to = args[1].as_str()?;
                             Ok(Value::Str(s.replace(from, to)))
                         } else {
-                            Err(LatchError::ArgCountMismatch { name: "str.replace".into(), expected: 2, found: args.len() })
+                            Err(LatchError::ArgCountMismatch {
+                                name: "str.replace".into(),
+                                expected: 2,
+                                found: args.len(),
+                            })
                         }
                     }
-                    _ => Err(LatchError::UnknownMethod { module: "string".into(), method: method.to_string() }),
+                    _ => Err(LatchError::UnknownMethod {
+                        module: "string".into(),
+                        method: method.to_string(),
+                    }),
                 }
             }
             Value::List(list) => {
                 let list = list.clone();
                 match method {
-                    "len"     => Ok(Value::Int(list.lock().unwrap().len() as i64)),
-                    "push"    => { if let Some(v) = args.into_iter().next() { list.lock().unwrap().push(v); } Ok(Value::Null) }
-                    "pop"     => {
-                        let mut guard = list.lock().unwrap();
-                        guard.pop().ok_or_else(|| LatchError::GenericError("pop from empty list".into()))
+                    "len" => Ok(Value::Int(list.lock().unwrap().len() as i64)),
+                    "push" => {
+                        if let Some(v) = args.into_iter().next() {
+                            list.lock().unwrap().push(v);
+                        }
+                        Ok(Value::Null)
                     }
-                    "reverse" => { list.lock().unwrap().reverse(); Ok(Value::Null) }
-                    "sort"    => {
+                    "pop" => {
+                        let mut guard = list.lock().unwrap();
+                        guard
+                            .pop()
+                            .ok_or_else(|| LatchError::GenericError("pop from empty list".into()))
+                    }
+                    "reverse" => {
+                        list.lock().unwrap().reverse();
+                        Ok(Value::Null)
+                    }
+                    "sort" => {
                         let mut vec = list.lock().unwrap().clone();
                         vec.sort_by(|a, b| match (a, b) {
                             (Value::Int(x), Value::Int(y)) => x.cmp(y),
-                            (Value::Float(x), Value::Float(y)) => x.partial_cmp(y).unwrap_or(std::cmp::Ordering::Equal),
+                            (Value::Float(x), Value::Float(y)) => {
+                                x.partial_cmp(y).unwrap_or(std::cmp::Ordering::Equal)
+                            }
                             (Value::Str(x), Value::Str(y)) => x.cmp(y),
                             _ => std::cmp::Ordering::Equal,
                         });
@@ -725,13 +872,16 @@ impl Interpreter {
                         let guard = list.lock().unwrap();
                         Ok(Value::Bool(guard.iter().any(|x| values_equal(x, &needle))))
                     }
-                    _ => Err(LatchError::UnknownMethod { module: "list".into(), method: method.to_string() }),
+                    _ => Err(LatchError::UnknownMethod {
+                        module: "list".into(),
+                        method: method.to_string(),
+                    }),
                 }
             }
             Value::Map(map) => {
                 let map = map.clone();
                 match method {
-                    "keys"   => {
+                    "keys" => {
                         let guard = map.lock().unwrap();
                         let mut keys: Vec<String> = guard.keys().cloned().collect();
                         keys.sort();
@@ -741,18 +891,29 @@ impl Interpreter {
                         let guard = map.lock().unwrap();
                         let mut sorted_keys: Vec<String> = guard.keys().cloned().collect();
                         sorted_keys.sort();
-                        Ok(Value::new_list(sorted_keys.iter().map(|k| guard[k].clone()).collect()))
+                        Ok(Value::new_list(
+                            sorted_keys.iter().map(|k| guard[k].clone()).collect(),
+                        ))
                     }
                     "get" => {
-                        let key = args.first().and_then(|v| v.as_str().ok().map(|s| s.to_string())).unwrap_or_default();
+                        let key = args
+                            .first()
+                            .and_then(|v| v.as_str().ok().map(|s| s.to_string()))
+                            .unwrap_or_default();
                         let guard = map.lock().unwrap();
                         Ok(guard.get(&key).cloned().unwrap_or(Value::Null))
                     }
                     "has" | "contains" => {
-                        let key = args.first().and_then(|v| v.as_str().ok().map(|s| s.to_string())).unwrap_or_default();
+                        let key = args
+                            .first()
+                            .and_then(|v| v.as_str().ok().map(|s| s.to_string()))
+                            .unwrap_or_default();
                         Ok(Value::Bool(map.lock().unwrap().contains_key(&key)))
                     }
-                    _ => Err(LatchError::UnknownMethod { module: "dict".into(), method: method.to_string() }),
+                    _ => Err(LatchError::UnknownMethod {
+                        module: "dict".into(),
+                        method: method.to_string(),
+                    }),
                 }
             }
             other => Err(LatchError::TypeMismatch {
@@ -762,7 +923,13 @@ impl Interpreter {
         }
     }
 
-    pub(crate) fn call_closure(&mut self, params: &[Param], body: &Block, args: Vec<Value>, captured_env: Option<Env>) -> Result<Value> {
+    pub(crate) fn call_closure(
+        &mut self,
+        params: &[Param],
+        body: &Block,
+        args: Vec<Value>,
+        captured_env: Option<Env>,
+    ) -> Result<Value> {
         let caller_env = std::mem::replace(&mut self.env, Env::new());
 
         self.env = match captured_env {

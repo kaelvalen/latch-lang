@@ -6,9 +6,12 @@ use crate::error::{LatchError, Result};
 pub fn call(method: &str, args: Vec<Value>) -> Result<Value> {
     match method {
         "parse" => {
-            let s = args.first()
+            let s = args
+                .first()
                 .ok_or_else(|| LatchError::ArgCountMismatch {
-                    name: "json.parse".into(), expected: 1, found: 0,
+                    name: "json.parse".into(),
+                    expected: 1,
+                    found: 0,
                 })?
                 .as_str()?
                 .to_string();
@@ -18,10 +21,11 @@ pub fn call(method: &str, args: Vec<Value>) -> Result<Value> {
         }
 
         "stringify" => {
-            let val = args.first()
-                .ok_or_else(|| LatchError::ArgCountMismatch {
-                    name: "json.stringify".into(), expected: 1, found: 0,
-                })?;
+            let val = args.first().ok_or_else(|| LatchError::ArgCountMismatch {
+                name: "json.stringify".into(),
+                expected: 1,
+                found: 0,
+            })?;
             let json_val = latch_to_json(val);
             let s = serde_json::to_string_pretty(&json_val)
                 .map_err(|e| LatchError::GenericError(format!("json.stringify: {e}")))?;
@@ -29,7 +33,8 @@ pub fn call(method: &str, args: Vec<Value>) -> Result<Value> {
         }
 
         _ => Err(LatchError::UnknownMethod {
-            module: "json".into(), method: method.into(),
+            module: "json".into(),
+            method: method.into(),
         }),
     }
 }
@@ -53,7 +58,8 @@ fn json_to_latch(val: serde_json::Value) -> Value {
             Value::new_list(arr.into_iter().map(json_to_latch).collect())
         }
         serde_json::Value::Object(obj) => {
-            let map: HashMap<String, Value> = obj.into_iter()
+            let map: HashMap<String, Value> = obj
+                .into_iter()
                 .map(|(k, v)| (k, json_to_latch(v)))
                 .collect();
             Value::new_map(map)
@@ -75,7 +81,8 @@ fn latch_to_json(val: &Value) -> serde_json::Value {
         }
         Value::Map(map) => {
             let guard = map.lock().unwrap();
-            let obj: serde_json::Map<String, serde_json::Value> = guard.iter()
+            let obj: serde_json::Map<String, serde_json::Value> = guard
+                .iter()
                 .map(|(k, v)| (k.clone(), latch_to_json(v)))
                 .collect();
             serde_json::Value::Object(obj)
@@ -84,14 +91,22 @@ fn latch_to_json(val: &Value) -> serde_json::Value {
         Value::Function(func) => serde_json::Value::String(format!("<fn {}>", func.name)),
         Value::Closure(c) => serde_json::Value::String(format!("<fn {}>", c.function.name)),
         Value::Native(n) => serde_json::Value::String(format!("<native fn {}>", n.name)),
-        Value::ProcessResult { stdout, stderr, code } => {
+        Value::ProcessResult {
+            stdout,
+            stderr,
+            code,
+        } => {
             serde_json::json!({
                 "stdout": stdout,
                 "stderr": stderr,
                 "code": code,
             })
         }
-        Value::HttpResponse { status, body, headers } => {
+        Value::HttpResponse {
+            status,
+            body,
+            headers,
+        } => {
             serde_json::json!({
                 "status": status,
                 "body": body,
@@ -99,13 +114,19 @@ fn latch_to_json(val: &Value) -> serde_json::Value {
             })
         }
         Value::Class { name, .. } => serde_json::Value::String(format!("<class {}>", name)),
-        Value::Instance { class_name, fields, .. } => {
+        Value::Instance {
+            class_name, fields, ..
+        } => {
             let guard = fields.lock().unwrap();
-            let obj: serde_json::Map<String, serde_json::Value> = guard.iter()
+            let obj: serde_json::Map<String, serde_json::Value> = guard
+                .iter()
                 .map(|(k, v)| (k.clone(), latch_to_json(v)))
                 .collect();
             let mut result = serde_json::Map::new();
-            result.insert("__class__".to_string(), serde_json::Value::String(class_name.clone()));
+            result.insert(
+                "__class__".to_string(),
+                serde_json::Value::String(class_name.clone()),
+            );
             result.extend(obj);
             serde_json::Value::Object(result)
         }

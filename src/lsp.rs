@@ -1,5 +1,5 @@
-use std::io::{self, BufRead, Write};
 use serde_json::{json, Value};
+use std::io::{self, BufRead, Write};
 
 use crate::lexer::Lexer;
 use crate::parser::Parser;
@@ -65,7 +65,7 @@ pub fn start_lsp_server() {
                     if let Some(doc) = params.get("textDocument") {
                         let uri = doc.get("uri").and_then(|u| u.as_str()).unwrap_or("");
                         let text = doc.get("text").and_then(|t| t.as_str()).unwrap_or("");
-                        
+
                         let diagnostics = analyze_document(text);
                         let notif = json!({
                             "jsonrpc": "2.0",
@@ -99,16 +99,19 @@ pub fn start_lsp_server() {
             "textDocument/completion" => {
                 if let Some(id_val) = id {
                     let keywords = vec![
-                        "let", "const", "fn", "if", "else", "for", "while",
-                        "break", "continue", "return", "try", "catch", "finally",
-                        "parallel", "class", "import", "export", "match"
+                        "let", "const", "fn", "if", "else", "for", "while", "break", "continue",
+                        "return", "try", "catch", "finally", "parallel", "class", "import",
+                        "export", "match",
                     ];
-                    let items: Vec<Value> = keywords.into_iter().map(|kw| {
-                        json!({
-                            "label": kw,
-                            "kind": 14 // Keyword
+                    let items: Vec<Value> = keywords
+                        .into_iter()
+                        .map(|kw| {
+                            json!({
+                                "label": kw,
+                                "kind": 14 // Keyword
+                            })
                         })
-                    }).collect();
+                        .collect();
 
                     let resp = json!({
                         "jsonrpc": "2.0",

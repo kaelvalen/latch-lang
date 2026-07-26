@@ -1,5 +1,5 @@
-use crate::error::{LatchError, Result};
 use super::chunk::OpCode;
+use crate::error::{LatchError, Result};
 
 /// Decoded Single Bytecode Instruction
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -28,7 +28,9 @@ impl<'a> InstructionCursor<'a> {
     #[inline(always)]
     pub fn decode_next(&mut self) -> Result<DecodedInstruction> {
         if self.ip >= self.code.len() {
-            return Err(LatchError::GenericError("Unexpected EOF in bytecode stream".into()));
+            return Err(LatchError::GenericError(
+                "Unexpected EOF in bytecode stream".into(),
+            ));
         }
 
         let offset = self.ip;
@@ -42,7 +44,10 @@ impl<'a> InstructionCursor<'a> {
 
         let operand = if desc.operand_width == 2 {
             if self.ip + 1 > self.code.len() {
-                return Err(LatchError::GenericError(format!("Truncated operand for {} at offset={offset}", desc.name)));
+                return Err(LatchError::GenericError(format!(
+                    "Truncated operand for {} at offset={offset}",
+                    desc.name
+                )));
             }
             let val = u16::from_be_bytes([self.code[self.ip], self.code[self.ip + 1]]);
             self.ip += 2;

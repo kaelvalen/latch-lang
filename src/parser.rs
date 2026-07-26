@@ -75,23 +75,29 @@ impl Parser {
     fn parse_stmt(&mut self) -> Result<Stmt> {
         self.skip_newlines();
         match self.peek().clone() {
-            Token::KwIf       => self.parse_if(),
-            Token::KwFor      => self.parse_for(),
+            Token::KwIf => self.parse_if(),
+            Token::KwFor => self.parse_for(),
             Token::KwParallel => self.parse_parallel(),
-            Token::KwFn       => self.parse_fn(),
-            Token::KwReturn   => self.parse_return(),
-            Token::KwTry      => self.parse_try(),
-            Token::KwWhile    => self.parse_while(),
-            Token::KwBreak    => { self.advance(); Ok(Stmt::Break) },
-            Token::KwContinue => { self.advance(); Ok(Stmt::Continue) },
-            Token::KwConst    => self.parse_const(),
-            Token::KwClass    => self.parse_class(),
-            Token::KwExport   => self.parse_export(),
-            Token::KwImport   => self.parse_import(),
-            Token::KwMatch    => self.parse_match(),
-            Token::KwStop     => self.parse_stop(),
-            Token::Ident(_)   => self.parse_ident_stmt(),
-            _                 => {
+            Token::KwFn => self.parse_fn(),
+            Token::KwReturn => self.parse_return(),
+            Token::KwTry => self.parse_try(),
+            Token::KwWhile => self.parse_while(),
+            Token::KwBreak => {
+                self.advance();
+                Ok(Stmt::Break)
+            }
+            Token::KwContinue => {
+                self.advance();
+                Ok(Stmt::Continue)
+            }
+            Token::KwConst => self.parse_const(),
+            Token::KwClass => self.parse_class(),
+            Token::KwExport => self.parse_export(),
+            Token::KwImport => self.parse_import(),
+            Token::KwMatch => self.parse_match(),
+            Token::KwStop => self.parse_stop(),
+            Token::Ident(_) => self.parse_ident_stmt(),
+            _ => {
                 let expr = self.parse_expr()?;
                 Ok(Stmt::Expr(expr))
             }
@@ -135,16 +141,20 @@ impl Parser {
                     });
                 }
                 let value = self.parse_expr()?;
-                Ok(Stmt::Let { name, type_ann: Some(type_ann), value })
+                Ok(Stmt::Let {
+                    name,
+                    type_ann: Some(type_ann),
+                    value,
+                })
             }
 
             // Compound assignments: +=, -=, *=, /=, %=
             Token::PlusEq | Token::MinusEq | Token::StarEq | Token::SlashEq | Token::PercentEq => {
                 let op = match self.advance().node.clone() {
-                    Token::PlusEq    => BinOp::Add,
-                    Token::MinusEq   => BinOp::Sub,
-                    Token::StarEq    => BinOp::Mul,
-                    Token::SlashEq   => BinOp::Div,
+                    Token::PlusEq => BinOp::Add,
+                    Token::MinusEq => BinOp::Sub,
+                    Token::StarEq => BinOp::Mul,
+                    Token::SlashEq => BinOp::Div,
                     Token::PercentEq => BinOp::Mod,
                     _ => unreachable!(),
                 };
@@ -162,7 +172,11 @@ impl Parser {
                     // Simple: name[idx] = value
                     self.advance(); // skip =
                     let value = self.parse_expr()?;
-                    Ok(Stmt::IndexAssign { target: Expr::Ident(name), index: first_index, value })
+                    Ok(Stmt::IndexAssign {
+                        target: Expr::Ident(name),
+                        index: first_index,
+                        value,
+                    })
                 } else {
                     // Build Expr::Index and continue postfix
                     let base = Expr::Index {
@@ -176,10 +190,20 @@ impl Parser {
                         self.advance(); // skip =
                         let value = self.parse_expr()?;
                         // Decompose: the outermost Expr::Index gives us target + index
-                        if let Expr::Index { expr: target, index } = expr {
-                            Ok(Stmt::IndexAssign { target: *target, index: *index, value })
+                        if let Expr::Index {
+                            expr: target,
+                            index,
+                        } = expr
+                        {
+                            Ok(Stmt::IndexAssign {
+                                target: *target,
+                                index: *index,
+                                value,
+                            })
                         } else {
-                            Err(crate::error::LatchError::GenericError("Invalid assignment target".into()))
+                            Err(crate::error::LatchError::GenericError(
+                                "Invalid assignment target".into(),
+                            ))
                         }
                     } else {
                         Ok(Stmt::Expr(expr))
@@ -231,7 +255,10 @@ impl Parser {
             self.advance();
             // For else, we create a dummy statement to hold the block
             let else_block = self.parse_block()?;
-            Some(Box::new(Stmt::Expr(Expr::Fn { params: vec![], body: else_block })))
+            Some(Box::new(Stmt::Expr(Expr::Fn {
+                params: vec![],
+                body: else_block,
+            })))
         } else {
             None
         };
@@ -251,7 +278,10 @@ impl Parser {
         } else if matches!(self.peek(), Token::KwElse) {
             self.advance();
             let else_block = self.parse_block()?;
-            Some(Box::new(Stmt::Expr(Expr::Fn { params: vec![], body: else_block })))
+            Some(Box::new(Stmt::Expr(Expr::Fn {
+                params: vec![],
+                body: else_block,
+            })))
         } else {
             None
         };
@@ -263,9 +293,13 @@ impl Parser {
         self.advance(); // skip 'for'
         let var = match self.advance().node.clone() {
             Token::Ident(n) => n,
-            other => return Err(LatchError::UnexpectedToken {
-                expected: "identifier".into(), found: format!("{other:?}"), line: self.line(),
-            }),
+            other => {
+                return Err(LatchError::UnexpectedToken {
+                    expected: "identifier".into(),
+                    found: format!("{other:?}"),
+                    line: self.line(),
+                })
+            }
         };
         self.expect(&Token::KwIn)?;
         let iter = self.parse_expr()?;
@@ -277,9 +311,13 @@ impl Parser {
         self.advance(); // skip 'parallel'
         let var = match self.advance().node.clone() {
             Token::Ident(n) => n,
-            other => return Err(LatchError::UnexpectedToken {
-                expected: "identifier".into(), found: format!("{other:?}"), line: self.line(),
-            }),
+            other => {
+                return Err(LatchError::UnexpectedToken {
+                    expected: "identifier".into(),
+                    found: format!("{other:?}"),
+                    line: self.line(),
+                })
+            }
         };
         self.expect(&Token::KwIn)?;
         let iter = self.parse_expr()?;
@@ -294,16 +332,25 @@ impl Parser {
         };
 
         let body = self.parse_block()?;
-        Ok(Stmt::Parallel { var, iter, workers, body })
+        Ok(Stmt::Parallel {
+            var,
+            iter,
+            workers,
+            body,
+        })
     }
 
     fn parse_fn(&mut self) -> Result<Stmt> {
         self.advance(); // skip 'fn'
         let name = match self.advance().node.clone() {
             Token::Ident(n) => n,
-            other => return Err(LatchError::UnexpectedToken {
-                expected: "function name".into(), found: format!("{other:?}"), line: self.line(),
-            }),
+            other => {
+                return Err(LatchError::UnexpectedToken {
+                    expected: "function name".into(),
+                    found: format!("{other:?}"),
+                    line: self.line(),
+                })
+            }
         };
 
         self.expect(&Token::LParen)?;
@@ -318,7 +365,12 @@ impl Parser {
         };
 
         let body = self.parse_block()?;
-        Ok(Stmt::Fn { name, params, return_type, body })
+        Ok(Stmt::Fn {
+            name,
+            params,
+            return_type,
+            body,
+        })
     }
 
     fn parse_params(&mut self) -> Result<Vec<Param>> {
@@ -329,9 +381,13 @@ impl Parser {
         loop {
             let name = match self.advance().node.clone() {
                 Token::Ident(n) => n,
-                other => return Err(LatchError::UnexpectedToken {
-                    expected: "parameter name".into(), found: format!("{other:?}"), line: self.line(),
-                }),
+                other => {
+                    return Err(LatchError::UnexpectedToken {
+                        expected: "parameter name".into(),
+                        found: format!("{other:?}"),
+                        line: self.line(),
+                    })
+                }
             };
             let type_ann = if matches!(self.peek(), Token::Colon) {
                 self.advance();
@@ -346,7 +402,11 @@ impl Parser {
             } else {
                 None
             };
-            params.push(Param { name, type_ann, default });
+            params.push(Param {
+                name,
+                type_ann,
+                default,
+            });
             if matches!(self.peek(), Token::Comma) {
                 self.advance();
             } else {
@@ -359,21 +419,25 @@ impl Parser {
     fn parse_type(&mut self) -> Result<Type> {
         match self.advance().node.clone() {
             Token::Ident(s) => match s.as_str() {
-                "int"     => Ok(Type::Int),
-                "float"   => Ok(Type::Float),
-                "bool"    => Ok(Type::Bool),
-                "string"  => Ok(Type::Str),
-                "list"    => Ok(Type::List),
-                "dict"    => Ok(Type::Dict),
+                "int" => Ok(Type::Int),
+                "float" => Ok(Type::Float),
+                "bool" => Ok(Type::Bool),
+                "string" => Ok(Type::Str),
+                "list" => Ok(Type::List),
+                "dict" => Ok(Type::Dict),
                 "process" => Ok(Type::Process),
-                "file"    => Ok(Type::File),
-                "any"     => Ok(Type::Any),
+                "file" => Ok(Type::File),
+                "any" => Ok(Type::Any),
                 _ => Err(LatchError::UnexpectedToken {
-                    expected: "type".into(), found: s, line: self.line(),
+                    expected: "type".into(),
+                    found: s,
+                    line: self.line(),
                 }),
             },
             other => Err(LatchError::UnexpectedToken {
-                expected: "type".into(), found: format!("{other:?}"), line: self.line(),
+                expected: "type".into(),
+                found: format!("{other:?}"),
+                line: self.line(),
             }),
         }
     }
@@ -391,12 +455,16 @@ impl Parser {
         self.expect(&Token::KwCatch)?;
         let catch_var = match self.advance().node.clone() {
             Token::Ident(n) => n,
-            other => return Err(LatchError::UnexpectedToken {
-                expected: "catch variable".into(), found: format!("{other:?}"), line: self.line(),
-            }),
+            other => {
+                return Err(LatchError::UnexpectedToken {
+                    expected: "catch variable".into(),
+                    found: format!("{other:?}"),
+                    line: self.line(),
+                })
+            }
         };
         let catch_body = self.parse_block()?;
-        
+
         // Check for finally clause
         let finally_body = if matches!(self.peek(), Token::KwFinally) {
             self.advance(); // skip 'finally'
@@ -404,8 +472,13 @@ impl Parser {
         } else {
             None
         };
-        
-        Ok(Stmt::Try { body, catch_var, catch_body, finally_body })
+
+        Ok(Stmt::Try {
+            body,
+            catch_var,
+            catch_body,
+            finally_body,
+        })
     }
 
     fn parse_while(&mut self) -> Result<Stmt> {
@@ -419,13 +492,15 @@ impl Parser {
         self.advance(); // skip 'const'
         let name = match self.advance().node.clone() {
             Token::Ident(n) => n,
-            other => return Err(LatchError::UnexpectedToken {
-                expected: "identifier".into(),
-                found: format!("{:?}", other),
-                line: self.line(),
-            }),
+            other => {
+                return Err(LatchError::UnexpectedToken {
+                    expected: "identifier".into(),
+                    found: format!("{:?}", other),
+                    line: self.line(),
+                })
+            }
         };
-        
+
         // Optional type annotation
         let type_ann = if matches!(self.peek(), Token::Colon) {
             self.advance(); // skip ':'
@@ -433,46 +508,65 @@ impl Parser {
         } else {
             None
         };
-        
+
         self.expect(&Token::Eq)?;
         let value = self.parse_expr()?;
-        Ok(Stmt::Const { name, type_ann, value })
+        Ok(Stmt::Const {
+            name,
+            type_ann,
+            value,
+        })
     }
 
     fn parse_class(&mut self) -> Result<Stmt> {
         self.advance(); // skip 'class'
         let name = match self.advance().node.clone() {
             Token::Ident(n) => n,
-            other => return Err(LatchError::UnexpectedToken {
-                expected: "class name".into(),
-                found: format!("{:?}", other),
-                line: self.line(),
-            }),
+            other => {
+                return Err(LatchError::UnexpectedToken {
+                    expected: "class name".into(),
+                    found: format!("{:?}", other),
+                    line: self.line(),
+                })
+            }
         };
-        
+
         let body = self.parse_block()?;
         let mut fields = Vec::new();
         let mut methods = Vec::new();
-        
+
         // Parse class body
         for stmt in body {
             match stmt {
-                Stmt::Let { name, type_ann, value } => {
+                Stmt::Let {
+                    name,
+                    type_ann,
+                    value,
+                } => {
                     fields.push((name, type_ann, Some(value)));
                 }
-                Stmt::Fn { name, params, return_type: _, body } => {
+                Stmt::Fn {
+                    name,
+                    params,
+                    return_type: _,
+                    body,
+                } => {
                     methods.push((name, params, body));
                 }
                 _ => {}
             }
         }
-        
-        Ok(Stmt::Class { name, fields, methods })
+
+        Ok(Stmt::Class {
+            name,
+            fields,
+            methods,
+        })
     }
 
     fn parse_export(&mut self) -> Result<Stmt> {
         self.advance(); // skip 'export'
-        
+
         // Check for block syntax: export { a, b, c }
         if matches!(self.peek(), Token::LBrace) {
             self.advance(); // skip '{'
@@ -480,11 +574,13 @@ impl Parser {
             while !matches!(self.peek(), Token::RBrace | Token::EOF) {
                 let name = match self.advance().node.clone() {
                     Token::Ident(n) => n,
-                    other => return Err(LatchError::UnexpectedToken {
-                        expected: "identifier".into(),
-                        found: format!("{:?}", other),
-                        line: self.line(),
-                    }),
+                    other => {
+                        return Err(LatchError::UnexpectedToken {
+                            expected: "identifier".into(),
+                            found: format!("{:?}", other),
+                            line: self.line(),
+                        })
+                    }
                 };
                 names.push(name);
                 if matches!(self.peek(), Token::Comma) {
@@ -497,11 +593,13 @@ impl Parser {
             // Single export: export foo
             let name = match self.advance().node.clone() {
                 Token::Ident(n) => n,
-                other => return Err(LatchError::UnexpectedToken {
-                    expected: "identifier".into(),
-                    found: format!("{:?}", other),
-                    line: self.line(),
-                }),
+                other => {
+                    return Err(LatchError::UnexpectedToken {
+                        expected: "identifier".into(),
+                        found: format!("{:?}", other),
+                        line: self.line(),
+                    })
+                }
             };
             Ok(Stmt::Export(vec![name]))
         }
@@ -509,7 +607,7 @@ impl Parser {
 
     fn parse_import(&mut self) -> Result<Stmt> {
         self.advance(); // skip 'import'
-        
+
         // Parse import list: { a, b, c } or single item
         let items = if matches!(self.peek(), Token::LBrace) {
             self.advance(); // skip '{'
@@ -517,11 +615,13 @@ impl Parser {
             while !matches!(self.peek(), Token::RBrace | Token::EOF) {
                 let name = match self.advance().node.clone() {
                     Token::Ident(n) => n,
-                    other => return Err(LatchError::UnexpectedToken {
-                        expected: "identifier".into(),
-                        found: format!("{:?}", other),
-                        line: self.line(),
-                    }),
+                    other => {
+                        return Err(LatchError::UnexpectedToken {
+                            expected: "identifier".into(),
+                            found: format!("{:?}", other),
+                            line: self.line(),
+                        })
+                    }
                 };
                 names.push(name);
                 if matches!(self.peek(), Token::Comma) {
@@ -534,15 +634,17 @@ impl Parser {
             // Single import
             let name = match self.advance().node.clone() {
                 Token::Ident(n) => n,
-                other => return Err(LatchError::UnexpectedToken {
-                    expected: "identifier".into(),
-                    found: format!("{:?}", other),
-                    line: self.line(),
-                }),
+                other => {
+                    return Err(LatchError::UnexpectedToken {
+                        expected: "identifier".into(),
+                        found: format!("{:?}", other),
+                        line: self.line(),
+                    })
+                }
             };
             vec![name]
         };
-        
+
         // Expect 'from' keyword
         if !matches!(self.peek(), Token::KwUse) {
             return Err(LatchError::UnexpectedToken {
@@ -552,18 +654,20 @@ impl Parser {
             });
         }
         self.advance(); // skip 'from'
-        
+
         // Parse module path (as string or ident)
         let module = match self.advance().node.clone() {
             Token::Str(s) => s,
             Token::Ident(s) => s,
-            other => return Err(LatchError::UnexpectedToken {
-                expected: "module path".into(),
-                found: format!("{:?}", other),
-                line: self.line(),
-            }),
+            other => {
+                return Err(LatchError::UnexpectedToken {
+                    expected: "module path".into(),
+                    found: format!("{:?}", other),
+                    line: self.line(),
+                })
+            }
         };
-        
+
         Ok(Stmt::Import { items, module })
     }
 
@@ -600,7 +704,11 @@ impl Parser {
         }
         self.expect(&Token::RBrace)?;
 
-        Ok(Stmt::Match { expr, cases, default })
+        Ok(Stmt::Match {
+            expr,
+            cases,
+            default,
+        })
     }
 
     /// `stop N` — syntax sugar for `exit(N)`.
@@ -703,7 +811,11 @@ impl Parser {
         while matches!(self.peek(), Token::Or) {
             self.advance();
             let right = self.parse_and_expr()?;
-            left = Expr::BinOp { op: BinOp::Or, left: Box::new(left), right: Box::new(right) };
+            left = Expr::BinOp {
+                op: BinOp::Or,
+                left: Box::new(left),
+                right: Box::new(right),
+            };
         }
         Ok(left)
     }
@@ -713,7 +825,11 @@ impl Parser {
         while matches!(self.peek(), Token::And) {
             self.advance();
             let right = self.parse_equality()?;
-            left = Expr::BinOp { op: BinOp::And, left: Box::new(left), right: Box::new(right) };
+            left = Expr::BinOp {
+                op: BinOp::And,
+                left: Box::new(left),
+                right: Box::new(right),
+            };
         }
         Ok(left)
     }
@@ -722,13 +838,17 @@ impl Parser {
         let mut left = self.parse_comparison()?;
         loop {
             let op = match self.peek() {
-                Token::EqEq  => BinOp::Eq,
+                Token::EqEq => BinOp::Eq,
                 Token::NotEq => BinOp::NotEq,
                 _ => break,
             };
             self.advance();
             let right = self.parse_comparison()?;
-            left = Expr::BinOp { op, left: Box::new(left), right: Box::new(right) };
+            left = Expr::BinOp {
+                op,
+                left: Box::new(left),
+                right: Box::new(right),
+            };
         }
         Ok(left)
     }
@@ -737,8 +857,8 @@ impl Parser {
         let mut left = self.parse_range()?;
         loop {
             let op = match self.peek() {
-                Token::Lt   => BinOp::Lt,
-                Token::Gt   => BinOp::Gt,
+                Token::Lt => BinOp::Lt,
+                Token::Gt => BinOp::Gt,
                 Token::LtEq => BinOp::LtEq,
                 Token::GtEq => BinOp::GtEq,
                 Token::KwIn => BinOp::In,
@@ -746,7 +866,11 @@ impl Parser {
             };
             self.advance();
             let right = self.parse_range()?;
-            left = Expr::BinOp { op, left: Box::new(left), right: Box::new(right) };
+            left = Expr::BinOp {
+                op,
+                left: Box::new(left),
+                right: Box::new(right),
+            };
         }
         Ok(left)
     }
@@ -768,13 +892,17 @@ impl Parser {
         let mut left = self.parse_multiplicative()?;
         loop {
             let op = match self.peek() {
-                Token::Plus  => BinOp::Add,
+                Token::Plus => BinOp::Add,
                 Token::Minus => BinOp::Sub,
                 _ => break,
             };
             self.advance();
             let right = self.parse_multiplicative()?;
-            left = Expr::BinOp { op, left: Box::new(left), right: Box::new(right) };
+            left = Expr::BinOp {
+                op,
+                left: Box::new(left),
+                right: Box::new(right),
+            };
         }
         Ok(left)
     }
@@ -783,14 +911,18 @@ impl Parser {
         let mut left = self.parse_unary()?;
         loop {
             let op = match self.peek() {
-                Token::Star    => BinOp::Mul,
-                Token::Slash   => BinOp::Div,
+                Token::Star => BinOp::Mul,
+                Token::Slash => BinOp::Div,
                 Token::Percent => BinOp::Mod,
                 _ => break,
             };
             self.advance();
             let right = self.parse_unary()?;
-            left = Expr::BinOp { op, left: Box::new(left), right: Box::new(right) };
+            left = Expr::BinOp {
+                op,
+                left: Box::new(left),
+                right: Box::new(right),
+            };
         }
         Ok(left)
     }
@@ -800,12 +932,18 @@ impl Parser {
             Token::Bang | Token::KwNot => {
                 self.advance();
                 let expr = self.parse_unary()?;
-                Ok(Expr::UnaryOp { op: UnaryOp::Not, expr: Box::new(expr) })
+                Ok(Expr::UnaryOp {
+                    op: UnaryOp::Not,
+                    expr: Box::new(expr),
+                })
             }
             Token::Minus => {
                 self.advance();
                 let expr = self.parse_unary()?;
-                Ok(Expr::UnaryOp { op: UnaryOp::Neg, expr: Box::new(expr) })
+                Ok(Expr::UnaryOp {
+                    op: UnaryOp::Neg,
+                    expr: Box::new(expr),
+                })
             }
             _ => self.parse_postfix(),
         }
@@ -818,7 +956,6 @@ impl Parser {
 
     /// Continue parsing postfix operations from an already-parsed base expression.
     fn continue_postfix(&mut self, mut expr: Expr) -> Result<Expr> {
-
         loop {
             match self.peek() {
                 // field access: expr.field or module call: mod.method(args)
@@ -827,17 +964,21 @@ impl Parser {
                     let field = match self.advance().node.clone() {
                         Token::Ident(n) => n,
                         // Allow keywords as method/field names (e.g., regex.match, set.new)
-                        Token::KwMatch   => "match".to_string(),
-                        Token::KwCase    => "case".to_string(),
+                        Token::KwMatch => "match".to_string(),
+                        Token::KwCase => "case".to_string(),
                         Token::KwDefault => "default".to_string(),
-                        Token::KwAs      => "as".to_string(),
-                        Token::KwIn      => "in".to_string(),
-                        Token::KwFor     => "for".to_string(),
-                        Token::KwIf      => "if".to_string(),
-                        Token::KwReturn  => "return".to_string(),
-                        other => return Err(LatchError::UnexpectedToken {
-                            expected: "field name".into(), found: format!("{other:?}"), line: self.line(),
-                        }),
+                        Token::KwAs => "as".to_string(),
+                        Token::KwIn => "in".to_string(),
+                        Token::KwFor => "for".to_string(),
+                        Token::KwIf => "if".to_string(),
+                        Token::KwReturn => "return".to_string(),
+                        other => {
+                            return Err(LatchError::UnexpectedToken {
+                                expected: "field name".into(),
+                                found: format!("{other:?}"),
+                                line: self.line(),
+                            })
+                        }
                     };
 
                     if matches!(self.peek(), Token::LParen) {
@@ -848,11 +989,30 @@ impl Parser {
 
                         expr = match expr {
                             // Known module name → ModuleCall (built-in module dispatch)
-                            Expr::Ident(ref module) if matches!(module.as_str(),
-                                "fs"|"proc"|"http"|"time"|"ai"|"json"|"env"|"path"|
-                                "math"|"regex"|"hash"|"set"|"csv"|"base64") => {
+                            Expr::Ident(ref module)
+                                if matches!(
+                                    module.as_str(),
+                                    "fs" | "proc"
+                                        | "http"
+                                        | "time"
+                                        | "ai"
+                                        | "json"
+                                        | "env"
+                                        | "path"
+                                        | "math"
+                                        | "regex"
+                                        | "hash"
+                                        | "set"
+                                        | "csv"
+                                        | "base64"
+                                ) =>
+                            {
                                 let module = module.clone();
-                                Expr::ModuleCall { module, method: field, args }
+                                Expr::ModuleCall {
+                                    module,
+                                    method: field,
+                                    args,
+                                }
                             }
                             // Everything else → MethodCall (instance method dispatch)
                             other => Expr::MethodCall {
@@ -862,19 +1022,22 @@ impl Parser {
                             },
                         };
                     } else {
-                        expr = Expr::FieldAccess { expr: Box::new(expr), field };
+                        expr = Expr::FieldAccess {
+                            expr: Box::new(expr),
+                            field,
+                        };
                     }
                 }
 
                 // index: expr[index] or slice: expr[start:end]
                 Token::LBracket => {
                     self.advance();
-                    
+
                     // Check for slice notation (contains :)
                     let saved_pos = self.pos;
                     let mut found_colon = false;
                     let mut bracket_depth = 1;
-                    
+
                     // Scan ahead to find if there's a colon at the top bracket level
                     let mut scan_pos = self.pos;
                     while scan_pos < self.tokens.len() && bracket_depth > 0 {
@@ -889,9 +1052,9 @@ impl Parser {
                         }
                         scan_pos += 1;
                     }
-                    
+
                     self.pos = saved_pos; // Reset position
-                    
+
                     if found_colon {
                         // Parse slice: start:end
                         let start = if matches!(self.peek(), Token::Colon) {
@@ -899,22 +1062,29 @@ impl Parser {
                         } else {
                             Some(Box::new(self.parse_expr()?))
                         };
-                        
+
                         self.expect(&Token::Colon)?;
-                        
+
                         let end = if matches!(self.peek(), Token::RBracket) {
                             None
                         } else {
                             Some(Box::new(self.parse_expr()?))
                         };
-                        
+
                         self.expect(&Token::RBracket)?;
-                        expr = Expr::Slice { expr: Box::new(expr), start, end };
+                        expr = Expr::Slice {
+                            expr: Box::new(expr),
+                            start,
+                            end,
+                        };
                     } else {
                         // Parse regular index
                         let index = self.parse_expr()?;
                         self.expect(&Token::RBracket)?;
-                        expr = Expr::Index { expr: Box::new(expr), index: Box::new(index) };
+                        expr = Expr::Index {
+                            expr: Box::new(expr),
+                            index: Box::new(index),
+                        };
                     }
                 }
 
@@ -923,14 +1093,21 @@ impl Parser {
                     self.advance();
                     let field = match self.advance().node.clone() {
                         Token::Ident(n) => n,
-                        Token::KwMatch   => "match".to_string(),
-                        Token::KwCase    => "case".to_string(),
+                        Token::KwMatch => "match".to_string(),
+                        Token::KwCase => "case".to_string(),
                         Token::KwDefault => "default".to_string(),
-                        other => return Err(LatchError::UnexpectedToken {
-                            expected: "field name".into(), found: format!("{other:?}"), line: self.line(),
-                        }),
+                        other => {
+                            return Err(LatchError::UnexpectedToken {
+                                expected: "field name".into(),
+                                found: format!("{other:?}"),
+                                line: self.line(),
+                            })
+                        }
                     };
-                    expr = Expr::SafeAccess { expr: Box::new(expr), field };
+                    expr = Expr::SafeAccess {
+                        expr: Box::new(expr),
+                        field,
+                    };
                 }
 
                 // call: expr(args) — only for Ident
@@ -939,7 +1116,11 @@ impl Parser {
                     let args = self.parse_args()?;
                     self.expect(&Token::RParen)?;
                     if let Expr::Ident(name) = expr {
-                        expr = Expr::Call { name, args, kwargs: Vec::new() };
+                        expr = Expr::Call {
+                            name,
+                            args,
+                            kwargs: Vec::new(),
+                        };
                     }
                 }
 
@@ -969,12 +1150,30 @@ impl Parser {
     fn parse_primary(&mut self) -> Result<Expr> {
         let tok = self.peek().clone();
         match tok {
-            Token::Int(n)    => { self.advance(); Ok(Expr::Int(n)) }
-            Token::Float(n)  => { self.advance(); Ok(Expr::Float(n)) }
-            Token::Bool(b)   => { self.advance(); Ok(Expr::Bool(b)) }
-            Token::Str(s)    => { self.advance(); Ok(Expr::Str(s)) }
-            Token::KwNull    => { self.advance(); Ok(Expr::Null) }
-            Token::Ident(n)  => { self.advance(); Ok(Expr::Ident(n)) }
+            Token::Int(n) => {
+                self.advance();
+                Ok(Expr::Int(n))
+            }
+            Token::Float(n) => {
+                self.advance();
+                Ok(Expr::Float(n))
+            }
+            Token::Bool(b) => {
+                self.advance();
+                Ok(Expr::Bool(b))
+            }
+            Token::Str(s) => {
+                self.advance();
+                Ok(Expr::Str(s))
+            }
+            Token::KwNull => {
+                self.advance();
+                Ok(Expr::Null)
+            }
+            Token::Ident(n) => {
+                self.advance();
+                Ok(Expr::Ident(n))
+            }
 
             Token::InterpolatedStr(parts) => {
                 self.advance();
@@ -984,27 +1183,29 @@ impl Parser {
 
             Token::LBracket => {
                 self.advance(); // skip [
-                
+
                 // Check if this is a list comprehension by looking for 'for' keyword
                 let saved_pos = self.pos;
                 let is_comprehension = self.scan_for_list_comprehension();
                 self.pos = saved_pos;
-                
+
                 if is_comprehension {
                     // Parse list comprehension: [expr for var in iter if cond]
                     let body = self.parse_expr()?;
                     self.expect(&Token::KwFor)?;
                     let var = match self.advance().node.clone() {
                         Token::Ident(n) => n,
-                        other => return Err(LatchError::UnexpectedToken {
-                            expected: "loop variable".into(),
-                            found: format!("{:?}", other),
-                            line: self.line(),
-                        }),
+                        other => {
+                            return Err(LatchError::UnexpectedToken {
+                                expected: "loop variable".into(),
+                                found: format!("{:?}", other),
+                                line: self.line(),
+                            })
+                        }
                     };
                     self.expect(&Token::KwIn)?;
                     let iter = self.parse_expr()?;
-                    
+
                     // Optional condition: if expr
                     let cond = if matches!(self.peek(), Token::KwIf) {
                         self.advance(); // skip 'if'
@@ -1012,13 +1213,13 @@ impl Parser {
                     } else {
                         None
                     };
-                    
+
                     self.expect(&Token::RBracket)?;
-                    Ok(Expr::ListComp { 
-                        body: Box::new(body), 
-                        var, 
-                        iter: Box::new(iter), 
-                        cond 
+                    Ok(Expr::ListComp {
+                        body: Box::new(body),
+                        var,
+                        iter: Box::new(iter),
+                        cond,
                     })
                 } else {
                     // Parse regular list literal
@@ -1046,11 +1247,13 @@ impl Parser {
                     let key = match self.advance().node.clone() {
                         Token::Str(s) => s,
                         Token::Ident(s) => s,
-                        other => return Err(LatchError::UnexpectedToken {
-                            expected: "string or identifier key".into(),
-                            found: format!("{other:?}"),
-                            line: self.line(),
-                        }),
+                        other => {
+                            return Err(LatchError::UnexpectedToken {
+                                expected: "string or identifier key".into(),
+                                found: format!("{other:?}"),
+                                line: self.line(),
+                            })
+                        }
                     };
                     self.expect(&Token::Colon)?;
                     let value = self.parse_expr()?;
@@ -1097,7 +1300,7 @@ impl Parser {
     fn scan_for_list_comprehension(&self) -> bool {
         let mut depth = 1; // bracket depth
         let mut pos = self.pos;
-        
+
         while pos < self.tokens.len() && depth > 0 {
             match self.tokens[pos].node {
                 Token::LBracket => depth += 1,

@@ -20,6 +20,12 @@ pub struct Resolver {
     globals_map: HashMap<SymbolId, GlobalId>,
 }
 
+impl Default for Resolver {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Resolver {
     pub fn new() -> Self {
         Resolver {
@@ -161,7 +167,9 @@ impl Resolver {
                 })
             }
 
-            Stmt::Fn { name, params, body, .. } => {
+            Stmt::Fn {
+                name, params, body, ..
+            } => {
                 let sym_id = self.db.intern_symbol(name);
                 let global_id = self.get_or_create_global(sym_id);
 
@@ -171,7 +179,11 @@ impl Resolver {
                 for p in params {
                     let p_sym = self.db.intern_symbol(&p.name);
                     let local_id = LocalId(self.locals.len() as u32);
-                    self.locals.push(ResolverLocal { symbol_id: p_sym, id: local_id, _depth: self.scope_depth });
+                    self.locals.push(ResolverLocal {
+                        symbol_id: p_sym,
+                        id: local_id,
+                        _depth: self.scope_depth,
+                    });
                 }
                 let mut resolved_body = Vec::new();
                 for s in body {
@@ -214,7 +226,11 @@ impl Resolver {
                 for p in params {
                     let p_sym = self.db.intern_symbol(&p.name);
                     let local_id = LocalId(self.locals.len() as u32);
-                    self.locals.push(ResolverLocal { symbol_id: p_sym, id: local_id, _depth: self.scope_depth });
+                    self.locals.push(ResolverLocal {
+                        symbol_id: p_sym,
+                        id: local_id,
+                        _depth: self.scope_depth,
+                    });
                 }
                 let mut resolved_body = Vec::new();
                 for s in body {
@@ -267,7 +283,11 @@ impl Resolver {
                     right: Box::new(r),
                 })
             }
-            Expr::Call { name, args, kwargs: _ } => {
+            Expr::Call {
+                name,
+                args,
+                kwargs: _,
+            } => {
                 let mut opt_args = Vec::with_capacity(args.len());
                 for a in args {
                     opt_args.push(self.resolve_expr(a)?);
@@ -293,7 +313,10 @@ impl Resolver {
             Expr::Map(pairs) => {
                 let mut opt_pairs = Vec::with_capacity(pairs.len());
                 for (k, v) in pairs {
-                    opt_pairs.push((HirExpr::Constant(HirLiteral::Str(k.clone())), self.resolve_expr(v)?));
+                    opt_pairs.push((
+                        HirExpr::Constant(HirLiteral::Str(k.clone())),
+                        self.resolve_expr(v)?,
+                    ));
                 }
                 Ok(HirExpr::Map(opt_pairs))
             }

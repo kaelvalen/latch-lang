@@ -74,10 +74,22 @@ pub enum HirExpr {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum HirStmt {
-    LetLocal { id: LocalId, value: HirExpr },
-    LetGlobal { id: GlobalId, value: HirExpr },
-    AssignLocal { id: LocalId, value: HirExpr },
-    AssignGlobal { id: GlobalId, value: HirExpr },
+    LetLocal {
+        id: LocalId,
+        value: HirExpr,
+    },
+    LetGlobal {
+        id: GlobalId,
+        value: HirExpr,
+    },
+    AssignLocal {
+        id: LocalId,
+        value: HirExpr,
+    },
+    AssignGlobal {
+        id: GlobalId,
+        value: HirExpr,
+    },
     Expr(HirExpr),
     If {
         cond: HirExpr,

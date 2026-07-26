@@ -1,5 +1,5 @@
-use crate::error::Result;
 use super::vm::VM;
+use crate::error::Result;
 
 /// Native Module Interface for registering FFI dynamic extensions into Latch VM.
 pub trait NativeModule {

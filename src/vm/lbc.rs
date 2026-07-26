@@ -1,6 +1,6 @@
+use super::chunk::Chunk;
 use crate::env::{ObjFunction, ObjFunctionBuilder, ObjRef};
 use crate::error::{LatchError, Result};
-use super::chunk::Chunk;
 
 pub const LBC_MAGIC: &[u8; 6] = b"LATCHB";
 pub const LBC_VERSION: u16 = 1;
@@ -52,7 +52,9 @@ impl LbcSerializer {
     /// Deserialize binary .lbc byte stream back into ObjRef<ObjFunction>.
     pub fn deserialize(bytes: &[u8]) -> Result<ObjRef<ObjFunction>> {
         if bytes.len() < 12 || &bytes[0..6] != LBC_MAGIC {
-            return Err(LatchError::GenericError("Invalid .lbc magic binary header".into()));
+            return Err(LatchError::GenericError(
+                "Invalid .lbc magic binary header".into(),
+            ));
         }
 
         let mut cursor = 6;
@@ -69,7 +71,9 @@ impl LbcSerializer {
             )));
         }
         if flags != 0 {
-            return Err(LatchError::GenericError(format!("Unsupported .lbc flags {flags}")));
+            return Err(LatchError::GenericError(format!(
+                "Unsupported .lbc flags {flags}"
+            )));
         }
 
         let arity = u16::from_be_bytes([bytes[cursor], bytes[cursor + 1]]) as usize;
@@ -92,7 +96,10 @@ impl LbcSerializer {
 
         // Code
         let code_len = u32::from_be_bytes([
-            bytes[cursor], bytes[cursor + 1], bytes[cursor + 2], bytes[cursor + 3],
+            bytes[cursor],
+            bytes[cursor + 1],
+            bytes[cursor + 2],
+            bytes[cursor + 3],
         ]) as usize;
         cursor += 4;
         let code = bytes[cursor..cursor + code_len].to_vec();
@@ -100,13 +107,19 @@ impl LbcSerializer {
 
         // Lines
         let lines_len = u32::from_be_bytes([
-            bytes[cursor], bytes[cursor + 1], bytes[cursor + 2], bytes[cursor + 3],
+            bytes[cursor],
+            bytes[cursor + 1],
+            bytes[cursor + 2],
+            bytes[cursor + 3],
         ]) as usize;
         cursor += 4;
         let mut lines = Vec::with_capacity(lines_len);
         for _ in 0..lines_len {
             let line = u32::from_be_bytes([
-                bytes[cursor], bytes[cursor + 1], bytes[cursor + 2], bytes[cursor + 3],
+                bytes[cursor],
+                bytes[cursor + 1],
+                bytes[cursor + 2],
+                bytes[cursor + 3],
             ]);
             lines.push(line);
             cursor += 4;

@@ -1,0 +1,91 @@
+name: Rust CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test:
+    name: Build & Test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - name: Cache Cargo dependencies
+        uses: Swatinem/rust-cache@v2
+
+      - name: Check code formatting
+        run: cargo fmt --check
+
+      - name: Run Clippy lints
+        run: cargo clippy --all-targets --all-features -- -D warnings
+
+      - name: Build debug profile
+        run: cargo build --verbose
+
+      - name: Run unit & integration test suite
+        run: cargo test --verbose
+
+      - name: Build release profile
+        run: cargo build --release --verbose
+
+      - name: Verify Latch example scripts (Tree-walk & VM)
+        run: |
+          cargo run --release -- check examples/hello.lt
+          cargo run --release -- run examples/hello.lt
+          cargo run --release -- vm examples/hello.lt
+          cargo run --release -- run examples/v02_test.lt
+          cargo run --release -- vm examples/v02_test.lt
+          cargo run --release -- run examples/v04_test.lt
+          cargo run --release -- vm examples/v04_test.lt
+          cargo run --release -- run examples/ci-check.lt
+          cargo run --release -- vm examples/ci-check.lt
+          cargo run --release -- run examples/parallel-tasks.lt
+          cargo run --release -- vm examples/parallel-tasks.lt
+          cargo run --release -- run examples/vm_test.lt
+          cargo run --release -- vm examples/vm_test.lt
+
+  editor-extensions:
+    name: Editor Extensions Validation
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Validate VS Code Extension
+        run: |
+          cd editors/vscode
+          npm ci || npm install
+          npm run compile
+
+      - name: Install Rust toolchain with WASM target
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-wasip1
+
+      - name: Validate Zed Extension (WASM compile)
+        run: |
+          cd editors/zed
+          cargo check --target wasm32-wasip1 || cargo check

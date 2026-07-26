@@ -9,6 +9,12 @@ pub struct HirLowering {
     resolver: Resolver,
 }
 
+impl Default for HirLowering {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl HirLowering {
     pub fn new() -> Self {
         HirLowering {

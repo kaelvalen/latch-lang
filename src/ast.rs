@@ -37,7 +37,7 @@ pub enum Expr {
     Call {
         name: String,
         args: Vec<Expr>,
-        kwargs: Vec<(String, Expr)>,  // Keyword arguments
+        kwargs: Vec<(String, Expr)>, // Keyword arguments
     },
 
     ModuleCall {
@@ -90,10 +90,10 @@ pub enum Expr {
 
     /// List comprehension: `[x*2 for x in list]` or `[x for x in list if x > 0]`
     ListComp {
-        body: Box<Expr>,           // The expression to generate (e.g., x*2)
-        var: String,               // Loop variable (e.g., x)
-        iter: Box<Expr>,           // Iterable (e.g., list)
-        cond: Option<Box<Expr>>,   // Optional condition (e.g., x > 0)
+        body: Box<Expr>,         // The expression to generate (e.g., x*2)
+        var: String,             // Loop variable (e.g., x)
+        iter: Box<Expr>,         // Iterable (e.g., list)
+        cond: Option<Box<Expr>>, // Optional condition (e.g., x > 0)
     },
 
     /// Safe field access: `expr?.field`
@@ -119,9 +119,19 @@ pub enum Expr {
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum BinOp {
-    Add, Sub, Mul, Div, Mod,
-    Eq, NotEq, Lt, Gt, LtEq, GtEq,
-    And, Or,
+    Add,
+    Sub,
+    Mul,
+    Div,
+    Mod,
+    Eq,
+    NotEq,
+    Lt,
+    Gt,
+    LtEq,
+    GtEq,
+    And,
+    Or,
     In,
 }
 
@@ -220,7 +230,7 @@ pub enum Stmt {
     Class {
         name: String,
         fields: Vec<(String, Option<Type>, Option<Expr>)>, // name, type, default
-        methods: Vec<(String, Vec<Param>, Block)>, // name, params, body
+        methods: Vec<(String, Vec<Param>, Block)>,         // name, params, body
     },
 
     /// Export statement: `export { foo, bar }` or `export foo`
@@ -242,7 +252,7 @@ pub enum Stmt {
     /// Match statement: `match expr { case val: { stmts } default: { stmts } }`
     Match {
         expr: Expr,
-        cases: Vec<(Expr, Block)>,      // (pattern expr, body)
+        cases: Vec<(Expr, Block)>, // (pattern expr, body)
         default: Option<Block>,
     },
 }
@@ -253,7 +263,7 @@ pub type Block = Vec<Stmt>;
 pub struct Param {
     pub name: String,
     pub type_ann: Option<Type>,
-    pub default: Option<Expr>,  // Default value for optional parameter
+    pub default: Option<Expr>, // Default value for optional parameter
 }
 
 #[derive(Debug, Clone, PartialEq)]

@@ -17,13 +17,27 @@ pub struct Interpreter {
     pub(crate) script_dir: Option<String>,
 }
 
+impl Default for Interpreter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Interpreter {
     pub fn new() -> Self {
-        Interpreter { env: Env::new(), loading: HashSet::new(), script_dir: None }
+        Interpreter {
+            env: Env::new(),
+            loading: HashSet::new(),
+            script_dir: None,
+        }
     }
 
     pub fn with_env(env: Env) -> Self {
-        Interpreter { env, loading: HashSet::new(), script_dir: None }
+        Interpreter {
+            env,
+            loading: HashSet::new(),
+            script_dir: None,
+        }
     }
 
     pub fn set_script_dir(&mut self, dir: &str) {

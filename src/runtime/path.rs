@@ -8,7 +8,9 @@ pub fn call(method: &str, args: Vec<Value>) -> Result<Value> {
         "join" => {
             if args.len() < 2 {
                 return Err(LatchError::ArgCountMismatch {
-                    name: "path.join".into(), expected: 2, found: args.len(),
+                    name: "path.join".into(),
+                    expected: 2,
+                    found: args.len(),
                 });
             }
             let base = args[0].as_str()?.to_string();
@@ -18,9 +20,12 @@ pub fn call(method: &str, args: Vec<Value>) -> Result<Value> {
         }
 
         "basename" => {
-            let p = args.first()
+            let p = args
+                .first()
                 .ok_or_else(|| LatchError::ArgCountMismatch {
-                    name: "path.basename".into(), expected: 1, found: 0,
+                    name: "path.basename".into(),
+                    expected: 1,
+                    found: 0,
                 })?
                 .as_str()?
                 .to_string();
@@ -32,9 +37,12 @@ pub fn call(method: &str, args: Vec<Value>) -> Result<Value> {
         }
 
         "dirname" => {
-            let p = args.first()
+            let p = args
+                .first()
                 .ok_or_else(|| LatchError::ArgCountMismatch {
-                    name: "path.dirname".into(), expected: 1, found: 0,
+                    name: "path.dirname".into(),
+                    expected: 1,
+                    found: 0,
                 })?
                 .as_str()?
                 .to_string();
@@ -46,9 +54,12 @@ pub fn call(method: &str, args: Vec<Value>) -> Result<Value> {
         }
 
         "ext" => {
-            let p = args.first()
+            let p = args
+                .first()
                 .ok_or_else(|| LatchError::ArgCountMismatch {
-                    name: "path.ext".into(), expected: 1, found: 0,
+                    name: "path.ext".into(),
+                    expected: 1,
+                    found: 0,
                 })?
                 .as_str()?
                 .to_string();
@@ -60,9 +71,12 @@ pub fn call(method: &str, args: Vec<Value>) -> Result<Value> {
         }
 
         "abs" => {
-            let p = args.first()
+            let p = args
+                .first()
                 .ok_or_else(|| LatchError::ArgCountMismatch {
-                    name: "path.abs".into(), expected: 1, found: 0,
+                    name: "path.abs".into(),
+                    expected: 1,
+                    found: 0,
                 })?
                 .as_str()?
                 .to_string();
@@ -72,7 +86,8 @@ pub fn call(method: &str, args: Vec<Value>) -> Result<Value> {
         }
 
         _ => Err(LatchError::UnknownMethod {
-            module: "path".into(), method: method.into(),
+            module: "path".into(),
+            method: method.into(),
         }),
     }
 }

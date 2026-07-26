@@ -24,7 +24,10 @@ impl InlineCache {
 
     pub fn lookup(&self, class_name: &str) -> Option<usize> {
         match &self.state {
-            IcState::Monomorphic { class_name: cached_name, offset } => {
+            IcState::Monomorphic {
+                class_name: cached_name,
+                offset,
+            } => {
                 if cached_name == class_name {
                     Some(*offset)
                 } else {
@@ -48,7 +51,10 @@ impl InlineCache {
             IcState::Uninitialized => {
                 self.state = IcState::Monomorphic { class_name, offset };
             }
-            IcState::Monomorphic { class_name: prev_name, offset: prev_offset } => {
+            IcState::Monomorphic {
+                class_name: prev_name,
+                offset: prev_offset,
+            } => {
                 if prev_name != &class_name {
                     self.state = IcState::Polymorphic {
                         slots: vec![(prev_name.clone(), *prev_offset), (class_name, offset)],

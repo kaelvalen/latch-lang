@@ -11,7 +11,11 @@ pub fn call(method: &str, args: Vec<Value>) -> Result<Value> {
 
         "add" => {
             if args.len() < 2 {
-                return Err(LatchError::ArgCountMismatch { name: "set.add".into(), expected: 2, found: args.len() });
+                return Err(LatchError::ArgCountMismatch {
+                    name: "set.add".into(),
+                    expected: 2,
+                    found: args.len(),
+                });
             }
             // Convert list to set
             let list = args[0].clone().into_list()?;
@@ -24,7 +28,11 @@ pub fn call(method: &str, args: Vec<Value>) -> Result<Value> {
 
         "remove" => {
             if args.len() < 2 {
-                return Err(LatchError::ArgCountMismatch { name: "set.remove".into(), expected: 2, found: args.len() });
+                return Err(LatchError::ArgCountMismatch {
+                    name: "set.remove".into(),
+                    expected: 2,
+                    found: args.len(),
+                });
             }
             let list = args[0].clone().into_list()?;
             let item = args[1].clone();
@@ -36,7 +44,11 @@ pub fn call(method: &str, args: Vec<Value>) -> Result<Value> {
 
         "has" => {
             if args.len() < 2 {
-                return Err(LatchError::ArgCountMismatch { name: "set.has".into(), expected: 2, found: args.len() });
+                return Err(LatchError::ArgCountMismatch {
+                    name: "set.has".into(),
+                    expected: 2,
+                    found: args.len(),
+                });
             }
             let list = args[0].clone().into_list()?;
             let item = format!("{}", args[1]);
@@ -46,7 +58,11 @@ pub fn call(method: &str, args: Vec<Value>) -> Result<Value> {
 
         "union" => {
             if args.len() < 2 {
-                return Err(LatchError::ArgCountMismatch { name: "set.union".into(), expected: 2, found: args.len() });
+                return Err(LatchError::ArgCountMismatch {
+                    name: "set.union".into(),
+                    expected: 2,
+                    found: args.len(),
+                });
             }
             let list1 = args[0].clone().into_list()?;
             let list2 = args[1].clone().into_list()?;
@@ -58,7 +74,11 @@ pub fn call(method: &str, args: Vec<Value>) -> Result<Value> {
 
         "intersection" => {
             if args.len() < 2 {
-                return Err(LatchError::ArgCountMismatch { name: "set.intersection".into(), expected: 2, found: args.len() });
+                return Err(LatchError::ArgCountMismatch {
+                    name: "set.intersection".into(),
+                    expected: 2,
+                    found: args.len(),
+                });
             }
             let list1 = args[0].clone().into_list()?;
             let list2 = args[1].clone().into_list()?;
@@ -71,7 +91,11 @@ pub fn call(method: &str, args: Vec<Value>) -> Result<Value> {
 
         "difference" => {
             if args.len() < 2 {
-                return Err(LatchError::ArgCountMismatch { name: "set.difference".into(), expected: 2, found: args.len() });
+                return Err(LatchError::ArgCountMismatch {
+                    name: "set.difference".into(),
+                    expected: 2,
+                    found: args.len(),
+                });
             }
             let list1 = args[0].clone().into_list()?;
             let list2 = args[1].clone().into_list()?;
@@ -82,6 +106,9 @@ pub fn call(method: &str, args: Vec<Value>) -> Result<Value> {
             Ok(Value::new_list(new_list))
         }
 
-        _ => Err(LatchError::UnknownMethod { module: "set".into(), method: method.into() }),
+        _ => Err(LatchError::UnknownMethod {
+            module: "set".into(),
+            method: method.into(),
+        }),
     }
 }

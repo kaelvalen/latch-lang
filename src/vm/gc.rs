@@ -1,12 +1,21 @@
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
-use crate::env::{HeapObject, GcTrace, ObjClass, ObjClosure, ObjFunction, ObjFunctionBuilder, ObjKind, ObjRef, Value};
+use crate::env::{
+    GcTrace, HeapObject, ObjClass, ObjClosure, ObjFunction, ObjFunctionBuilder, ObjKind, ObjRef,
+    Value,
+};
 
 /// Garbage Collector state and memory allocation metrics manager.
 pub struct GcState {
     pub bytes_allocated: AtomicUsize,
     pub next_gc_threshold: AtomicUsize,
+}
+
+impl Default for GcState {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl GcState {
@@ -26,7 +35,8 @@ impl GcState {
     }
 
     pub fn should_collect(&self) -> bool {
-        self.bytes_allocated.load(Ordering::Relaxed) >= self.next_gc_threshold.load(Ordering::Relaxed)
+        self.bytes_allocated.load(Ordering::Relaxed)
+            >= self.next_gc_threshold.load(Ordering::Relaxed)
     }
 
     pub fn update_threshold_after_sweep(&self, live_bytes: usize) {
@@ -81,7 +91,9 @@ impl GcState {
 
     /// Return a debug heap snapshot (stub).
     pub fn heap_snapshot(&self) -> HeapSnapshot {
-        HeapSnapshot { objects: Vec::new() }
+        HeapSnapshot {
+            objects: Vec::new(),
+        }
     }
 
     /// Sweep unreachable objects.

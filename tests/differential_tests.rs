@@ -25,7 +25,9 @@ fn run_bytecode_vm(source: &str) -> String {
     let stmts = parser.parse_program().expect("Parser error");
 
     let mut resolver = Resolver::new();
-    let module = resolver.resolve_module("diff_test", &stmts).expect("Resolver error");
+    let module = resolver
+        .resolve_module("diff_test", &stmts)
+        .expect("Resolver error");
 
     let compiler = Compiler::new();
     let script_fn = compiler.compile_module(&module).expect("Compiler error");
@@ -42,7 +44,11 @@ fn test_differential_arithmetic_expressions() {
     let code = "a = 10; b = 20; c = a + b * 2; return c;";
     let tw = run_tree_walk(code);
     let vm = run_bytecode_vm(code);
-    assert_eq!(tw.trim(), vm.trim(), "Differential test failed for arithmetic expressions!");
+    assert_eq!(
+        tw.trim(),
+        vm.trim(),
+        "Differential test failed for arithmetic expressions!"
+    );
 }
 
 #[test]
@@ -50,7 +56,11 @@ fn test_differential_conditionals() {
     let code = "x = 15; if x > 10 { return 100; } else { return 200; }";
     let tw = run_tree_walk(code);
     let vm = run_bytecode_vm(code);
-    assert_eq!(tw.trim(), vm.trim(), "Differential test failed for conditionals!");
+    assert_eq!(
+        tw.trim(),
+        vm.trim(),
+        "Differential test failed for conditionals!"
+    );
 }
 
 #[test]
@@ -58,15 +68,24 @@ fn test_differential_named_function_call() {
     let code = "fn add(a, b) { return a + b; } return add(15, 27);";
     let tw = run_tree_walk(code);
     let vm = run_bytecode_vm(code);
-    assert_eq!(tw.trim(), vm.trim(), "Differential test failed for named function call!");
+    assert_eq!(
+        tw.trim(),
+        vm.trim(),
+        "Differential test failed for named function call!"
+    );
 }
 
 #[test]
 fn test_differential_recursive_function() {
-    let code = "fn fact(n) { if n <= 1 { return 1; } else { return n * fact(n - 1); } } return fact(5);";
+    let code =
+        "fn fact(n) { if n <= 1 { return 1; } else { return n * fact(n - 1); } } return fact(5);";
     let tw = run_tree_walk(code);
     let vm = run_bytecode_vm(code);
-    assert_eq!(tw.trim(), vm.trim(), "Differential test failed for recursive function!");
+    assert_eq!(
+        tw.trim(),
+        vm.trim(),
+        "Differential test failed for recursive function!"
+    );
 }
 
 #[test]
@@ -74,7 +93,11 @@ fn test_differential_closure_return() {
     let code = "make_adder := fn(x) { return fn(y) { return x + y; }; }; add5 := make_adder(5); return add5(10);";
     let tw = run_tree_walk(code);
     let vm = run_bytecode_vm(code);
-    assert_eq!(tw.trim(), vm.trim(), "Differential test failed for closure return!");
+    assert_eq!(
+        tw.trim(),
+        vm.trim(),
+        "Differential test failed for closure return!"
+    );
 }
 
 #[test]
@@ -82,5 +105,9 @@ fn test_differential_or_fallback() {
     let code = "x := null or 42; return x;";
     let tw = run_tree_walk(code);
     let vm = run_bytecode_vm(code);
-    assert_eq!(tw.trim(), vm.trim(), "Differential test failed for OR fallback!");
+    assert_eq!(
+        tw.trim(),
+        vm.trim(),
+        "Differential test failed for OR fallback!"
+    );
 }

@@ -101,28 +101,40 @@ impl HirVerifier {
 
     fn verify_local_id(id: LocalId) -> Result<()> {
         if id.0 > 65535 {
-            return Err(LatchError::GenericError(format!("HIR Verifier error: LocalId {} exceeds u16 limit", id.0)));
+            return Err(LatchError::GenericError(format!(
+                "HIR Verifier error: LocalId {} exceeds u16 limit",
+                id.0
+            )));
         }
         Ok(())
     }
 
     fn verify_global_id(id: GlobalId) -> Result<()> {
         if id.0 > 65535 {
-            return Err(LatchError::GenericError(format!("HIR Verifier error: GlobalId {} exceeds u16 limit", id.0)));
+            return Err(LatchError::GenericError(format!(
+                "HIR Verifier error: GlobalId {} exceeds u16 limit",
+                id.0
+            )));
         }
         Ok(())
     }
 
     fn verify_func_id(id: FunctionId) -> Result<()> {
         if id.0 > 65535 {
-            return Err(LatchError::GenericError(format!("HIR Verifier error: FunctionId {} exceeds u16 limit", id.0)));
+            return Err(LatchError::GenericError(format!(
+                "HIR Verifier error: FunctionId {} exceeds u16 limit",
+                id.0
+            )));
         }
         Ok(())
     }
 
     fn verify_upvalue_id(id: UpvalueId) -> Result<()> {
         if id.0 > 65535 {
-            return Err(LatchError::GenericError(format!("HIR Verifier error: UpvalueId {} exceeds u16 limit", id.0)));
+            return Err(LatchError::GenericError(format!(
+                "HIR Verifier error: UpvalueId {} exceeds u16 limit",
+                id.0
+            )));
         }
         Ok(())
     }
