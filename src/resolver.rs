@@ -145,18 +145,32 @@ impl Resolver {
                 })
             }
 
-            Stmt::Fn { name, params: _, body, .. } => {
+            Stmt::Fn { name, params, body, .. } => {
                 let sym_id = self.db.intern_symbol(name);
                 let global_id = self.get_or_create_global(sym_id);
+
+                let outer_locals = std::mem::take(&mut self.locals);
                 self.scope_depth += 1;
+                for p in params {
+                    let p_sym = self.db.intern_symbol(&p.name);
+                    let local_id = LocalId(self.locals.len() as u32);
+                    self.locals.push(ResolverLocal { symbol_id: p_sym, id: local_id, _depth: self.scope_depth });
+                }
                 let mut resolved_body = Vec::new();
                 for s in body {
                     resolved_body.push(self.resolve_stmt(s)?);
                 }
                 self.scope_depth -= 1;
+                self.locals = outer_locals;
+
+                let param_names = params.iter().map(|p| p.name.clone()).collect();
                 Ok(HirStmt::LetGlobal {
                     id: global_id,
-                    value: HirExpr::Constant(HirLiteral::Str(name.clone())),
+                    value: HirExpr::Function {
+                        name: name.clone(),
+                        params: param_names,
+                        body: resolved_body,
+                    },
                 })
             }
 
@@ -175,6 +189,28 @@ impl Resolver {
             Expr::Float(f) => Ok(HirExpr::Constant(HirLiteral::Float(*f))),
             Expr::Bool(b) => Ok(HirExpr::Constant(HirLiteral::Bool(*b))),
             Expr::Str(s) => Ok(HirExpr::Constant(HirLiteral::Str(s.clone()))),
+            Expr::Fn { params, body, .. } => {
+                let outer_locals = std::mem::take(&mut self.locals);
+                self.scope_depth += 1;
+                for p in params {
+                    let p_sym = self.db.intern_symbol(&p.name);
+                    let local_id = LocalId(self.locals.len() as u32);
+                    self.locals.push(ResolverLocal { symbol_id: p_sym, id: local_id, _depth: self.scope_depth });
+                }
+                let mut resolved_body = Vec::new();
+                for s in body {
+                    resolved_body.push(self.resolve_stmt(s)?);
+                }
+                self.scope_depth -= 1;
+                self.locals = outer_locals;
+
+                let param_names = params.iter().map(|p| p.name.clone()).collect();
+                Ok(HirExpr::Function {
+                    name: "<anonymous>".into(),
+                    params: param_names,
+                    body: resolved_body,
+                })
+            }
             Expr::Ident(name) => {
                 let sym_id = self.db.intern_symbol(name);
                 if let Some(id) = self.resolve_local(sym_id) {
@@ -199,6 +235,8 @@ impl Resolver {
                     BinOp::LtEq => HirOp::LessEqual,
                     BinOp::Gt => HirOp::Greater,
                     BinOp::GtEq => HirOp::GreaterEqual,
+                    BinOp::Or => HirOp::Or,
+                    BinOp::And => HirOp::And,
                     _ => HirOp::Add,
                 };
                 Ok(HirExpr::BinOp {

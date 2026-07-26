@@ -41,6 +41,8 @@ pub enum HirOp {
     LessEqual,
     Greater,
     GreaterEqual,
+    Or,
+    And,
 }
 
 /// Standalone High-Level Intermediate Representation (HIR)
@@ -51,6 +53,11 @@ pub enum HirExpr {
     Local(LocalId),
     Global(GlobalId),
     Upvalue(UpvalueId),
+    Function {
+        name: String,
+        params: Vec<String>,
+        body: Vec<HirStmt>,
+    },
     BinOp {
         op: HirOp,
         left: Box<HirExpr>,

@@ -192,29 +192,70 @@ impl Compiler {
                 self.emit_u16(id.0 as u16, 0);
             }
 
+            HirExpr::Function { name, params, body } => {
+                let mut sub_compiler = Compiler::new();
+                for stmt in body {
+                    sub_compiler.compile_stmt(stmt)?;
+                }
+                sub_compiler.emit_constant(Constant::Null, 0);
+                sub_compiler.emit_return(0);
+                BytecodePeephole::optimize(&mut sub_compiler.chunk);
+
+                let sub_fn = ObjFunctionBuilder::new(name.clone(), params.len())
+                    .with_chunk(sub_compiler.chunk.build())
+                    .build();
+                let func_arc = std::sync::Arc::new(sub_fn);
+                self.emit_constant(Constant::Function(func_arc), 0);
+            }
+
             HirExpr::BinOp { op, left, right } => {
-                self.compile_expr(left)?;
-                self.compile_expr(right)?;
                 match op {
-                    HirOp::Add => { self.emit_opcode(OpCode::OpAdd, 0); }
-                    HirOp::Sub => { self.emit_opcode(OpCode::OpSub, 0); }
-                    HirOp::Mul => { self.emit_opcode(OpCode::OpMul, 0); }
-                    HirOp::Div => { self.emit_opcode(OpCode::OpDiv, 0); }
-                    HirOp::Mod => { self.emit_opcode(OpCode::OpMod, 0); }
-                    HirOp::Equal => { self.emit_opcode(OpCode::OpEqual, 0); }
-                    HirOp::NotEqual => {
-                        self.emit_opcode(OpCode::OpEqual, 0);
-                        self.emit_opcode(OpCode::OpNot, 0);
+                    HirOp::Or => {
+                        self.compile_expr(left)?;
+                        self.emit_opcode(OpCode::OpDup, 0);
+                        let jump_false = self.emit_jump(OpCode::OpJumpIfFalse, 0);
+                        let jump_end = self.emit_jump(OpCode::OpJump, 0);
+                        self.patch_jump(jump_false);
+                        self.emit_pop(0);
+                        self.compile_expr(right)?;
+                        self.patch_jump(jump_end);
                     }
-                    HirOp::Less => { self.emit_opcode(OpCode::OpLess, 0); }
-                    HirOp::LessEqual => {
-                        self.emit_opcode(OpCode::OpGreater, 0);
-                        self.emit_opcode(OpCode::OpNot, 0);
+                    HirOp::And => {
+                        self.compile_expr(left)?;
+                        self.emit_opcode(OpCode::OpDup, 0);
+                        let jump_false = self.emit_jump(OpCode::OpJumpIfFalse, 0);
+                        self.emit_pop(0);
+                        self.compile_expr(right)?;
+                        let jump_end = self.emit_jump(OpCode::OpJump, 0);
+                        self.patch_jump(jump_false);
+                        self.patch_jump(jump_end);
                     }
-                    HirOp::Greater => { self.emit_opcode(OpCode::OpGreater, 0); }
-                    HirOp::GreaterEqual => {
-                        self.emit_opcode(OpCode::OpLess, 0);
-                        self.emit_opcode(OpCode::OpNot, 0);
+                    _ => {
+                        self.compile_expr(left)?;
+                        self.compile_expr(right)?;
+                        match op {
+                            HirOp::Add => { self.emit_opcode(OpCode::OpAdd, 0); }
+                            HirOp::Sub => { self.emit_opcode(OpCode::OpSub, 0); }
+                            HirOp::Mul => { self.emit_opcode(OpCode::OpMul, 0); }
+                            HirOp::Div => { self.emit_opcode(OpCode::OpDiv, 0); }
+                            HirOp::Mod => { self.emit_opcode(OpCode::OpMod, 0); }
+                            HirOp::Equal => { self.emit_opcode(OpCode::OpEqual, 0); }
+                            HirOp::NotEqual => {
+                                self.emit_opcode(OpCode::OpEqual, 0);
+                                self.emit_opcode(OpCode::OpNot, 0);
+                            }
+                            HirOp::Less => { self.emit_opcode(OpCode::OpLess, 0); }
+                            HirOp::LessEqual => {
+                                self.emit_opcode(OpCode::OpGreater, 0);
+                                self.emit_opcode(OpCode::OpNot, 0);
+                            }
+                            HirOp::Greater => { self.emit_opcode(OpCode::OpGreater, 0); }
+                            HirOp::GreaterEqual => {
+                                self.emit_opcode(OpCode::OpLess, 0);
+                                self.emit_opcode(OpCode::OpNot, 0);
+                            }
+                            _ => {}
+                        }
                     }
                 }
             }

@@ -11,10 +11,11 @@
 .DS_Store
 
 # Editors
-editors/vscode/out/
-editors/vscode/node_modules/
-editors/vscode/*.vsix
-editors/zed/target/
+editors/**/out/
+editors/**/node_modules/
+editors/**/target/
+editors/**/*.vsix
+editors/**/.vscode-test/
 
 # OS
 Thumbs.db

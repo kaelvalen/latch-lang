@@ -175,10 +175,17 @@ impl TypeChecker {
                             Ok(Type::Int)
                         }
                     }
-                    HirOp::Equal | HirOp::NotEqual | HirOp::Less | HirOp::LessEqual | HirOp::Greater | HirOp::GreaterEqual => {
+                    HirOp::Equal | HirOp::NotEqual | HirOp::Less | HirOp::LessEqual | HirOp::Greater | HirOp::GreaterEqual | HirOp::Or | HirOp::And => {
                         Ok(Type::Bool)
                     }
                 }
+            }
+
+            HirExpr::Function { body, .. } => {
+                for s in body {
+                    self.check_stmt(s)?;
+                }
+                Ok(Type::Any)
             }
 
             HirExpr::List(items) => {

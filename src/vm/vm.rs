@@ -320,6 +320,11 @@ impl VM {
                     }
                 }
 
+                OpCode::OpDup => {
+                    let val = self.peek(0)?.clone();
+                    self.push(val);
+                }
+
                 OpCode::OpJump => {
                     let target = operand.unwrap_or(0) as usize;
                     self.current_frame_mut().ip = target;

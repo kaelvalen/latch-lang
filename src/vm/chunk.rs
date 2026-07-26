@@ -36,6 +36,7 @@ pub enum OpCode {
     OpGetUpvalue   = 29,
     OpSetUpvalue   = 30,
     OpClosure      = 31,
+    OpDup          = 32,
 }
 
 impl OpCode {
@@ -73,6 +74,7 @@ impl OpCode {
             29 => Some(OpCode::OpGetUpvalue),
             30 => Some(OpCode::OpSetUpvalue),
             31 => Some(OpCode::OpClosure),
+            32 => Some(OpCode::OpDup),
             _  => None,
         }
     }
@@ -85,7 +87,7 @@ impl OpCode {
 
 /// Compile-time opcode metadata table. Indexed by `OpCode as usize`.
 /// Index 0 is a placeholder for the reserved `0x00` opcode.
-pub const OPCODE_TABLE: [InstructionDescriptor; 32] = [
+pub const OPCODE_TABLE: [InstructionDescriptor; 33] = [
     InstructionDescriptor { opcode: OpCode::OpConstant, name: "<reserved>", operand_count: 0, operand_width: 0, stack_in: 0, stack_out: 0, is_jump: false, may_allocate: false, gc_safe: false }, // 0x00 placeholder
     InstructionDescriptor { opcode: OpCode::OpConstant, name: "OP_CONSTANT", operand_count: 1, operand_width: 2, stack_in: 0, stack_out: 1, is_jump: false, may_allocate: true, gc_safe: false },
     InstructionDescriptor { opcode: OpCode::OpAdd, name: "OP_ADD", operand_count: 0, operand_width: 0, stack_in: 2, stack_out: 1, is_jump: false, may_allocate: false, gc_safe: true },
@@ -118,6 +120,7 @@ pub const OPCODE_TABLE: [InstructionDescriptor; 32] = [
     InstructionDescriptor { opcode: OpCode::OpGetUpvalue, name: "OP_GET_UPVAL", operand_count: 1, operand_width: 2, stack_in: 0, stack_out: 1, is_jump: false, may_allocate: false, gc_safe: false },
     InstructionDescriptor { opcode: OpCode::OpSetUpvalue, name: "OP_SET_UPVAL", operand_count: 1, operand_width: 2, stack_in: 1, stack_out: 1, is_jump: false, may_allocate: false, gc_safe: false },
     InstructionDescriptor { opcode: OpCode::OpClosure, name: "OP_CLOSURE", operand_count: 1, operand_width: 2, stack_in: 0, stack_out: 1, is_jump: false, may_allocate: true, gc_safe: true },
+    InstructionDescriptor { opcode: OpCode::OpDup, name: "OP_DUP", operand_count: 0, operand_width: 0, stack_in: 1, stack_out: 2, is_jump: false, may_allocate: false, gc_safe: false },
 ];
 
 /// Centralized Instruction Descriptor metadata table for Disassembler, Verifier, Debugger, & Optimizer.
@@ -142,6 +145,7 @@ pub enum Constant {
     Bool(bool),
     Str(String),
     Symbol(u32),
+    Function(std::sync::Arc<crate::env::ObjFunction>),
     Null,
 }
 
@@ -156,6 +160,7 @@ impl PartialEq for Constant {
             (Constant::Bool(a), Constant::Bool(b)) => a == b,
             (Constant::Str(a), Constant::Str(b)) => a == b,
             (Constant::Symbol(a), Constant::Symbol(b)) => a == b,
+            (Constant::Function(a), Constant::Function(b)) => std::sync::Arc::ptr_eq(a, b),
             (Constant::Null, Constant::Null) => true,
             _ => false,
         }
@@ -170,6 +175,7 @@ impl Constant {
             Constant::Bool(b) => Value::Bool(*b),
             Constant::Str(s) => Value::Str(s.clone()),
             Constant::Symbol(id) => Value::Int(*id as i64),
+            Constant::Function(func) => Value::Function(func.clone()),
             Constant::Null => Value::Null,
         }
     }
@@ -183,6 +189,7 @@ impl std::fmt::Display for Constant {
             Constant::Bool(b) => write!(f, "{b}"),
             Constant::Str(s) => write!(f, "{s}"),
             Constant::Symbol(id) => write!(f, "symbol#{id}"),
+            Constant::Function(func) => write!(f, "<fn {}>", func.name),
             Constant::Null => write!(f, "null"),
         }
     }

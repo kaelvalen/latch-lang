@@ -87,6 +87,12 @@ impl HirVerifier {
                 }
                 Ok(())
             }
+            HirExpr::Function { body, .. } => {
+                for s in body {
+                    Self::verify_stmt(s)?;
+                }
+                Ok(())
+            }
             HirExpr::Print(expr) => Self::verify_expr(expr),
         }
     }
