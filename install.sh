@@ -34,7 +34,11 @@ cargo_fallback() {
     echo "→ Falling back to cargo install..."
     echo ""
     if command -v cargo &> /dev/null; then
-        cargo install latch-lang
+        if [ -f "./Cargo.toml" ]; then
+            cargo install --path .
+        else
+            cargo install latch-lang
+        fi
         echo ""
         echo "✓ Latch installed via cargo!"
         latch version

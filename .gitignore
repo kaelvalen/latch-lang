@@ -10,6 +10,12 @@
 *~
 .DS_Store
 
+# Editors
+editors/vscode/out/
+editors/vscode/node_modules/
+editors/vscode/*.vsix
+editors/zed/target/
+
 # OS
 Thumbs.db
 .directory

@@ -1,0 +1,23 @@
+name = "Latch"
+grammar = "latch"
+path_suffixes = ["lt"]
+line_comments = ["# ", "// "]
+block_comment = ["/*", "*/"]
+autocloses = [
+    { start = "{", end = "}" },
+    { start = "[", end = "]" },
+    { start = "(", end = ")" },
+    { start = "\"", end = "\"" },
+    { start = "'", end = "'" },
+    { start = "`", end = "`" }
+]
+brackets = [
+    { start = "{", end = "}", close = true, newline = true },
+    { start = "[", end = "]", close = true, newline = true },
+    { start = "(", end = ")", close = true, newline = true }
+]
+tab_width = 4
+hard_tabs = false
+
+[language_servers.latch-lsp]
+name = "Latch LSP"

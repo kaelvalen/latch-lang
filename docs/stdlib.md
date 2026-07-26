@@ -1,7 +1,7 @@
 # Latch Standard Library Reference
 
-> **Version**: 0.4.3  
-> **Last Updated**: 2026-04-02  
+> **Version**: 0.5.0  
+> **Last Updated**: 2026-07-26  
 > **Status**: Complete — all features documented with examples
 
 ---
@@ -1171,7 +1171,7 @@ name := user?.name ?? "anonymous"
 latch run <file.lt>     # Execute a script
 latch check <file.lt>   # Static analysis only
 latch repl              # Interactive REPL
-latch version           # Print version (v0.4.3)
+latch version           # Print version (v0.5.0)
 ```
 
 ---

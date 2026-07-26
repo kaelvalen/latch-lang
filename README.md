@@ -74,7 +74,7 @@ cargo install --path .
 
 ```sh
 $ latch version
-latch v0.4.3
+latch v0.5.0
 ```
 
 ## Quick Start — Your First Script

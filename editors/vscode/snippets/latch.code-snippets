@@ -1,0 +1,124 @@
+{
+  "Function Declaration": {
+    "prefix": "fn",
+    "body": [
+      "fn ${1:name}(${2:params}) -> ${3:string} {",
+      "\t${0:# body}",
+      "}"
+    ],
+    "description": "Define a Latch function with typed parameters and return type"
+  },
+  "Anonymous Function": {
+    "prefix": "afn",
+    "body": [
+      "fn(${1:x}) { return ${0:x * 2} }"
+    ],
+    "description": "Create an anonymous closure function"
+  },
+  "If Statement": {
+    "prefix": "if",
+    "body": [
+      "if ${1:condition} {",
+      "\t${0}",
+      "}"
+    ],
+    "description": "If conditional block"
+  },
+  "If Else Statement": {
+    "prefix": "ifelse",
+    "body": [
+      "if ${1:condition} {",
+      "\t${2}",
+      "} else {",
+      "\t${0}",
+      "}"
+    ],
+    "description": "If / Else conditional block"
+  },
+  "For In Loop": {
+    "prefix": "for",
+    "body": [
+      "for ${1:item} in ${2:iterable} {",
+      "\t${0:print(item)}",
+      "}"
+    ],
+    "description": "Iterate over list or range"
+  },
+  "While Loop": {
+    "prefix": "while",
+    "body": [
+      "while ${1:condition} {",
+      "\t${0}",
+      "}"
+    ],
+    "description": "While loop block"
+  },
+  "Parallel Block": {
+    "prefix": "parallel",
+    "body": [
+      "parallel ${1:item} in ${2:items} workers=${3:4} {",
+      "\t${0:# parallel task execution}",
+      "}"
+    ],
+    "description": "Parallel worker pool task execution"
+  },
+  "Try Catch Block": {
+    "prefix": "try",
+    "body": [
+      "try {",
+      "\t${1}",
+      "} catch ${2:err} {",
+      "\t${0:print(\"Error: ${err}\")}",
+      "}"
+    ],
+    "description": "Try / Catch error handling block"
+  },
+  "File Read": {
+    "prefix": "fsread",
+    "body": [
+      "content := fs.read(\"${1:path/to/file.txt}\")"
+    ],
+    "description": "Read file contents as string"
+  },
+  "File Write": {
+    "prefix": "fswrite",
+    "body": [
+      "fs.write(\"${1:file.txt}\", ${2:data})"
+    ],
+    "description": "Write data string to file"
+  },
+  "Process Exec": {
+    "prefix": "procexec",
+    "body": [
+      "result := proc.exec(\"${1:echo Hello}\")",
+      "print(result.stdout)"
+    ],
+    "description": "Execute shell command and get result"
+  },
+  "HTTP GET Request": {
+    "prefix": "httpget",
+    "body": [
+      "res := http.get(\"${1:https://api.example.com/data}\")",
+      "if res.status == 200 {",
+      "\tdata := json.parse(res.body)",
+      "\t${0}",
+      "}"
+    ],
+    "description": "Make HTTP GET request and parse JSON"
+  },
+  "JSON Parse with Fallback": {
+    "prefix": "jsonparse",
+    "body": [
+      "data := json.parse(${1:json_str}) or ${2:{}}"
+    ],
+    "description": "Parse JSON string with fallback default value"
+  },
+  "List Comprehension / Filter Map": {
+    "prefix": "filtermap",
+    "body": [
+      "evens := filter(${1:list}, fn(n) { return n % 2 == 0 })",
+      "doubled := map(evens, fn(n) { return n * 2 })"
+    ],
+    "description": "Filter and map list items using higher-order closures"
+  }
+}

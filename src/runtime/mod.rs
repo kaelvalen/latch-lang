@@ -1,5 +1,5 @@
 // ── Latch Standard Library Modules ───────────────────────────
-// These module names and method signatures are LOCKED as of v0.4.3.
+// These module names and method signatures are LOCKED as of v0.5.0.
 // Do not rename or remove existing methods. New methods may be added.
 //
 // Locked names:

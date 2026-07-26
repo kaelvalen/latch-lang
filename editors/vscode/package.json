@@ -1,0 +1,189 @@
+{
+  "name": "vscode-latch",
+  "displayName": "Latch Language Support",
+  "description": "Rich language support for Latch: syntax highlighting, LSP integration, code snippets, execution commands, and debugging tools.",
+  "version": "0.5.0",
+  "publisher": "kaelvalen",
+  "license": "MIT",
+  "homepage": "https://github.com/kaelvalen/latch-lang",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kaelvalen/latch-lang.git"
+  },
+  "bugs": {
+    "url": "https://github.com/kaelvalen/latch-lang/issues"
+  },
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Snippets",
+    "Linters"
+  ],
+  "keywords": [
+    "latch",
+    "automation",
+    "scripting",
+    "lsp",
+    "devops"
+  ],
+  "main": "./out/extension.js",
+  "activationEvents": [
+    "onLanguage:latch",
+    "onCommand:latch.run",
+    "onCommand:latch.vm",
+    "onCommand:latch.check",
+    "onCommand:latch.restartLsp"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "latch",
+        "aliases": [
+          "Latch",
+          "latch"
+        ],
+        "extensions": [
+          ".lt"
+        ],
+        "configuration": "./language-configuration.json",
+        "icon": {
+          "light": "./icon.png",
+          "dark": "./icon.png"
+        }
+      }
+    ],
+    "grammars": [
+      {
+        "language": "latch",
+        "scopeName": "source.latch",
+        "path": "./syntaxes/latch.tmLanguage.json"
+      }
+    ],
+    "snippets": [
+      {
+        "language": "latch",
+        "path": "./snippets/latch.code-snippets"
+      }
+    ],
+    "commands": [
+      {
+        "command": "latch.run",
+        "title": "Latch: Run Current Script (Tree-walk)",
+        "icon": "$(play)"
+      },
+      {
+        "command": "latch.vm",
+        "title": "Latch: Run Current Script (Bytecode VM)",
+        "icon": "$(play-circle)"
+      },
+      {
+        "command": "latch.check",
+        "title": "Latch: Check Script for Errors",
+        "icon": "$(check)"
+      },
+      {
+        "command": "latch.restartLsp",
+        "title": "Latch: Restart LSP Server",
+        "icon": "$(refresh)"
+      }
+    ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "latch.run",
+          "group": "navigation@1",
+          "when": "resourceLangId == latch"
+        },
+        {
+          "command": "latch.vm",
+          "group": "navigation@2",
+          "when": "resourceLangId == latch"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "latch.run",
+          "group": "1_modification",
+          "when": "resourceLangId == latch"
+        },
+        {
+          "command": "latch.vm",
+          "group": "1_modification",
+          "when": "resourceLangId == latch"
+        },
+        {
+          "command": "latch.check",
+          "group": "1_modification",
+          "when": "resourceLangId == latch"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "latch.run",
+          "when": "resourceLangId == latch"
+        },
+        {
+          "command": "latch.vm",
+          "when": "resourceLangId == latch"
+        },
+        {
+          "command": "latch.check",
+          "when": "resourceLangId == latch"
+        },
+        {
+          "command": "latch.restartLsp"
+        }
+      ]
+    },
+    "configuration": {
+      "type": "object",
+      "title": "Latch",
+      "properties": {
+        "latch.executablePath": {
+          "type": "string",
+          "default": "latch",
+          "description": "Path to the Latch CLI executable (`latch`). Defaults to looking up `latch` in PATH."
+        },
+        "latch.lsp.enable": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable Language Server Protocol (LSP) integration for autocompletion, diagnostics, and hover details."
+        },
+        "latch.lsp.trace": {
+          "type": "string",
+          "enum": [
+            "off",
+            "messages",
+            "verbose"
+          ],
+          "default": "off",
+          "description": "Traces the communication between VS Code and the Latch Language Server."
+        },
+        "latch.execution.mode": {
+          "type": "string",
+          "enum": [
+            "terminal",
+            "outputChannel"
+          ],
+          "default": "terminal",
+          "description": "Where script output should be displayed when running Latch commands."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  },
+  "devDependencies": {
+    "@types/node": "^18.0.0",
+    "@types/vscode": "^1.75.0",
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^8.1.0"
+  }
+}

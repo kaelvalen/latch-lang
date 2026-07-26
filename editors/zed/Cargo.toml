@@ -1,0 +1,12 @@
+[package]
+name = "zed-latch"
+version = "0.5.0"
+edition = "2021"
+authors = ["kaelvalen"]
+description = "Zed Extension for Latch Language"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+zed_extension_api = "0.1.0"

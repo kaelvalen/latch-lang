@@ -12,7 +12,7 @@ use crate::lexer::Lexer;
 use crate::semantic::SemanticAnalyzer;
 
 #[derive(Parser)]
-#[command(name = "latch", version = "0.4.3", about = "Latch — local automation scripting language")]
+#[command(name = "latch", version = "0.5.0", about = "Latch — local automation scripting language")]
 struct Cli {
     #[command(subcommand)]
     command: Command,
@@ -245,7 +245,7 @@ fn main() {
         }
 
         Command::Version => {
-            println!("latch v0.4.3");
+            println!("latch v0.5.0");
         }
     }
 }
@@ -253,7 +253,7 @@ fn main() {
 // ── REPL ─────────────────────────────────────────────────────
 
 fn run_repl() {
-    println!("latch v0.4.3 — interactive REPL");
+    println!("latch v0.5.0 — interactive REPL");
     println!("Type expressions or statements. Use Ctrl+D to exit.\n");
 
     let stdin = io::stdin();
