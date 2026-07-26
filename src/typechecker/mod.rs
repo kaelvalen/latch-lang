@@ -186,7 +186,9 @@ impl TypeChecker {
 
                 match op {
                     HirOp::Add | HirOp::Sub | HirOp::Mul | HirOp::Div | HirOp::Mod => {
-                        if l_t == Type::Float || r_t == Type::Float {
+                        if l_t == Type::Str || r_t == Type::Str {
+                            Ok(Type::Str)
+                        } else if l_t == Type::Float || r_t == Type::Float {
                             Ok(Type::Float)
                         } else {
                             Ok(Type::Int)

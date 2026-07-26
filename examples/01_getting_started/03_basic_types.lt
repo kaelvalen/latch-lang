@@ -1,0 +1,18 @@
+# Tutorial 03: Basic Data Types
+# Learn primitive types and type inspection with typeof().
+
+print("=== Primitive Types in Latch ===")
+
+int_val := 42
+float_val := 3.14159
+bool_val := true
+str_val := "Latch Language"
+null_val := null
+
+print("int_val = " + str(int_val) + " | type: " + typeof(int_val))
+print("float_val = " + str(float_val) + " | type: " + typeof(float_val))
+print("bool_val = " + str(bool_val) + " | type: " + typeof(bool_val))
+print("str_val = " + str_val + " | type: " + typeof(str_val))
+print("null_val = " + str(null_val) + " | type: " + typeof(null_val))
+
+print("=== 01_getting_started/03_basic_types.lt PASSED ===")

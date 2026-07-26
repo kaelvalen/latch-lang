@@ -1,0 +1,7 @@
+# Tutorial 01: Hello World
+# Learn the basic syntax, comments, and printing in Latch.
+
+print("Hello, World!")
+print("Welcome to Latch Programming Language!")
+
+print("=== 01_getting_started/01_hello_world.lt PASSED ===")

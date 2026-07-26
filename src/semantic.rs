@@ -20,7 +20,7 @@ pub struct SymbolInfo {
 #[derive(Debug, Clone)]
 pub enum SymbolKind {
     Variable,
-    Function { param_count: usize },
+    Function { min_arity: usize, max_arity: usize },
 }
 
 impl SymbolInfo {
@@ -40,7 +40,20 @@ impl SymbolInfo {
 
     fn function(param_count: usize) -> Self {
         SymbolInfo {
-            kind: SymbolKind::Function { param_count },
+            kind: SymbolKind::Function {
+                min_arity: param_count,
+                max_arity: param_count,
+            },
+            type_ann: None,
+        }
+    }
+
+    fn function_optional(min_arity: usize, max_arity: usize) -> Self {
+        SymbolInfo {
+            kind: SymbolKind::Function {
+                min_arity,
+                max_arity,
+            },
             type_ann: None,
         }
     }
@@ -113,7 +126,7 @@ impl SemanticAnalyzer {
         self.declare("extend", SymbolInfo::function(2));
         self.declare("insert", SymbolInfo::function(3));
         self.declare("remove", SymbolInfo::function(2));
-        self.declare("pop", SymbolInfo::function(2)); // list pop with optional index
+        self.declare("pop", SymbolInfo::function_optional(1, 2)); // list pop with optional index
         self.declare("list_clear", SymbolInfo::function(1));
         self.declare("list_copy", SymbolInfo::function(1));
         self.declare("index", SymbolInfo::function(2));
@@ -123,7 +136,7 @@ impl SemanticAnalyzer {
         // Dict operations
         self.declare("keys", SymbolInfo::function(1));
         self.declare("values", SymbolInfo::function(1));
-        self.declare("get", SymbolInfo::function(3)); // dict, key, default
+        self.declare("get", SymbolInfo::function_optional(2, 3)); // dict, key, [default]
         self.declare("popitem", SymbolInfo::function(1));
         self.declare("update", SymbolInfo::function(2));
         self.declare("setdefault", SymbolInfo::function(3));
@@ -470,15 +483,16 @@ impl SemanticAnalyzer {
                             .push(LatchError::UndefinedFunction(name.clone()));
                     }
                     Some(SymbolInfo {
-                        kind: SymbolKind::Function { param_count },
+                        kind: SymbolKind::Function { min_arity, max_arity },
                         ..
                     }) => {
-                        let pc = *param_count;
+                        let min = *min_arity;
+                        let max = *max_arity;
                         // usize::MAX = variadic, skip arity check
-                        if pc != usize::MAX && args.len() != pc {
+                        if min != usize::MAX && (args.len() < min || args.len() > max) {
                             self.errors.push(LatchError::ArgCountMismatch {
                                 name: name.clone(),
-                                expected: pc,
+                                expected: min,
                                 found: args.len(),
                             });
                         }
@@ -649,16 +663,18 @@ impl SemanticAnalyzer {
             } => {
                 // Pipe adds one implicit arg, so check arity with +1
                 if let Some(SymbolInfo {
-                    kind: SymbolKind::Function { param_count },
+                    kind: SymbolKind::Function { min_arity, max_arity },
                     ..
                 }) = self.resolve(name)
                 {
-                    let pc = *param_count;
-                    if args.len() + 1 != pc {
+                    let min = *min_arity;
+                    let max = *max_arity;
+                    let total = args.len() + 1;
+                    if min != usize::MAX && (total < min || total > max) {
                         self.errors.push(LatchError::ArgCountMismatch {
                             name: name.clone(),
-                            expected: pc,
-                            found: args.len() + 1,
+                            expected: min,
+                            found: total,
                         });
                     }
                 }

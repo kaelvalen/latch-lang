@@ -1,0 +1,27 @@
+# Tutorial 08: Conditionals
+# Learn branching with if, elif, and else.
+
+print("=== Conditional Branching ===")
+
+temperature := 28
+
+if temperature > 30 {
+    print("It is hot outside!")
+} elif temperature >= 20 {
+    print("Weather is pleasant.")
+} elif temperature >= 10 {
+    print("It is a bit cool.")
+} else {
+    print("It is cold!")
+}
+
+is_logged_in := true
+role := "admin"
+
+if is_logged_in && role == "admin" {
+    print("Admin dashboard ready.")
+} else {
+    print("Please log in as admin.")
+}
+
+print("=== 03_control_flow/01_conditionals.lt PASSED ===")

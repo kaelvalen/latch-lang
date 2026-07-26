@@ -1,0 +1,25 @@
+# Tutorial 11: Recursion
+# Functions that call themselves to solve problems.
+
+print("=== Recursive Functions ===")
+
+fn factorial(n) {
+    if n <= 1 {
+        return 1
+    }
+    return n * factorial(n - 1)
+}
+
+fn fibonacci(n) {
+    if n <= 0 {
+        return 0
+    } elif n == 1 {
+        return 1
+    }
+    return fibonacci(n - 1) + fibonacci(n - 2)
+}
+
+print("factorial(6) = " + str(factorial(6)))
+print("fibonacci(8) = " + str(fibonacci(8)))
+
+print("=== 04_functions/02_recursion.lt PASSED ===")

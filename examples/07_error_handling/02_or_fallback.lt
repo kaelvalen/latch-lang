@@ -1,0 +1,26 @@
+# Tutorial 24: The `or` Fallback Operator
+# Provide default values when an expression fails or is null.
+
+print("=== Safe JSON Parse Fallback ===")
+invalid_json := "{name: broken_json_without_quotes"
+parsed := json.parse(invalid_json) or {"status": "fallback_default", "code": 500}
+print("Parsed invalid JSON with fallback: " + parsed["status"])
+
+print("\n=== Null / Falsy Fallback ===")
+user_input := null
+display_name := user_input or "Guest_User"
+print("Resolved display name: " + display_name)
+
+print("\n=== Short-Circuit Evaluation ===")
+evaluated_second := false
+fn side_effect() {
+    evaluated_second = true
+    return "Second Value"
+}
+
+first_val := "First Valid Value"
+final_res := first_val or side_effect()
+print("First val truthy: " + final_res)
+print("Was second side-effect evaluated?: " + str(evaluated_second))
+
+print("=== 07_error_handling/02_or_fallback.lt PASSED ===")

@@ -1,0 +1,21 @@
+# Tutorial 18: Math Utilities
+# Standard math functions and constants.
+
+print("=== Math Builtins ===")
+
+print("sqrt(144) = " + str(math.sqrt(144)))
+print("abs(-42.5) = " + str(math.abs(-42.5)))
+print("floor(3.7) = " + str(math.floor(3.7)))
+print("ceil(3.2) = " + str(math.ceil(3.2)))
+print("round(3.5) = " + str(math.round(3.5)))
+print("pow(2, 10) = " + str(math.pow(2, 10)))
+
+values := [3, 1, 4, 1, 5, 9]
+print("Max of values: " + str(max(values)))
+print("Min of values: " + str(min(values)))
+print("Sum of values: " + str(sum(values)))
+
+print("PI = " + str(math.pi()))
+print("E = " + str(math.e()))
+
+print("=== 06_stdlib/02_math.lt PASSED ===")

@@ -1,0 +1,18 @@
+# Tutorial 04: String Interpolation
+# Embed expressions directly inside strings with ${...}.
+
+print("=== String Interpolation ===")
+
+name := "Latch"
+version := 0.5
+
+print("Welcome to ${name} v${version}!")
+
+a := 10
+b := 20
+print("${a} + ${b} = ${a + b}")
+
+items := ["milk", "eggs", "bread"]
+print("Shopping list has ${len(items)} items: ${items}")
+
+print("=== 01_getting_started/04_string_interpolation.lt PASSED ===")

@@ -1,0 +1,21 @@
+# Tutorial 16: List Comprehensions
+# Build lists declaratively from existing iterables.
+
+print("=== List Comprehensions ===")
+
+src := [1, 2, 3, 4, 5, 6]
+
+doubles := [x * 2 for x in src]
+print("Doubled: " + str(doubles))
+
+evens := [x for x in src if x % 2 == 0]
+print("Evens: " + str(evens))
+
+squares := [x * x for x in 1..6]
+print("Squares 1..5: " + str(squares))
+
+words := ["apple", "banana", "cherry"]
+upper_words := [upper(w) for w in words]
+print("Upper words: " + str(upper_words))
+
+print("=== 05_collections/03_list_comprehensions.lt PASSED ===")

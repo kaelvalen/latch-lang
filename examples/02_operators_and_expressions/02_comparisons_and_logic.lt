@@ -1,0 +1,21 @@
+# Tutorial 06: Comparisons & Boolean Logic
+# Learn ==, !=, <, >, <=, >=, &&, ||, and !.
+
+print("=== Comparisons ===")
+print("5 == 5: " + str(5 == 5))
+print("5 != 3: " + str(5 != 3))
+print("5 > 3: " + str(5 > 3))
+print("5 <= 5: " + str(5 <= 5))
+
+print("\n=== Boolean Logic ===")
+print("true && true: " + str(true && true))
+print("true && false: " + str(true && false))
+print("true || false: " + str(true || false))
+print("!true: " + str(!true))
+print("!false: " + str(!false))
+
+age := 25
+has_id := true
+print("\nCan enter: " + str(age >= 18 && has_id))
+
+print("=== 02_operators_and_expressions/02_comparisons_and_logic.lt PASSED ===")

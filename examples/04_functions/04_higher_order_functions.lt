@@ -1,0 +1,25 @@
+# Tutorial 13: Higher-Order Functions
+# Functions that accept or return other functions.
+
+print("=== Higher-Order Functions: map & filter ===")
+
+nums := [1, 2, 3, 4, 5, 6]
+print("Original numbers: " + str(nums))
+
+# Map: double numbers
+doubled := map(nums, fn(x) { return x * 2 })
+print("Doubled numbers: " + str(doubled))
+
+# Filter: keep even numbers
+evens := filter(nums, fn(x) { return x % 2 == 0 })
+print("Even numbers: " + str(evens))
+
+print("\n=== Custom Higher-Order Function ===")
+fn apply_twice(f, x) {
+    return f(f(x))
+}
+
+increment := fn(n) { return n + 1 }
+print("apply_twice(increment, 5) = " + str(apply_twice(increment, 5)))
+
+print("=== 04_functions/04_higher_order_functions.lt PASSED ===")

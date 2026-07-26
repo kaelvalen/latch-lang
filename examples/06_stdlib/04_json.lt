@@ -1,0 +1,19 @@
+# Tutorial 20: JSON Processing
+# Parse and stringify JSON with the json module.
+
+print("=== JSON Parse & Stringify ===")
+
+config_str := '{"server": "localhost", "port": 8080, "ssl": true}'
+print("Raw JSON String: " + config_str)
+
+parsed := json.parse(config_str)
+print("Parsed JSON Object - Server: " + parsed["server"])
+print("Parsed JSON Object - Port: " + str(parsed["port"]))
+print("Parsed JSON Object - SSL: " + str(parsed["ssl"]))
+
+parsed["port"] = 9090
+
+stringified := json.stringify(parsed)
+print("Stringified JSON: " + stringified)
+
+print("=== 06_stdlib/04_json.lt PASSED ===")

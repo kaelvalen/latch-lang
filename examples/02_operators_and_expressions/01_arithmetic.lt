@@ -1,0 +1,18 @@
+# Tutorial 05: Arithmetic Operators
+# Learn +, -, *, /, %, and operator precedence.
+
+print("=== Arithmetic Operators ===")
+
+print("10 + 3 = " + str(10 + 3))
+print("10 - 3 = " + str(10 - 3))
+print("10 * 3 = " + str(10 * 3))
+print("10 / 3 = " + str(10 / 3))
+print("10 % 3 = " + str(10 % 3))
+
+print("2 + 3 * 4 = " + str(2 + 3 * 4))
+print("(2 + 3) * 4 = " + str((2 + 3) * 4))
+
+neg := -5
+print("neg = " + str(neg))
+
+print("=== 02_operators_and_expressions/01_arithmetic.lt PASSED ===")

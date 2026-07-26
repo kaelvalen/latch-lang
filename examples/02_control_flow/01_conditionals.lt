@@ -1,0 +1,18 @@
+# Tutorial 04: Conditionals
+# Learn branching with if, elif, and else.
+
+print("=== Conditional Branching ===")
+
+temperature := 28
+
+if temperature > 30 {
+    print("It is hot outside!")
+} elif temperature >= 20 {
+    print("Weather is pleasant.")
+} elif temperature >= 10 {
+    print("It is a bit cool.")
+} else {
+    print("It is cold!")
+}
+
+print("Conditional test completed.")
