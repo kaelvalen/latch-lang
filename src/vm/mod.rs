@@ -14,14 +14,14 @@ pub mod verifier;
 pub mod vm;
 
 #[allow(unused_imports)]
-pub use chunk::{Chunk, InstructionDescriptor, OpCode};
+pub use chunk::{Chunk, Constant, InstructionDescriptor, OpCode};
 pub use compiler::Compiler;
 pub use decoder::{DecodedInstruction, InstructionCursor};
 pub use frame::CallFrame;
 pub use gc::GcState;
 pub use globals::{Global, GlobalFlags};
 pub use ic::{IcState, InlineCache};
-pub use lbc::LbcSerializer;
+pub use lbc::{LbcSerializer, LBC_MAGIC, LBC_VERSION};
 pub use memory::NativeModule;
 pub use optimizer::Optimizer;
 pub use profiler::VmProfiler;

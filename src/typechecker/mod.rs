@@ -1,22 +1,28 @@
 use std::collections::HashMap;
 
-use crate::ast::*;
+use crate::ast::Type;
 use crate::error::{LatchError, Result};
+use crate::hir::*;
 
+/// Pure HIR Level Type Checker — verifies types on resolved HirModule and HIR Nodes.
+/// Employs lexically scoped local symbol stacks to correctly resolve variable shadowing.
 pub struct TypeChecker {
-    symbol_types: HashMap<String, Type>,
+    locals: Vec<HashMap<LocalId, Type>>,
+    globals: HashMap<GlobalId, Type>,
 }
 
 impl TypeChecker {
     pub fn new() -> Self {
         TypeChecker {
-            symbol_types: HashMap::new(),
+            locals: vec![HashMap::new()],
+            globals: HashMap::new(),
         }
     }
 
-    pub fn check_program(&mut self, stmts: &[Stmt]) -> Vec<LatchError> {
+    /// Check resolved HirModule at HIR level
+    pub fn check_module(&mut self, module: &HirModule) -> Vec<LatchError> {
         let mut errors = Vec::new();
-        for stmt in stmts {
+        for stmt in &module.stmts {
             if let Err(e) = self.check_stmt(stmt) {
                 errors.push(e);
             }
@@ -24,93 +30,188 @@ impl TypeChecker {
         errors
     }
 
-    fn check_stmt(&mut self, stmt: &Stmt) -> Result<()> {
+    pub fn check_program(&mut self, stmts: &[crate::ast::Stmt]) -> Vec<LatchError> {
+        // Legacy entry point compatibility facade — resolves to HirModule
+        let mut resolver = crate::resolver::Resolver::new();
+        if let Ok(module) = resolver.resolve_module("<check>", stmts) {
+            self.check_module(&module)
+        } else {
+            Vec::new()
+        }
+    }
+
+    fn push_scope(&mut self) {
+        self.locals.push(HashMap::new());
+    }
+
+    fn pop_scope(&mut self) {
+        self.locals.pop();
+    }
+
+    fn check_stmt(&mut self, stmt: &HirStmt) -> Result<()> {
         match stmt {
-            Stmt::Let { name, type_ann, value } => {
+            HirStmt::LetLocal { id, value } => {
                 let inferred = self.check_expr(value)?;
-                if let Some(ann) = type_ann {
-                    if !types_compatible(ann, &inferred) {
+                if let Some(scope) = self.locals.last_mut() {
+                    scope.insert(*id, inferred);
+                }
+            }
+
+            HirStmt::LetGlobal { id, value } => {
+                let inferred = self.check_expr(value)?;
+                self.globals.insert(*id, inferred);
+            }
+
+            HirStmt::AssignLocal { id, value } => {
+                let inferred = self.check_expr(value)?;
+                if let Some(expected) = self.lookup_local(*id) {
+                    if !types_compatible(&expected, &inferred) {
                         return Err(LatchError::TypeMismatch {
-                            expected: format!("{ann}"),
-                            found: format!("{inferred}"),
+                            expected: format!("{expected:?}"),
+                            found: format!("{inferred:?}"),
                         });
                     }
-                    self.symbol_types.insert(name.clone(), ann.clone());
-                } else {
-                    self.symbol_types.insert(name.clone(), inferred);
+                }
+                if let Some(scope) = self.locals.last_mut() {
+                    scope.insert(*id, inferred);
                 }
             }
 
-            Stmt::Const { name, type_ann, value } => {
+            HirStmt::AssignGlobal { id, value } => {
                 let inferred = self.check_expr(value)?;
-                if let Some(ann) = type_ann {
-                    if !types_compatible(ann, &inferred) {
+                if let Some(expected) = self.globals.get(id) {
+                    if !types_compatible(expected, &inferred) {
                         return Err(LatchError::TypeMismatch {
-                            expected: format!("{ann}"),
-                            found: format!("{inferred}"),
+                            expected: format!("{expected:?}"),
+                            found: format!("{inferred:?}"),
                         });
                     }
-                    self.symbol_types.insert(name.clone(), ann.clone());
-                } else {
-                    self.symbol_types.insert(name.clone(), inferred);
                 }
+                self.globals.insert(*id, inferred);
             }
 
-            Stmt::Fn { name, return_type, .. } => {
-                if let Some(ret) = return_type {
-                    self.symbol_types.insert(name.clone(), ret.clone());
-                }
-            }
-
-            Stmt::Expr(expr) => {
+            HirStmt::Expr(expr) => {
                 self.check_expr(expr)?;
             }
 
-            _ => {}
+            HirStmt::If { cond, then, else_ } => {
+                let cond_type = self.check_expr(cond)?;
+                if cond_type != Type::Bool && cond_type != Type::Any {
+                    return Err(LatchError::TypeMismatch {
+                        expected: "Bool".into(),
+                        found: format!("{cond_type:?}"),
+                    });
+                }
+                self.push_scope();
+                for s in then {
+                    self.check_stmt(s)?;
+                }
+                self.pop_scope();
+
+                if let Some(else_stmt) = else_ {
+                    self.push_scope();
+                    self.check_stmt(else_stmt)?;
+                    self.pop_scope();
+                }
+            }
+
+            HirStmt::While { cond, body } => {
+                let cond_type = self.check_expr(cond)?;
+                if cond_type != Type::Bool && cond_type != Type::Any {
+                    return Err(LatchError::TypeMismatch {
+                        expected: "Bool".into(),
+                        found: format!("{cond_type:?}"),
+                    });
+                }
+                self.push_scope();
+                for s in body {
+                    self.check_stmt(s)?;
+                }
+                self.pop_scope();
+            }
+
+            HirStmt::Return(expr) => {
+                self.check_expr(expr)?;
+            }
         }
         Ok(())
     }
 
-    fn check_expr(&mut self, expr: &Expr) -> Result<Type> {
+    fn check_expr(&mut self, expr: &HirExpr) -> Result<Type> {
         match expr {
-            Expr::Int(_) => Ok(Type::Int),
-            Expr::Float(_) => Ok(Type::Float),
-            Expr::Bool(_) => Ok(Type::Bool),
-            Expr::Str(_) => Ok(Type::Str),
-            Expr::Null => Ok(Type::Any),
+            HirExpr::Constant(lit) => match lit {
+                HirLiteral::Int(_) => Ok(Type::Int),
+                HirLiteral::Float(_) => Ok(Type::Float),
+                HirLiteral::Bool(_) => Ok(Type::Bool),
+                HirLiteral::Str(_) => Ok(Type::Str),
+                HirLiteral::Null => Ok(Type::Any),
+            },
 
-            Expr::List(_) => Ok(Type::List),
-            Expr::Map(_) => Ok(Type::Dict),
+            HirExpr::Local(id) => {
+                if let Some(t) = self.lookup_local(*id) {
+                    Ok(t)
+                } else {
+                    Ok(Type::Any)
+                }
+            }
 
-            Expr::Ident(name) => {
-                if let Some(t) = self.symbol_types.get(name) {
+            HirExpr::Global(id) => {
+                if let Some(t) = self.globals.get(id) {
                     Ok(t.clone())
                 } else {
                     Ok(Type::Any)
                 }
             }
 
-            Expr::BinOp { op, left, right } => {
+            HirExpr::BinOp { op, left, right } => {
                 let l_t = self.check_expr(left)?;
                 let r_t = self.check_expr(right)?;
 
                 match op {
-                    BinOp::Add | BinOp::Sub | BinOp::Mul | BinOp::Div | BinOp::Mod => {
+                    HirOp::Add | HirOp::Sub | HirOp::Mul | HirOp::Div | HirOp::Mod => {
                         if l_t == Type::Float || r_t == Type::Float {
                             Ok(Type::Float)
                         } else {
                             Ok(Type::Int)
                         }
                     }
-                    BinOp::Eq | BinOp::NotEq | BinOp::Lt | BinOp::Gt | BinOp::LtEq | BinOp::GtEq => {
+                    HirOp::Equal | HirOp::NotEqual | HirOp::Less | HirOp::LessEqual | HirOp::Greater | HirOp::GreaterEqual => {
                         Ok(Type::Bool)
                     }
-                    _ => Ok(Type::Any),
                 }
+            }
+
+            HirExpr::List(items) => {
+                for i in items {
+                    self.check_expr(i)?;
+                }
+                Ok(Type::List)
+            }
+
+            HirExpr::Map(pairs) => {
+                for (k, v) in pairs {
+                    self.check_expr(k)?;
+                    self.check_expr(v)?;
+                }
+                Ok(Type::Dict)
+            }
+
+            HirExpr::Print(expr) => {
+                self.check_expr(expr)?;
+                Ok(Type::Any)
             }
 
             _ => Ok(Type::Any),
         }
+    }
+
+    fn lookup_local(&self, id: LocalId) -> Option<Type> {
+        for scope in self.locals.iter().rev() {
+            if let Some(t) = scope.get(&id) {
+                return Some(t.clone());
+            }
+        }
+        None
     }
 }
 

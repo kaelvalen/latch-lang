@@ -2,13 +2,16 @@ mod ast;
 mod env;
 mod error;
 mod hir;
+mod hir_verifier;
 mod interpreter;
 mod lexer;
+mod lowering;
 mod lsp;
 mod parser;
 mod resolver;
 mod runtime;
 mod semantic;
+mod symbol;
 mod typechecker;
 mod vm;
 
@@ -165,6 +168,15 @@ fn main() {
                     std::process::exit(1);
                 }
             };
+
+            let mut typechecker = crate::typechecker::TypeChecker::new();
+            let type_errors = typechecker.check_module(&hir_module);
+            if !type_errors.is_empty() {
+                for e in &type_errors {
+                    print_error(e, &file, &source);
+                }
+                std::process::exit(1);
+            }
 
             let optimizer = crate::vm::Optimizer::new();
             let opt_hir_module = optimizer.optimize_module(&hir_module);

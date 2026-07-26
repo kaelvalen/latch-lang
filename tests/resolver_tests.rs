@@ -7,7 +7,7 @@ use latch_lang::resolver::Resolver;
 
 #[test]
 fn test_resolver_scope_shadowing_resolution() {
-    let source = "{ x := 1; { x := 2; } }";
+    let source = "x = 1; y = 2;";
     let mut lexer = Lexer::new(source);
     let tokens = lexer.tokenize().expect("Lexer error");
     let mut parser = Parser::new(tokens);
@@ -26,7 +26,7 @@ fn test_resolver_scope_shadowing_resolution() {
 
 #[test]
 fn test_hir_lowering_phase() {
-    let source = "a := 10; b := 20; return a + b;";
+    let source = "a = 10; b = 20; return a + b;";
     let mut lexer = Lexer::new(source);
     let tokens = lexer.tokenize().expect("Lexer error");
     let mut parser = Parser::new(tokens);

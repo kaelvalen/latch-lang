@@ -107,12 +107,14 @@ impl Compiler {
                 self.compile_expr(value)?;
                 self.emit_opcode(OpCode::OpSetLocal, 0);
                 self.emit_u16(id.0 as u16, 0);
+                self.emit_opcode(OpCode::OpPop, 0);
             }
 
             HirStmt::AssignGlobal { id, value } => {
                 self.compile_expr(value)?;
                 self.emit_opcode(OpCode::OpSetGlobal, 0);
                 self.emit_u16(id.0 as u16, 0);
+                self.emit_opcode(OpCode::OpPop, 0);
             }
 
             HirStmt::Expr(expr) => {
@@ -219,11 +221,13 @@ impl Compiler {
                 }
             }
 
-            HirExpr::Call { func_id: _, args } => {
-                let argc = args.len();
+            HirExpr::Call { func_id, args } => {
+                self.emit_opcode(OpCode::OpGetGlobal, 0);
+                self.emit_u16(func_id.0 as u16, 0);
                 for arg in args {
                     self.compile_expr(arg)?;
                 }
+                let argc = args.len();
                 self.emit_opcode(OpCode::OpCall, 0);
                 self.emit_u16(argc as u16, 0);
             }

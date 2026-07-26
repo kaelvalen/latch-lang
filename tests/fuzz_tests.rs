@@ -1,5 +1,5 @@
-use latch_lang::env::{ObjFunction, ObjHeader, ObjKind, Value};
-use latch_lang::vm::{BytecodeVerifier, Chunk, VM};
+use latch_lang::env::{ObjFunction, ObjHeader, ObjKind};
+use latch_lang::vm::{BytecodeVerifier, Chunk, Constant, VM};
 
 #[test]
 fn test_bytecode_verifier_rejects_invalid_opcodes() {
@@ -12,6 +12,11 @@ fn test_bytecode_verifier_rejects_invalid_opcodes() {
         chunk,
         name: "invalid_fn".into(),
         upvalue_count: 0,
+        max_stack: 256,
+        local_count: 0,
+        module_id: 0,
+        debug_id: 0,
+        flags: 0,
     };
 
     let verify_res = BytecodeVerifier::verify(&func);
@@ -23,7 +28,7 @@ fn test_bytecode_fuzzer_resilience() {
     // Generate 50 pseudo-random valid bytecode streams
     for seed in 0..50u8 {
         let mut chunk = Chunk::new();
-        let const_val = Value::Int(seed as i64);
+        let const_val = Constant::Int(seed as i64);
         let const_idx = chunk.add_constant(const_val);
 
         // OP_CONSTANT <const_idx>
@@ -39,6 +44,11 @@ fn test_bytecode_fuzzer_resilience() {
             chunk,
             name: format!("fuzz_{seed}"),
             upvalue_count: 0,
+            max_stack: 256,
+            local_count: 0,
+            module_id: 0,
+            debug_id: 0,
+            flags: 0,
         };
 
         let verify_res = BytecodeVerifier::verify(&func);

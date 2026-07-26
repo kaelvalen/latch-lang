@@ -26,10 +26,10 @@ fn run_bytecode_vm(source: &str) -> String {
     let stmts = parser.parse_program().expect("Parser error");
 
     let mut resolver = Resolver::new();
-    let _hir = resolver.resolve_program(&stmts).expect("Resolver error");
+    let module = resolver.resolve_module("diff_test", &stmts).expect("Resolver error");
 
     let compiler = Compiler::new();
-    let script_fn = compiler.compile(&stmts).expect("Compiler error");
+    let script_fn = compiler.compile_module(&module).expect("Compiler error");
     let mut vm = VM::new(script_fn);
 
     match vm.run() {
