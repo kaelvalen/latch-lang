@@ -5,64 +5,44 @@
 <h1 align="center">Latch</h1>
 
 <p align="center">
-  <strong>A fast, lightweight scripting language for local automation, file operations, and task orchestration.</strong>
+  <strong>A scripting language for local automation, with a real compiler pipeline behind it.</strong>
 </p>
 
 <p align="center">
   <a href="https://crates.io/crates/latch-lang"><img src="https://img.shields.io/crates/v/latch-lang.svg" alt="crates.io" /></a>
   <a href="https://github.com/kaelvalen/latch-lang/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT" /></a>
-  <a href="#features"><img src="https://img.shields.io/badge/batteries-included-brightgreen.svg" alt="Batteries Included" /></a>
 </p>
 
 ---
 
-## Why Latch?
+## What this actually is
 
-Latch is built to **replace shell scripts and Makefiles** for your automation tasks. It provides:
+Latch reads like a shell-script replacement — variables, string interpolation, `fs`/`proc`/`http` built-ins, a `parallel` block — but it isn't a thin wrapper interpreter. There are **two independent execution backends** sharing one frontend:
 
-- **Zero dependencies** — Single binary, instant startup
-- **Clear syntax** — Readable even for non-programmers
-- **Built-in power** — File I/O, processes, HTTP, JSON, regex, parallel tasks
-- **Error handling** — Try-catch, fallback values, defensive coalescing
-- **Type safety** — Optional type annotations, caught at parse-time
+- **Tree-walk interpreter** (`latch run`) — direct AST evaluation, fast to start, used for scripting and the REPL.
+- **Bytecode VM** (`latch vm`) — a full pipeline: name resolution → HIR → HIR verification → constant-folding/DCE optimizer → bytecode compiler → bytecode verifier → stack VM with inline caches for method/field dispatch.
 
-### Write automation scripts faster
+Both backends are checked against each other with differential tests (same program, same result, on both paths), and the VM's serialized bytecode format (`.lbc`) round-trips through a `serialize → deserialize → run` test to make sure the on-disk format isn't a fiction.
 
-```latch
-# Deploy app to production
-deploy := fn(target) {
-    config := json.parse(fs.read("config.json")) or {}
-    
-    files := fs.glob("dist/**/*")
-    parallel f in files workers=8 {
-        proc.exec("cp ${f} /opt/app/${f}")
-    }
-    
-    print("✓ Deployed ${len(files)} files to ${target}")
-}
-
-deploy("production")
-```
+If you just want to write automation scripts, none of that matters and you can skip to [Quick Start](#quick-start). If you're evaluating the implementation, see [Architecture](#architecture).
 
 ## Install
 
-### With Cargo (recommended)
+### With Cargo
 
 ```sh
 cargo install latch-lang
 ```
 
-Then use the `latch` command:
+### With the install script
 
 ```sh
-latch version        # Show version
-latch run script.lt   # Execute script with Tree-walk Interpreter
-latch vm script.lt    # Execute script with Bytecode Virtual Machine (VM)
-latch check script.lt # Typecheck & lint script without running
-latch lsp             # Start Language Server Protocol (LSP) for IDEs
+curl -fsSL https://raw.githubusercontent.com/kaelvalen/latch-lang/main/install.sh | bash
 ```
 
-### From Source
+Downloads a prebuilt release binary for your OS/arch if one exists; falls back to `cargo install` otherwise.
+
+### From source
 
 ```sh
 git clone https://github.com/kaelvalen/latch-lang.git
@@ -70,116 +50,60 @@ cd latch-lang
 cargo install --path .
 ```
 
-### Verify Installation
+### Verify
 
 ```sh
 $ latch version
 latch v0.5.0
 ```
 
-## Quick Start — Your First Script
+## Quick Start
 
-Create `greet.lt`:
+```sh
+latch run script.lt   # tree-walk interpreter
+latch vm script.lt     # bytecode VM
+latch check script.lt  # parse + resolve + typecheck, no execution
+latch repl              # interactive REPL
+latch lsp               # LSP server (diagnostics, hover, completion)
+```
+
+`greet.lt`:
 
 ```latch
 name := "Latch"
-version := 0.4
+version: int := 1
 
-# String interpolation
 print("Welcome to ${name} v${version}!")
 
-# List iteration
+fn greet(who: string) -> string {
+    return "Hello, ${who}!"
+}
+print(greet("world"))
+
 features := ["automation", "scripting", "orchestration"]
-for feature in features {
-    print("  • ${feature}")
+for f in features {
+    print("  • ${f}")
 }
 
-# File operations
-fs.write("log.txt", "Script ran at ${time.now()}")
-
-# Process execution
-result := proc.exec("echo Done!")
+fs.write("log.txt", "script ran at ${time.now()}")
+result := proc.exec("echo done")
 print(result.stdout)
 ```
 
-Run it:
-
 ```sh
 $ latch run greet.lt
-Welcome to Latch v0.4!
+Welcome to Latch v1!
+Hello, world!
   • automation
   • scripting
   • orchestration
-Script ran at 2026-04-02 12:10:30
-Done!
+done
 ```
 
-## Language Features at a Glance
-
-| Category | Features |
-|----------|----------|
-| **Basics** | Variables, type annotations, string interpolation, comments |
-| **Types** | `null`, `bool`, `int`, `float`, `string`, `list`, `dict`, `fn` |
-| **Collections** | Lists `[1, 2, 3]`, Dicts `{"key": "val"}`, Ranges `1..10` |
-| **Operators** | Arithmetic `+ - * / %`, Comparison `== != < > <= >=`, Logical `&& \|\| !` |
-| **Smart Operators** | Null coalesce `??`, Error fallback `or`, Optional access `?.` |
-| **Control Flow** | `if`/`else`, `for`/`in`, range loops `for i in 0..10` |
-| **Functions** | Named functions, anonymous functions, parameters, return types |
-| **Parallel** | `parallel` blocks with configurable worker pools |
-| **Error Handling** | Try-catch-finally, error propagation, graceful defaults |
-| **Built-ins** | 50+ functions for strings, lists, dicts, math, I/O |
-| **Modules** | `fs`, `proc`, `http`, `json`, `csv`, `regex`, `time`, `hash`, `base64` and more |
-
-## Common Tasks
-
-### Read and Process a File
+A slightly more realistic one — parallel file processing with a worker pool:
 
 ```latch
-# Read JSON config
-config := json.parse(fs.read("config.json")) or {"port": 8080}
-
-# Search for patterns
-lines := fs.read("data.txt") |> split("\n")
-errors := filter(lines, fn(l) { return contains(l, "ERROR") })
-
-print("Found ${len(errors)} errors")
-for error in errors {
-    print("  → ${error}")
-}
-```
-
-### Run Shell Commands and Process Output
-
-```latch
-# Execute git command
-result := proc.exec("git log --oneline -5")
-commits := split(trim(result.stdout), "\n")
-
-print("Latest 5 commits:")
-for commit in commits {
-    print("  ${commit}")
-}
-```
-
-### Make HTTP Requests
-
-```latch
-# Fetch JSON from API
-response := http.get("https://api.example.com/data")
-if response.status == 200 {
-    data := json.parse(response.body) or {}
-    print("API Response: ${data}")
-} else {
-    print("Error: HTTP ${response.status}")
-}
-```
-
-### Parallel File Processing
-
-```latch
-# Process many files in parallel with 4 workers
 files := fs.glob("logs/*.txt")
-results := []
 
 parallel file in files workers=4 {
     content := fs.read(file)
@@ -189,186 +113,108 @@ parallel file in files workers=4 {
 print("✓ Processed ${len(files)} files")
 ```
 
-### Run Checks with Error Handling
+Parallel blocks run every worker to completion; if any worker fails, the first error surfaces only after all workers have finished — no silent partial runs.
 
-```latch
-# CI-style checks with try-catch
-failed := false
+## Architecture
 
-try {
-    # Check 1: Required files exist
-    assert(fs.exists("Cargo.toml"), "Missing Cargo.toml")
-    
-    # Check 2: Tests pass
-    result := proc.exec("cargo test")
-    assert(result.exit_code == 0, "Tests failed")
-    
-    print("✓ All checks passed!")
-} catch e {
-    print("✗ Check failed: ${e}")
-    failed = true
-} finally {
-    print("Cleanup...")
-}
+The VM path is the part worth reading if you care about how this is built, not just what it runs.
 
-if failed {
-    stop 1
-}
+```text
+Source (.lt)
+    │
+  Lexer            tokens + spans
+    │
+  Parser           AST (syntax only, nothing resolved)
+    │
+  Resolver         lexical scoping, upvalue resolution, slot allocation
+    │
+  HIR Lowering     AST → HirModule (idents replaced by LocalId/GlobalId/FunctionId/ConstantId)
+    │
+  HIR Verifier     structural + index-bound checks on the HIR itself
+    │
+  Optimizer        constant folding, dead-code elimination, branch pruning
+    │
+  Bytecode Compiler   pure emitter — no names left, only slots and ids
+    │
+  Bytecode Verifier   CFG + stack-depth simulation before anything executes
+    │
+  VM               single stack, windowed call frames, O(1) dispatch
 ```
 
-## Documentation
+Some specifics:
 
-- **[Complete Stdlib Reference](docs/stdlib.md)** — All built-in functions and modules
-- **[Examples](examples/)** — Real-world scripts showcasing features
-- **[GitHub Issues](https://github.com/kaelvalen/latch-lang/issues)** — Questions & bug reports
+- **Frozen ISA.** Opcodes, operand layout, and the CALL ABI are versioned (`isa_version` in the `.lbc` header). A build that changes a stack contract has to bump the version; the VM rejects mismatched bytecode rather than guessing. ~30 opcodes, documented in [`docs/ISA.md`](docs/ISA.md).
+- **Inline caches.** Method and field lookups use monomorphic → polymorphic → megamorphic inline caches (the Self/Strongtalk/V8 lineage), not a dictionary lookup on every call.
+- **Verified before executed.** Both the HIR and the compiled bytecode go through a dedicated verifier pass. Malformed bytecode (bad opcodes, stack-depth violations) is rejected before the VM ever runs it — there's a test asserting this directly, not just an assumption.
+- **Heap objects are `ObjRef<Arc<T>>`**, a pointer wrapper chosen so the underlying scheme (arena, moving GC, tagged pointers) can change without touching call sites. Allocation is tracked against a GC threshold today; a tracing collector is the planned next step, documented in [`docs/MEMORY_LAYOUT.md`](docs/MEMORY_LAYOUT.md) as a stable-ABI target rather than an implementation detail.
+- **A peephole pass and a bytecode-level profiler** sit after the main optimizer for redundant-instruction cleanup and hot-path measurement.
 
-## Examples Included
+Full specs: [`docs/HIR_SPECIFICATION.md`](docs/HIR_SPECIFICATION.md), [`docs/VM_SPECIFICATION.md`](docs/VM_SPECIFICATION.md), [`docs/ISA.md`](docs/ISA.md), [`docs/MEMORY_LAYOUT.md`](docs/MEMORY_LAYOUT.md).
 
-- `hello.lt` — Feature overview with print, math, loops, file I/O
-- `ci-check.lt` — Run tests and verify required files
-- `fetch-data.lt` — HTTP requests and JSON parsing
-- `parallel-tasks.lt` — Pool-based parallel execution
-| **While loops** | `while condition { ... }` |
-| **Break/Continue** | `break`, `continue` |
+## Language Tour
+
+| Category | Features |
+|----------|----------|
+| **Basics** | Variables (`:=`), optional type annotations, string interpolation `${}`, `#`/`//` comments |
+| **Types** | `null`, `bool`, `int`, `float`, `string`, `list`, `dict`, `fn` |
+| **Collections** | Lists `[1, 2, 3]`, dicts `{"key": "val"}`, ranges `1..10`, list comprehensions `[x*2 for x in xs if x > 0]` |
+| **Operators** | Arithmetic `+ - * / %`, comparison `== != < > <= >=`, logical `&& \|\| !`, compound assign `+= -= *= /= %=` |
+| **Smart operators** | Null coalesce `??`, error fallback `or`, safe access `?.`, pipe `\|>` |
+| **Control flow** | `if`/`else`, `while`, `for`/`in`, `break`, `continue` |
+| **Functions** | Named and anonymous functions, typed parameters/returns, closures |
+| **Classes** | `class Point { x: int, y: int, fn move() { ... } }` — real, not aspirational: implemented in both the interpreter and the VM (with IC-backed field/method access) |
 | **Constants** | `const PI = 3.14` |
-| **Generators/Yield** | `yield value` |
-| **List comprehension** | `[x*2 for x in list if x > 0]` |
-| **Default args** | `fn greet(name = "World")` |
-| **Class/OOP** | `class Point { x: int }` |
-| **Export/Import** | `export { foo }`, `import { foo } from "module"` |
-| **Safe access** | `resp?.headers`, `val?.field` |
-| **Pipe operator** | `list \|> sort() \|> filter(fn(x) { return x > 2 })` |
-| **Membership test** | `"x" in list`, `"key" in dict` |
-| **Range literal** | `1..10` → `[1, 2, ..., 9]` |
-| **Compound assign** | `count += 1`, `total *= 2` |
-| **Modulo** | `10 % 3` → `1` |
-| **Exit codes** | `stop 0` / `stop 1` |
-| **Null literal** | `x := null`, `x == null` |
-| **File I/O** | `fs.read`, `fs.write`, `fs.append`, `fs.readlines`, `fs.exists`, `fs.glob`, `fs.mkdir`, `fs.remove`, `fs.stat` |
-| **Shell commands** | `proc.exec("cmd")`, `proc.exec(["git", "status"])`, `proc.pipe([...])` |
-| **HTTP** | `http.get(url)`, `http.post(url, body)` → HttpResponse |
-| **JSON** | `json.parse(str)`, `json.stringify(value)` |
-| **Env vars** | `env.get(key)`, `env.set(k, v)`, `env.list()` |
-| **Path utils** | `path.join`, `path.basename`, `path.dirname`, `path.ext`, `path.abs` |
-| **Time** | `time.now()`, `time.sleep(ms)` |
-| **AI** | `ai.ask(prompt)`, `ai.summarize(text)` |
-| **Index mutation** | `list[0] = 5`, `dict["key"] = val` |
-| **Higher-order** | `sort(list)`, `filter(list, fn)`, `map(list, fn)`, `each(list, fn)` |
-| **String utils** | `lower`, `upper`, `starts_with`, `ends_with`, `trim`, `split`, `replace` |
-| **Comments** | `# hash` and `// line` comments |
-| **REPL** | `latch repl` |
+| **Modules** | `export { foo }`, `import { foo } from "module"` |
+| **Concurrency** | `parallel x in xs workers=N { ... }` |
+| **Error handling** | `try`/`catch`/`finally`, `or` fallback, `assert` |
+| **Membership** | `"x" in list`, `"key" in dict` |
 
-## CLI
-
-```sh
-latch run <file.lt>      # Run a script
-latch check <file.lt>    # Static analysis (no execution)
-latch repl               # Interactive REPL
-latch version            # Print version
-```
-
-## Operators
-
-| Operator | Description | Precedence |
-|----------|-------------|------------|
-| `\|>` | Pipe (inject as first arg) | 1 (lowest) |
-| `or` | Error fallback | 2 |
-| `??` | Null coalesce | 3 |
-| `\|\|` | Logical OR | 4 |
-| `&&` | Logical AND | 5 |
-| `==` `!=` | Equality | 6 |
-| `<` `>` `<=` `>=` `in` | Comparison / membership | 7 |
-| `..` | Range | 8 |
-| `+` `-` | Add / subtract / concat | 9 |
-| `*` `/` `%` | Multiply / divide / modulo | 10 |
-| `!` `-` | Unary not / negate | 11 |
-| `.` `?.` `[]` `()` | Access / safe access / index / call | 12 (highest) |
-
-Compound: `+=` `-=` `*=` `/=` `%=`
+Not in the language (so you don't go looking): generators/`yield`, default argument values, and static typing beyond parse-time annotation checks.
 
 ## Standard Library
 
-### Built-in Functions
+Selected modules — full reference in [`docs/stdlib.md`](docs/stdlib.md).
 
 ```python
-print("hello")              # Print to stdout
-len([1, 2, 3])              # → 3
-str(42)                     # → "42"
-int("7")                    # → 7
-float("3.14")               # → 3.14
-typeof(x)                   # → "string"
-push([1, 2], 3)             # → [1, 2, 3]
-keys({"a": 1})              # → ["a"]
-values({"a": 1})            # → [1]
-range(0, 5)                 # → [0, 1, 2, 3, 4]
-split("a,b,c", ",")         # → ["a", "b", "c"]
-trim("  hi  ")              # → "hi"
-lower("HELLO")              # → "hello"
-upper("hello")              # → "HELLO"
-starts_with("hello", "he")  # → true
-ends_with("hello", "lo")    # → true
-contains("hello", "ell")    # → true
-replace("foo", "o", "0")    # → "f00"
-sort([3, 1, 2])             # → [1, 2, 3]
-filter(list, fn(x) { return x > 0 })
-map(list, fn(x) { return x * 2 })
-each(list, fn(x) { print(x) })
+# fs — filesystem
+fs.read(path); fs.write(path, s); fs.append(path, s); fs.readlines(path)
+fs.exists(path); fs.glob(pattern); fs.mkdir(path); fs.remove(path)
+fs.stat(path)   # → {size, is_file, is_dir, readonly}
+
+# proc — processes (result: {stdout, stderr, code})
+proc.exec("ls -la")
+proc.exec(["git", "status"])   # array form, no shell
+proc.pipe(["cat log.txt", "grep ERROR", "wc -l"])
+
+# http — client (result: {status, body, headers})
+http.get(url); http.post(url, body)
+
+# json / csv
+json.parse(s); json.stringify(v)
+csv.read(path); csv.write(path, rows); csv.parse(s); csv.stringify(rows)
+
+# env / path / time
+env.get(k) or default; env.set(k, v); env.list()
+path.join(a, b); path.basename(p); path.dirname(p); path.ext(p)
+time.now(); time.sleep(ms)
+
+# regex / hash / base64 / set
+regex.match(p, s); regex.search(p, s); regex.findall(p, s); regex.split(p, s); regex.replace(p, s, r)
+hash.md5(s); hash.sha256(s); hash.sha512(s)
+base64.encode(s); base64.decode(s)
+set.new(); set.add(); set.remove(); set.has(); set.union(); set.intersection(); set.difference()
+
+# math
+math.sqrt/abs/floor/ceil/round/pow/sin/cos/tan/log/exp; math.pi; math.e; math.random()
+
+# ai — requires LATCH_AI_KEY (calls the Anthropic Messages API, model claude-haiku-4-5-20251001)
+ai.ask("Explain Rust in one sentence")
+ai.summarize(fs.read("article.txt"))
 ```
 
-### Modules
-
-```python
-# fs — File System
-content := fs.read("file.txt")
-fs.write("out.txt", content)
-fs.append("log.txt", "new entry\n")
-lines := fs.readlines("data.csv")
-fs.exists("path")
-files := fs.glob("**/*.lt")
-fs.mkdir("build/output")
-fs.remove("tmp/cache")
-info := fs.stat("file.txt")     # → {size, is_file, is_dir, readonly}
-
-# proc — Processes
-result := proc.exec("ls -la")
-result := proc.exec(["git", "status"])   # array form (no shell)
-piped := proc.pipe(["cat log.txt", "grep ERROR", "wc -l"])
-
-# http — HTTP Client (returns HttpResponse)
-resp := http.get("https://api.example.com/data")
-print(resp.status)     # 200
-print(resp.body)       # response body
-print(resp.headers)    # headers dict
-
-resp := http.post("https://api.example.com", "{\"key\": \"value\"}")
-
-# json — JSON
-data := json.parse("{\"name\": \"latch\"}")
-back := json.stringify(data)
-
-# env — Environment Variables
-home := env.get("HOME") or "/tmp"
-env.set("MODE", "production")   # current process only
-all := env.list()
-
-# path — Path Utilities
-full := path.join("/home", "user/file.txt")
-print(path.basename("/a/b/c.txt"))   # → c.txt
-print(path.dirname("/a/b/c.txt"))    # → /a/b
-print(path.ext("file.tar.gz"))       # → gz
-
-# time — Time
-now := time.now()           # RFC 3339 timestamp
-time.sleep(500)             # Sleep 500ms
-
-# ai — AI (requires LATCH_AI_KEY env var)
-answer := ai.ask("Explain Rust in one sentence")
-summary := ai.summarize(fs.read("article.txt"))
-```
+Higher-order built-ins work as expected: `sort`, `filter`, `map`, `each`, `push`, `keys`, `values`, `len`, `str`, `int`, `float`, `typeof`, plus the usual string set (`lower`, `upper`, `trim`, `split`, `replace`, `starts_with`, `ends_with`, `contains`).
 
 ## Error Messages
-
-Latch produces structured, actionable errors:
 
 ```
 [latch] Semantic Error
@@ -379,20 +225,9 @@ Latch produces structured, actionable errors:
   hint: Declare the variable first with ':='
 ```
 
-## Parallel Execution
+## CI Usage
 
-Parallel blocks run all workers to completion. If any worker fails, the first error is returned after every worker has finished — no silent partial failures.
-
-```python
-servers := ["web-1", "web-2", "web-3", "web-4"]
-parallel s in servers workers=4 {
-    proc.exec("ssh ${s} 'systemctl restart app'")
-}
-```
-
-## Use as CI Exit Code
-
-```python
+```latch
 result := proc.exec("cargo test")
 if result.code != 0 {
     print("Tests failed!")
@@ -401,17 +236,44 @@ if result.code != 0 {
 stop 0
 ```
 
+## Testing
+
+~12.7k lines of Rust, exercised by differential tests (interpreter vs. VM must agree), a bytecode `.lbc` serialize/deserialize round-trip test, a bytecode verifier test suite (malformed opcodes and stack-depth violations must be rejected before execution), plus resolver, pipeline, compiler-snapshot, and tutorial-example integration tests. Run them with:
+
+```sh
+cargo test
+./scripts/run_examples.sh   # runs every tutorial example end to end
+```
+
 ## Examples
 
-See the [examples/](examples/) directory:
+A progressive tutorial series lives in [`examples/`](examples/), ten chapters from basics to mini-projects:
 
-- [`hello.lt`](examples/hello.lt) — Feature showcase
-- [`ci-check.lt`](examples/ci-check.lt) — CI gate example
-- [`v02_test.lt`](examples/v02_test.lt) — v0.4.3 feature tests
+1. Getting Started — variables, types, string interpolation
+2. Operators & Expressions
+3. Control Flow — `if`/`while`/`for`/`break`/`continue`
+4. Functions — recursion, closures, higher-order functions
+5. Collections — lists, dicts, comprehensions
+6. Standard Library — strings, math, fs, json, time/env, path/regex/csv/base64
+7. Error Handling
+8. Concurrency — `parallel`
+9. Advanced — algorithms, pipelines
+10. Mini Projects — e.g. a log analyzer
 
-## Full Reference
+Plus a few standalone scripts: [`hello.lt`](examples/hello.lt) (feature showcase), [`ci-check.lt`](examples/ci-check.lt) (CI gate), [`parallel-tasks.lt`](examples/parallel-tasks.lt), [`fetch-data.lt`](examples/fetch-data.lt) (HTTP + JSON).
 
-See [docs/stdlib.md](docs/stdlib.md) for the complete standard library reference.
+```sh
+latch run examples/01_getting_started/01_hello_world.lt
+```
+
+## Documentation
+
+- [`docs/stdlib.md`](docs/stdlib.md) — complete standard library reference
+- [`docs/HIR_SPECIFICATION.md`](docs/HIR_SPECIFICATION.md) — frontend/backend boundary contract
+- [`docs/VM_SPECIFICATION.md`](docs/VM_SPECIFICATION.md) — pipeline and ISA overview
+- [`docs/ISA.md`](docs/ISA.md) — opcode table, `.lbc` binary format
+- [`docs/MEMORY_LAYOUT.md`](docs/MEMORY_LAYOUT.md) — heap object layout, GC hooks
+- [GitHub Issues](https://github.com/kaelvalen/latch-lang/issues) — bugs and questions
 
 ## License
 
