@@ -1,7 +1,7 @@
-# 04_advanced/parallel_execution.lt
-# Latch Language - Parallel Task Execution
+# Tutorial 25: Parallel Execution
+# Run independent tasks concurrently with the parallel block.
 
-print("=== 1. Parallel Task Execution ===")
+print("=== Parallel Task Execution ===")
 
 tasks := [1, 2, 3, 4, 5, 6, 7, 8]
 
@@ -14,4 +14,4 @@ parallel task_id in tasks {
 
 print("Parallel execution block finished successfully!")
 
-print("\n=== 04_advanced/parallel_execution.lt PASSED ===")
+print("=== 08_concurrency/01_parallel_basics.lt PASSED ===")

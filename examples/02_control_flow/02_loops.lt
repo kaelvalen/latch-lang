@@ -1,0 +1,25 @@
+# Tutorial 05: Loops & Iteration
+# Learn while loops, for loops, break, and continue statements.
+
+print("=== 1. While Loop with Break/Continue ===")
+i := 0
+sum := 0
+
+while i < 10 {
+    i = i + 1
+    if i % 2 != 0 {
+        continue
+    }
+    sum = sum + i
+    if i == 6 {
+        print("Reached 6, exiting loop early.")
+        break
+    }
+}
+print("Sum of even numbers up to 6: " + str(sum))
+
+print("\n=== 2. For Loop Over List ===")
+cities := ["Istanbul", "Tokyo", "London", "New York"]
+for city in cities {
+    print(" - City: " + city)
+}

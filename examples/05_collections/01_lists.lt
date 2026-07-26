@@ -1,0 +1,30 @@
+# Tutorial 14: Lists
+# Learn list creation, indexing, slicing, and common operations.
+
+print("=== List Basics ===")
+items := [45, 12, 89, 3, 27]
+print("Initial items: " + str(items))
+print("List length: " + str(len(items)))
+
+print("\n=== Indexing & Slicing ===")
+print("First item: " + str(items[0]))
+print("Last item: " + str(items[len(items) - 1]))
+print("Slice [1:4]: " + str(items[1:4]))
+print("Slice [:3]: " + str(items[:3]))
+print("Slice [3:]: " + str(items[3:]))
+
+print("\n=== Mutating Lists ===")
+push(items, 99)
+print("After push(99): " + str(items))
+
+popped := pop(items)
+print("Popped item: " + str(popped))
+print("After pop(): " + str(items))
+
+reverse(items)
+print("Reversed list: " + str(items))
+
+sorted_items := sort(items)
+print("Sorted list: " + str(sorted_items))
+
+print("=== 05_collections/01_lists.lt PASSED ===")

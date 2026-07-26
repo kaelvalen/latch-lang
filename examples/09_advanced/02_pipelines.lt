@@ -1,0 +1,20 @@
+# Tutorial 27: Pipelines
+# Chain function calls with the pipe operator `|>`.
+
+print("=== Pipelines ===")
+
+data := ["  Hello ", "WORLD", "  latch  "]
+
+normalized := data
+    |> filter(fn(s) { return len(trim(s)) > 0 })
+    |> map(fn(s) { return lower(trim(s)) })
+
+print("Normalized: " + str(normalized))
+
+sum_of_squares := 1..6
+    |> map(fn(x) { return x * x })
+    |> sum()
+
+print("Sum of squares 1..5: " + str(sum_of_squares))
+
+print("=== 09_advanced/02_pipelines.lt PASSED ===")

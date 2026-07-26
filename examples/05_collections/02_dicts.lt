@@ -1,0 +1,25 @@
+# Tutorial 15: Dictionaries
+# Learn how to create and work with key-value maps.
+
+print("=== Dictionary Basics ===")
+
+cfg := {
+    "server": "localhost",
+    "port": 8080,
+    "ssl": true
+}
+
+print("Server: " + cfg["server"])
+print("Port: " + str(cfg["port"]))
+print("SSL: " + str(cfg["ssl"]))
+
+print("\n=== Dictionary Inspection ===")
+print("Keys: " + str(keys(cfg)))
+print("Values: " + str(values(cfg)))
+print("Items: " + str(items(cfg)))
+
+print("\n=== Updating Dictionaries ===")
+cfg["port"] = 9090
+print("Updated port: " + str(cfg["port"]))
+
+print("=== 05_collections/02_dicts.lt PASSED ===")

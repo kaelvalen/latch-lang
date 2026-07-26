@@ -1,7 +1,7 @@
-# 03_stdlib/string_and_math.lt
-# Latch Language - Standard Library: String & Math Builtins
+# Tutorial 17: String Utilities
+# Common string operations from the standard library.
 
-print("=== 1. String Builtins (trim, upper, lower, split, replace, etc.) ===")
+print("=== String Builtins ===")
 text := "  Hello, Latch Language World!  "
 
 trimmed := trim(text)
@@ -23,11 +23,6 @@ print("Contains 'Latch': " + str(contains(trimmed, "Latch")))
 print("Starts with 'Hello': " + str(starts_with(trimmed, "Hello")))
 print("Ends with '!': " + str(ends_with(trimmed, "!")))
 
-print("\n=== 2. Core Math Builtins ===")
-print("Square root of 144: 12")
-print("Absolute value of -42.5: 42.5")
-print("Length of string: " + str(len(trimmed)))
-print("Max of [3, 1, 4]: " + str(max([3, 1, 4])))
-print("Min of [3, 1, 4]: " + str(min([3, 1, 4])))
+print("Length: " + str(len(trimmed)))
 
-print("\n=== 03_stdlib/string_and_math.lt PASSED ===")
+print("=== 06_stdlib/01_strings.lt PASSED ===")

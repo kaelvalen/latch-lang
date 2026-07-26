@@ -1,0 +1,21 @@
+# Tutorial 07: The `in` Operator and Ranges
+# Learn how to check membership and generate numeric ranges.
+
+print("=== Membership with `in` ===")
+
+fruits := ["apple", "banana", "cherry"]
+print("banana in fruits: " + str("banana" in fruits))
+print("grape in fruits: " + str("grape" in fruits))
+
+print("a in 'latch': " + str("a" in "latch"))
+print("z in 'latch': " + str("z" in "latch"))
+
+cfg := {"host": "localhost", "port": 8080}
+print("host in cfg: " + str("host" in cfg))
+print("user in cfg: " + str("user" in cfg))
+
+print("\n=== Ranges ===")
+nums := 1..6
+print("Range 1..6: " + str(nums))
+
+print("=== 02_operators_and_expressions/03_in_and_ranges.lt PASSED ===")

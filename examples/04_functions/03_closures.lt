@@ -1,0 +1,37 @@
+# Tutorial 12: Closures
+# Functions that capture variables from their enclosing scope.
+
+print("=== Currying & Parameter Capture ===")
+make_adder := fn(x) {
+    return fn(y) {
+        return x + y
+    }
+}
+
+add10 := make_adder(10)
+add100 := make_adder(100)
+
+print("add10(5) = " + str(add10(5)))
+print("add10(25) = " + str(add10(25)))
+print("add100(50) = " + str(add100(50)))
+
+print("\n=== Stateful Counter Closures ===")
+make_counter := fn(start) {
+    count := start
+    return fn() {
+        count = count + 1
+        return count
+    }
+}
+
+c1 := make_counter(0)
+c2 := make_counter(100)
+
+print("c1 step 1: " + str(c1()))
+print("c1 step 2: " + str(c1()))
+print("c1 step 3: " + str(c1()))
+
+print("c2 step 1: " + str(c2()))
+print("c2 step 2: " + str(c2()))
+
+print("=== 04_functions/03_closures.lt PASSED ===")

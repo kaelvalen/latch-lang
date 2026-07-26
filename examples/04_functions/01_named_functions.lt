@@ -1,0 +1,22 @@
+# Tutorial 10: Named Functions
+# Learn how to declare and call functions with fn.
+
+print("=== Named Functions ===")
+
+fn add(a, b) {
+    return a + b
+}
+
+fn multiply(a, b) {
+    return a * b
+}
+
+fn greet(name) {
+    return "Hello, " + name + "!"
+}
+
+print("add(15, 27) = " + str(add(15, 27)))
+print("multiply(6, 7) = " + str(multiply(6, 7)))
+print(greet("Latch"))
+
+print("=== 04_functions/01_named_functions.lt PASSED ===")

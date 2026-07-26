@@ -1,0 +1,21 @@
+# Tutorial 23: Try / Catch / Finally
+# Gracefully handle runtime errors.
+
+print("=== Try / Catch / Finally ===")
+
+finally_ran := false
+
+try {
+    print("Inside try block: attempting invalid division...")
+    res := 100 / 0
+    print("This will not be reached: " + str(res))
+} catch err {
+    print("Caught exception -> " + str(err))
+} finally {
+    finally_ran = true
+    print("Finally block executed cleanly!")
+}
+
+print("Finally execution confirmed: " + str(finally_ran))
+
+print("=== 07_error_handling/01_try_catch.lt PASSED ===")

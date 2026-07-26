@@ -1,0 +1,28 @@
+# Tutorial 22: Path, Regex, CSV, and Base64
+# Miscellaneous standard library modules for everyday tasks.
+
+print("=== Path Module ===")
+print("join('a', 'b', 'c'): " + path.join("a", "b", "c"))
+print("basename('/home/user/file.txt'): " + path.basename("/home/user/file.txt"))
+print("dirname('/home/user/file.txt'): " + path.dirname("/home/user/file.txt"))
+print("ext('/home/user/file.txt'): " + path.ext("/home/user/file.txt"))
+
+print("\n=== Regex Module ===")
+matched := regex.match("hello", "hello world")
+print("regex.match 'hello' in 'hello world': " + str(matched))
+
+found := regex.findall("[0-9]+", "abc123def456")
+print("regex.findall digits: " + str(found))
+
+print("\n=== CSV Module ===")
+csv_text := "name,age\nAlice,30\nBob,25\n"
+parsed_csv := csv.parse(csv_text)
+print("CSV rows: " + str(parsed_csv))
+
+print("\n=== Base64 Module ===")
+encoded := base64.encode("hello latch")
+print("base64.encode: " + encoded)
+decoded := base64.decode(encoded)
+print("base64.decode: " + decoded)
+
+print("=== 06_stdlib/06_path_regex_csv_base64.lt PASSED ===")

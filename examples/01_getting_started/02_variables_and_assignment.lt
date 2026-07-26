@@ -1,0 +1,20 @@
+# Tutorial 02: Variables & Assignment
+# Learn variable declaration with ':=' and assignment with '='.
+
+print("=== Variable Declaration & Assignment ===")
+
+# Declare a new variable with ':='
+x := 10
+print("Initial x: " + str(x))
+
+# Mutate an existing variable with '='
+x = 25
+print("Updated x: " + str(x))
+
+# Multiple variables
+greeting := "Hello"
+name := "Kael"
+message := greeting + ", " + name + "!"
+print(message)
+
+print("=== 01_getting_started/02_variables_and_assignment.lt PASSED ===")

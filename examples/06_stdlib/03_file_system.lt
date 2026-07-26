@@ -1,17 +1,17 @@
-# 03_stdlib/file_system.lt
-# Latch Language - Standard Library: fs module
+# Tutorial 19: File System Operations
+# Read, write, append, and inspect files with the fs module.
 
-test_file := "/tmp/latch_fs_sample.txt"
+print("=== File System Basics ===")
 
-print("=== 1. Directory & File Creation ===")
+test_file := "/tmp/latch_tutorial_fs.txt"
+
 content := "Line 1: Latch FS API Test\nLine 2: Built-in File Management\n"
 
 fs.write(test_file, content)
 print("File written to: " + test_file)
-
 print("File exists?: " + str(fs.exists(test_file)))
 
-print("\n=== 2. Appending & Reading Content ===")
+print("\n=== Appending & Reading ===")
 fs.append(test_file, "Line 3: Appended line\n")
 
 read_back := fs.read(test_file)
@@ -20,8 +20,8 @@ print("--------------------------------")
 print(read_back)
 print("--------------------------------")
 
-print("\n=== 3. Cleaning Up ===")
+print("\n=== Cleaning Up ===")
 fs.remove(test_file)
 print("File exists after removal?: " + str(fs.exists(test_file)))
 
-print("\n=== 03_stdlib/file_system.lt PASSED ===")
+print("=== 06_stdlib/03_file_system.lt PASSED ===")

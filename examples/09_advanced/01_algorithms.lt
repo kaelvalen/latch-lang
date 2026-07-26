@@ -1,7 +1,7 @@
-# 04_advanced/algorithms_suite.lt
-# Latch Language - Algorithms & Data Structures Suite
+# Tutorial 26: Algorithms
+# Classic algorithms using Latch collections and functions.
 
-print("=== 1. Quicksort Algorithm ===")
+print("=== Quicksort Algorithm ===")
 
 fn quicksort(arr) {
     if len(arr) <= 1 {
@@ -37,7 +37,7 @@ print("Unsorted array: " + str(unsorted))
 sorted_arr := quicksort(unsorted)
 print("Quicksort result: " + str(sorted_arr))
 
-print("\n=== 2. Binary Search Algorithm ===")
+print("\n=== Binary Search Algorithm ===")
 
 fn binary_search(arr, target) {
     low := 0
@@ -62,4 +62,4 @@ target_val := 32
 found_idx := binary_search(sorted_arr, target_val)
 print("Searching for 32 in sorted array -> Index: " + str(found_idx))
 
-print("\n=== 04_advanced/algorithms_suite.lt PASSED ===")
+print("=== 09_advanced/01_algorithms.lt PASSED ===")

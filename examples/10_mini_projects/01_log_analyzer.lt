@@ -1,0 +1,37 @@
+# Tutorial 28: Mini Project — Log Analyzer
+# Count log levels in a sample log file using pure-functional transforms.
+
+print("=== Log Analyzer ===")
+
+log_path := "/tmp/latch_tutorial_log.txt"
+
+lines := [
+    "INFO  service started",
+    "ERROR connection failed",
+    "INFO  retrying...",
+    "WARN  high latency",
+    "ERROR timeout"
+]
+
+# Join lines into a single string manually
+content := ""
+for line in lines {
+    content = content + line + "\n"
+}
+fs.write(log_path, content)
+
+all_content := fs.read(log_path)
+all_lines := split(all_content, "\n")
+
+level_count := fn(lines, level) {
+    matching := filter(lines, fn(line) { return starts_with(line, level) })
+    return len(matching)
+}
+
+print("INFO count: " + str(level_count(all_lines, "INFO")))
+print("WARN count: " + str(level_count(all_lines, "WARN")))
+print("ERROR count: " + str(level_count(all_lines, "ERROR")))
+
+fs.remove(log_path)
+
+print("=== 10_mini_projects/01_log_analyzer.lt PASSED ===")
