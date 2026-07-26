@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="icon.png" width="120" alt="Latch Logo" />
+  <img src="icon.svg" width="120" alt="Latch Logo" />
 </p>
 
 <h1 align="center">Latch</h1>

@@ -2,7 +2,7 @@
 
 Official Visual Studio Code language extension for **Latch** (`.lt`) — a minimal scripting language for local automation, tool orchestration, and systems integration.
 
-![Latch Extension](https://raw.githubusercontent.com/kaelvalen/latch-lang/main/icon.png)
+![Latch Extension](https://raw.githubusercontent.com/kaelvalen/latch-lang/main/icon.svg)
 
 ---
 
